@@ -1,0 +1,39 @@
+{
+  "date": "2026-10-03",
+  "environment": {
+    "beforeFix": "127.0.0.1:3007, output/acceptance-20261003/f11-data",
+    "afterFix": "127.0.0.1:3008, output/acceptance-20261003/f11-fixed-data",
+    "fixtures": "Synthetic 1x1 PNG and isolated JSON canvas records"
+  },
+  "history": {
+    "beforeFixReproduction": "Deleting a history entry removed an output image still referenced by a canvas: HTTP 200 to 404.",
+    "afterFixCanvasReference": "History entry removed; canvas-referenced output image stayed HTTP 200.",
+    "afterFixUnreferenced": "History entry removed; unreferenced output image changed HTTP 200 to 404.",
+    "afterFixInput": "Input image stayed HTTP 200 after its history entry was removed."
+  },
+  "assetItem": {
+    "index": "Item removed from library index.",
+    "unreferencedCopy": "Library copy changed HTTP 200 to 404.",
+    "source": "Original generated image stayed HTTP 200 with identical SHA-256.",
+    "additionalRegression": "Canvas-referenced library copy stays on disk; an index entry pointing directly to generated output cannot delete the source."
+  },
+  "category": {
+    "beforeFixReproduction": "Deleting a category removed its library copy despite a canvas reference: HTTP 200 to 404; category directory removed.",
+    "afterFix": "Category index removed; referenced library copy stayed HTTP 200 and its nonempty directory stayed on disk. Unreferenced copy and empty directory are removed."
+  },
+  "project": {
+    "result": "Project index removed; response moved=1. Canvas JSON stayed on disk, project changed to default, media URL and source HTTP 200 remained."
+  },
+  "pageReadback": {
+    "url": "http://127.0.0.1:3008/static/canvas.html?id=f11-ui-category-owner&project=default",
+    "result": "After clicking category delete twice in the asset manager, ordinary canvas rendered an output image element. Browser reported complete=true, naturalWidth=32, naturalHeight=32 and the retained library URL."
+  },
+  "visiblePageActions": {
+    "project": "Selected F11 test project, clicked Delete and its page confirmation. Project disappeared and its canvas appeared under Default; persisted canvas project=default.",
+    "assetItem": "Selected F11 item category and clicked the item detail Delete button. UI showed '素材已删除'; item and unreferenced copy disappeared while source remained HTTP 200.",
+    "category": "Selected F11 category, clicked Delete and then Confirm Delete. Category disappeared; another canvas still loaded its referenced 32x32 library image (HTTP 200).",
+    "history": "Opened zimage history Manage, selected its sole synthetic card, clicked Delete Selected and accepted the browser confirm. Card disappeared; history record was removed and canvas image stayed HTTP 200."
+  },
+  "verification": "43 Python unittest cases, py_compile, and git diff --check passed, including batch deletion reference protection.",
+  "limits": "Only local synthetic PNG and isolated ordinary canvas records were exercised. Other media types, production data, and provider-backed content remain unverified."
+}

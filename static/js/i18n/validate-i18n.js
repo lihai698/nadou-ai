@@ -10,6 +10,7 @@ const files = [
     'static/js/i18n/api-settings.js',
     'static/js/i18n/canvas.js',
     'static/js/i18n/smart-canvas.js',
+    'static/js/i18n/asset-manager.js',
     'static/js/i18n/comfyui-settings.js',
     'static/js/i18n.js',
 ];
@@ -31,6 +32,7 @@ const sandbox = {
     console,
 };
 sandbox.window.dispatchEvent = function(){};
+sandbox.window.addEventListener = function(){};
 
 for(const file of files){
     const abs = path.join(root, file);

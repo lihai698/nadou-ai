@@ -1,0 +1,19 @@
+{
+  "date": "2026-10-03",
+  "environment": "127.0.0.1:3008, output/acceptance-20261003/f11-fixed-data",
+  "fixtures": [
+    "output/acceptance-20261003/f12-missing-workflow.json",
+    "output/acceptance-20261003/f12-smart-missing-workflow.json",
+    "tests/fixtures/canvas-ui/output-workflow.zip",
+    "tests/fixtures/canvas-ui/smart-workflow.zip"
+  ],
+  "before": "Ordinary canvas imported a workflow with a missing local PNG and rendered a broken image (complete=true, naturalWidth=0) without an import warning.",
+  "after": {
+    "ordinaryMissing": "Importing the same JSON showed a persistent '导入资源缺失' dialog naming one missing local file; imported nodes stayed on canvas and showed '文件缺失'.",
+    "ordinaryValid": "Importing a resource-containing ZIP showed one decoded output image (naturalWidth=320) without a missing-resource dialog, even with old missing nodes already on the canvas.",
+    "smartMissing": "Importing smart workflow JSON showed '工作流已导入，但有 1 个本地素材文件缺失' in the page toast; the node stayed on canvas.",
+    "smartValid": "Importing a resource-containing smart ZIP added three nodes and one connection, with a decoded reference image and no missing-resource warning."
+  },
+  "verification": "65 JavaScript tests, 43 Python tests, node --check for both canvas scripts, and git diff --check passed.",
+  "remaining": "In-app browser did not yield a download event or a file in the regular Downloads directory for JSON or ZIP export. Raw CDP download-event inspection was denied by browser approval review and was not retried. Browser download landing and export-file comparison remain unverified."
+}

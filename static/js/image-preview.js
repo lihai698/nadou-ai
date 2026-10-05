@@ -1,6 +1,9 @@
 (function(){
     'use strict';
 
+    /* 同一容器只允许一个活动实例，避免动态弹窗重复打开时叠加全局监听器。 */
+    const instances = new WeakMap();
+
     /* 一次性注入预览框样式 —— 所有页面共用同一套外观 */
     function injectStyles(){
         if(document.getElementById('studio-image-preview-css')) return;
@@ -53,11 +56,17 @@
      * @param {HTMLImageElement} [options.img] - 容器内的图片，默认取 .studio-preview-img 或第一个 img
      * @param {number} [options.minZoom=1]
      * @param {number} [options.maxZoom=6]
-     * @returns {{reset:Function, apply:Function, getZoom:Function}|null}
+     * @param {boolean} [options.replace=false] - 先销毁同容器旧实例，再创建新实例
+     * @returns {{reset:Function, apply:Function, getZoom:Function, destroy:Function}|null}
      */
     function attach(container, options){
         if(!container) return null;
         options = options || {};
+        const current = instances.get(container);
+        if(current && !current.isDestroyed()) {
+            if(options.replace !== true) return current;
+            current.destroy();
+        }
         const img = options.img
             || container.querySelector('.studio-preview-img')
             || container.querySelector('img');
@@ -68,6 +77,7 @@
         let zoom = 1;
         let pan = { x:0, y:0 };
         let drag = null;
+        let destroyed = false;
 
         function apply(){
             img.style.transform = `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`;
@@ -131,17 +141,35 @@
             reset();
         }
 
+        let api = null;
+        function destroy(){
+            if(destroyed) return false;
+            destroyed = true;
+            onUp();
+            container.removeEventListener('wheel', onWheel);
+            container.removeEventListener('mousedown', onDown);
+            container.removeEventListener('dblclick', onDblClick);
+            window.removeEventListener('mousemove', onMove);
+            window.removeEventListener('mouseup', onUp);
+            if(instances.get(container) === api) instances.delete(container);
+            return true;
+        }
+
         container.addEventListener('wheel', onWheel, { passive:false });
         container.addEventListener('mousedown', onDown);
         container.addEventListener('dblclick', onDblClick);
         window.addEventListener('mousemove', onMove);
         window.addEventListener('mouseup', onUp);
 
-        return {
+        api = {
             reset,
             apply,
-            getZoom: () => zoom
+            getZoom: () => zoom,
+            destroy,
+            isDestroyed: () => destroyed
         };
+        instances.set(container, api);
+        return api;
     }
 
     injectStyles();

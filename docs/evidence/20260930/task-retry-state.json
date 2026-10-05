@@ -1,0 +1,59 @@
+{
+  "mock_state": {
+    "mode": "success",
+    "calls": 2
+  },
+  "nodes": 4,
+  "connections": 3,
+  "logs": [
+    {
+      "id": "log_e0c7d1e6ceb75_1790776383766",
+      "createdAt": 1790776383766,
+      "status": "success",
+      "platform": "Comfly",
+      "nodeType": "generator",
+      "model": "API Image",
+      "request": {
+        "task_id": "",
+        "request_id": "",
+        "provider_id": "",
+        "backend": "",
+        "prompt_id": "",
+        "workflow_json": "",
+        "seed": ""
+      },
+      "prompt": "中文验收：蓝色方块与橙色圆形，保存后重新打开。",
+      "outputs": [
+        "/assets/input/ai_ref_c96861fe0c41.png"
+      ],
+      "refs": [
+        {
+          "url": "/assets/input/ai_ref_c96861fe0c41.png",
+          "name": "中文参考图.png"
+        }
+      ],
+      "runMs": 1887,
+      "error": ""
+    },
+    {
+      "id": "log_1baf432a842778_1790776253666",
+      "createdAt": 1790776253666,
+      "status": "failed",
+      "platform": "Comfly",
+      "nodeType": "generator",
+      "model": "API Image",
+      "request": {},
+      "prompt": "中文验收：蓝色方块与橙色圆形，保存后重新打开。",
+      "outputs": [],
+      "refs": [
+        {
+          "url": "/assets/input/ai_ref_c96861fe0c41.png",
+          "name": "中文参考图.png"
+        }
+      ],
+      "runMs": 1893,
+      "error": "验收模拟：上游服务暂时不可用"
+    }
+  ],
+  "outputs": 1
+}

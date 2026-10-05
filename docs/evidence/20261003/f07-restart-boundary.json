@@ -1,0 +1,27 @@
+{
+  "date": "2026-10-03",
+  "environment": "127.0.0.1:3005 isolated server and canvas directory",
+  "canvas": "f07-restart-visible-20261003",
+  "taskId": "canvas_img_776f0f28077f4dc6bfb67d93f3492c1d",
+  "beforeRestart": {
+    "serverPid": 6456,
+    "submissions": 1,
+    "taskStatus": "running",
+    "taskIdSavedInCanvas": true
+  },
+  "afterRestart": {
+    "serverPid": 19488,
+    "taskLookupHttpStatus": 404,
+    "newSubmissions": 0,
+    "queries": 3,
+    "queryBreakdown": "One direct API check, one initial page check, one fixed page check; page refresh added none.",
+    "savedNodes": 2,
+    "savedConnections": 1,
+    "pending": 0,
+    "pendingTasks": null,
+    "resultImages": 0,
+    "failureNoticeVisibleAfterReload": true,
+    "failureNoticeClickExplainsUnknownRemoteStatus": true
+  },
+  "scope": "Real process restart and browser reload for a local simulated smart canvas image task. Other task types and real providers were not exercised."
+}

@@ -63,6 +63,8 @@
         "online.square": { zh: "1:1 方图", en: "1:1 Square" },
         "online.portrait": { zh: "2:3 竖图", en: "2:3 Portrait" },
         "online.landscape": { zh: "3:2 横图", en: "3:2 Landscape" },
+        "online.portrait43": { zh: "3:4 竖图", en: "3:4 Portrait" },
+        "online.landscape43": { zh: "4:3 横图", en: "4:3 Landscape" },
         "online.story": { zh: "9:16 竖屏", en: "9:16 Story" },
         "online.wide": { zh: "16:9 宽屏", en: "16:9 Wide" },
         "online.customRatio": { zh: "自定义比例", en: "Custom ratio" },

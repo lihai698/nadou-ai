@@ -1,0 +1,21 @@
+{
+  "date": "2026-10-03",
+  "scope": "isolated Windows Python 3.10 app and self-created files only",
+  "copied_main_sha256": "dd8a3eb510abe1a8222a1c2b1fade5e97cc0f5a5e3b587f665cc936e25b6c1c4",
+  "app_root": "D:\\daxiong\\output\\acceptance-20261003\\stage4-external-storage\\app",
+  "external_root": "D:\\daxiong\\output\\acceptance-20261003\\stage4-external-storage\\自定义存储路径",
+  "port": 3017,
+  "settings_patch": 200,
+  "settings_persisted_after_restart": true,
+  "app_upload_wrote_external_upload": true,
+  "app_upload_wrote_external_local": true,
+  "generated_file_listed_and_served": true,
+  "file_sha256_before_and_after_restart": {
+    "upload": "a3c41089f19ff6d0f67575a2083796bd8a34664bbf3b9635691659b4422d578b",
+    "generated": "a3c41089f19ff6d0f67575a2083796bd8a34664bbf3b9635691659b4422d578b",
+    "local": "c726d333dd159a31423f3480dbb1c5c4a9dfcd30efe1f7e12ade390dc92e8908"
+  },
+  "files_unchanged_after_restart": true,
+  "server_stopped": true,
+  "original_api_env_data_assets_copied": false
+}

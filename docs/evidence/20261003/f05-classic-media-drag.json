@@ -1,0 +1,57 @@
+{
+  "date": "2026-10-03",
+  "case": "F05 ordinary canvas native pointer drag of audio and video from the asset library",
+  "environment": {
+    "origin": "http://127.0.0.1:3015",
+    "browser": "Codex in-app browser",
+    "canvasId": "8d4ed7b5f75943a599efe7f653358af8",
+    "canvasUrl": "http://127.0.0.1:3015/static/canvas.html?id=8d4ed7b5f75943a599efe7f653358af8&project=default",
+    "isolatedDataRoot": "output/acceptance-20261003/f05-media-data",
+    "fixtureServer": "output/acceptance-20261003/f05_media_server.py",
+    "gitHead": "53168d8"
+  },
+  "productSupport": {
+    "assetCard": "static/js/canvas.js renderCanvasAssetLibrary sets data-kind and application/x-canvas-asset on dragstart",
+    "canvasDrop": "The board drop handler reads the asset payload and calls createImageCardFromUrl for non-workflow media",
+    "mediaNode": "createImageCardFromUrl stores video/audio in an image node's mediaKind; the node renderer shows a video preview or audio player"
+  },
+  "fixtures": [
+    {
+      "kind": "audio",
+      "name": "验收音频",
+      "file": "output/acceptance-20261003/f05-media-data/assets/library/角色/lib_90b6f2a882bf_验收音频.wav",
+      "bytes": 4044,
+      "sha256": "F9BBE28BC5AF66266961C931E2CD7AE4B6C3F863428EF2B1ADE242690C42D327"
+    },
+    {
+      "kind": "video",
+      "name": "验收短视频",
+      "file": "output/acceptance-20261003/f05-media-data/assets/library/角色/lib_1a1205de36df_验收短视频.webm",
+      "bytes": 741,
+      "sha256": "80E1F29301D366FFAE1B26FF1472E65AED31FC3A4A18C791B58511BCF5D0CBEF"
+    }
+  ],
+  "uiResult": {
+    "assetPanel": "Opened the 角色 category on an initially empty ordinary canvas.",
+    "method": "Native pointer drag of the audio card to the blank board, followed by native pointer drag of the video card to a second position.",
+    "nodesBefore": 0,
+    "nodesAfter": 2,
+    "afterReload": {
+      "nodes": 2,
+      "audio": {"readyState": 4, "durationSeconds": 0.25, "error": null},
+      "video": {"readyState": 4, "durationSeconds": 0.33004, "videoWidth": 64, "videoHeight": 48, "error": null}
+    }
+  },
+  "diskReadback": {
+    "file": "output/acceptance-20261003/f05-media-data/data/canvases/8d4ed7b5f75943a599efe7f653358af8.json",
+    "kind": "classic",
+    "nodeCount": 2,
+    "nodes": [
+      {"id": "img_daaaee308355f8_1791008746484", "type": "image", "mediaKind": "audio", "name": "验收音频"},
+      {"id": "img_df15ac9add696_1791008758422", "type": "image", "mediaKind": "video", "name": "验收短视频"}
+    ],
+    "libraryUrlsMatchCanvas": true
+  },
+  "validation": "Read back the isolated canvas JSON after both native drags, refreshed the page and observed both media nodes and successful browser decode; verified both isolated fixture file sizes and SHA-256 hashes.",
+  "limits": "Self-made short WAV/WebM files and the ordinary canvas asset-library drag path in the in-app browser only. No generation, paid provider, production data, or independent browser profile was exercised."
+}

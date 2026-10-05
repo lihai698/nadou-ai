@@ -1,0 +1,10 @@
+{
+  "date":"2026-10-02",
+  "environment":{"base_url":"http://127.0.0.1:3002","canvas_id":"interaction-classic-10-20261002","isolated":true},
+  "trigger":"在普通画布节点标题按住 Alt 拖动复制",
+  "before_fix":{"node_count_before":10,"node_count_after_copy":11,"ctrl_z_node_count":11,"cause":"普通画布 startNodeDrag 的 Alt 复制分支没有在复制前调用 pushUndo"},
+  "fix":{"file":"static/js/canvas.js","change":"Alt 复制前调用 pushUndo，沿用现有撤销栈；static/canvas.html 更新脚本缓存版本"},
+  "after_fix":{"node_count_before":10,"node_count_after_copy":11,"ctrl_z_node_count":10,"reload_node_count":10,"saved_canvas_node_count":10},
+  "other_checks":{"javascript_syntax":"passed","unittest_count":32,"unittest_result":"passed","git_diff_check":"passed"},
+  "scope":"本次覆盖普通画布单节点 Alt 拖动复制和撤销；Ctrl+C/V、Alt+Shift 保留输入连接及智能画布复制组合未在本轮完整验证。"
+}

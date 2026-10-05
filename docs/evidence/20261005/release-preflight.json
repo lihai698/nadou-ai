@@ -1,0 +1,44 @@
+{
+  "date": "2026-10-05",
+  "scope": "首发公开源码、完整安装包和独立启动验证",
+  "version": "2026.10.05",
+  "updateMode": "full_install",
+  "publicFileCount": 454,
+  "zipEntryCount": 455,
+  "artifacts": {
+    "directory": "output/release/nadou-ai-2026.10.05",
+    "zip": "output/release/nadou-ai-2026.10.05.zip",
+    "notes": "output/release/nadou-ai-2026.10.05-notes.md"
+  },
+  "privateBoundary": {
+    "privateEntries": [],
+    "containsEnvExample": true,
+    "containsManifest": true,
+    "excluded": ["API/.env", "data", "assets", "output", "docs/evidence", ".git"]
+  },
+  "checks": {
+    "python": 395,
+    "javascript": 170,
+    "i18n": "passed",
+    "compileall": "passed",
+    "gitDiffCheck": "passed",
+    "dataFormats": "passed",
+    "releaseFilter": "passed",
+    "releaseStartupDirectory": "passed",
+    "releaseStartupZipExtract": "passed",
+    "embeddedPythonOfflineInstall": "passed",
+    "upgradeRecoveryTests": 5
+  },
+  "pageSmoke": [
+    "/",
+    "/static/index.html",
+    "/static/canvas-list.html?project=default",
+    "/static/smart-canvas.html",
+    "/api/asset-library",
+    "/api/canvases"
+  ],
+  "limitations": [
+    "真实供应商、macOS 实机、磁盘写满、长期性能和真实用户目录跨版本升级未验证",
+    "未执行远端仓库推送"
+  ]
+}

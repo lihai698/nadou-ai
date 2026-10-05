@@ -4,6 +4,12 @@
         "comfy.title": { zh: "工作流设置", en: "Workflow Settings" },
         "comfy.subtitle": { zh: "选择本地 ComfyUI 工作流，配置可暴露到画布的输入参数。", en: "Choose local ComfyUI workflows, then configure the inputs exposed to Canvas." },
         "comfy.localWorkflowMode": { zh: "本地 ComfyUI 工作流", en: "Local ComfyUI Workflow" },
+        "comfy.backendAddresses": { zh: "ComfyUI 后端地址", en: "ComfyUI Backend Addresses" },
+        "comfy.addBackend": { zh: "添加后端", en: "Add Backend" },
+        "comfy.backendFormat": { zh: "格式：", en: "Format: " },
+        "comfy.backendExamplePrefix": { zh: "（如 ", en: " (e.g. " },
+        "comfy.backendExampleSuffix": { zh: "）", en: ")" },
+        "comfy.fitWindow": { zh: "适应窗口", en: "Fit to Window" },
         "comfy.workflowList": { zh: "工作流列表", en: "Workflows" },
         "comfy.uploadWorkflow": { zh: "上传工作流", en: "Upload Workflow" },
         "comfy.nodePreview": { zh: "画布节点预览", en: "Canvas Node Preview" },
@@ -67,6 +73,18 @@
         "comfy.runFailed": { zh: "运行失败", en: "Run failed" },
         "comfy.invalidJson": { zh: "不是有效的 JSON 文件", en: "Not a valid JSON file" },
         "comfy.namePrompt": { zh: "给这个工作流起个名字（中文/英文/数字/_-.）：", en: "Name this workflow (letters/numbers/_-.):" },
-        "comfy.uploaded": { zh: "已上传：", en: "Uploaded: " }
+        "comfy.uploaded": { zh: "已上传：", en: "Uploaded: " },
+        "comfy.unnamedNode": { zh: "未命名", en: "Unnamed" },
+        "comfy.needBackend": { zh: "请至少填一个 ComfyUI 后端地址", en: "Enter at least one ComfyUI backend address" },
+        "comfy.backendsSaved": { zh: "ComfyUI 后端地址已保存", en: "ComfyUI backend addresses saved" },
+        "comfy.randomNumber": { zh: "随机数", en: "Random number" },
+        "comfy.numericOption": { zh: "数字", en: "Number" },
+        "comfy.textOption": { zh: "文本", en: "Text" },
+        "comfy.optionPlaceholder": { zh: "选项 {count}", en: "Option {count}" },
+        "comfy.dropdownOptionsLabel": { zh: "下拉选项", en: "Dropdown options" },
+        "comfy.dropdownNumericHint": { zh: "· 数字形式自动作为数值传给 ComfyUI", en: "· Numeric options are sent to ComfyUI as numbers" },
+        "comfy.addOption": { zh: "添加选项", en: "Add option" },
+        "comfy.randomOn": { zh: "随机已开启，点击关闭", en: "Random is on; click to turn off" },
+        "comfy.randomOff": { zh: "随机已关闭，点击开启", en: "Random is off; click to turn on" }
     });
 })();

@@ -1,4 +1,4 @@
-# Private configuration and user content (tracked upstream files remain tracked).
+# Private configuration and user content.
 .env
 .env.*
 !.env.example

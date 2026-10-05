@@ -1,0 +1,84 @@
+{
+  "date": "2026-10-04",
+  "case": "阶段3：普通与智能画布自制 WAV/WebM 工作流 ZIP 导出、导入和刷新往返",
+  "environment": {
+    "origin": "http://127.0.0.1:3026",
+    "browser": "Codex in-app browser",
+    "classicCanvasId": "e6e348a381a0459cb338c55de9bbbfc0",
+    "smartCanvasId": "aef0c468a33f4038a9894af7e1c33072",
+    "gitHead": "53168d8e6b7be6174f2d3eccae9375ce4d44cd3e",
+    "dataScope": "本机隔离预览目录；未读取真实配置、历史、画布或素材"
+  },
+  "fixtures": [
+    {
+      "kind": "audio",
+      "name": "验收音频.wav",
+      "file": "tests/fixtures/canvas-ui/multimedia-export/验收音频.wav",
+      "bytes": 4044,
+      "sha256": "f9bbe28bc5af66266961c931e2cd7ae4b6c3f863428ef2b1ade242690c42d327"
+    },
+    {
+      "kind": "video",
+      "name": "验收短视频.webm",
+      "file": "tests/fixtures/canvas-ui/multimedia-export/验收短视频.webm",
+      "bytes": 741,
+      "sha256": "80e1f29301d366ffae1b26ff1472e65aed31fc3a4a18c791b58511bcf5d0cbef"
+    }
+  ],
+  "uiResult": {
+    "classic": {
+      "import": {
+        "zip": "tests/fixtures/canvas-ui/multimedia-export/multimedia-classic.zip",
+        "nodesBefore": 0,
+        "nodesAfter": 2,
+        "mediaKinds": ["audio", "video"],
+        "missingResourceNotice": false
+      },
+      "decodeBeforeReload": {
+        "audio": {"readyState": 4, "durationSeconds": 0.25, "error": null},
+        "video": {"readyState": 4, "durationSeconds": 0.33004, "videoWidth": 64, "videoHeight": 48, "error": null}
+      },
+      "decodeAfterReload": {
+        "audio": {"readyState": 4, "durationSeconds": 0.25, "error": null},
+        "video": {"readyState": 4, "durationSeconds": 0.33004, "videoWidth": 64, "videoHeight": 48, "error": null}
+      },
+      "exportRequest": {
+        "selectedNodes": 2,
+        "endpoint": "/api/canvas-workflows/export",
+        "status": 200,
+        "contentType": "application/zip",
+        "contentLength": 1865
+      }
+    },
+    "smart": {
+      "import": {
+        "zip": "tests/fixtures/canvas-ui/multimedia-export/multimedia-smart.zip",
+        "nodesBefore": 0,
+        "nodesAfter": 2,
+        "mediaKinds": ["audio", "video"],
+        "missingResourceNotice": false
+      },
+      "decodeBeforeReload": {
+        "audio": {"readyState": 4, "durationSeconds": 0.25, "error": null},
+        "video": {"readyState": 4, "durationSeconds": 0.33004, "videoWidth": 64, "videoHeight": 48, "error": null}
+      },
+      "decodeAfterReload": {
+        "audio": {"readyState": 4, "durationSeconds": 0.25, "error": null},
+        "video": {"readyState": 4, "durationSeconds": 0.33004, "videoWidth": 64, "videoHeight": 48, "error": null}
+      },
+      "exportRequest": {
+        "selectedNodes": 1,
+        "endpoint": "/api/canvas-workflows/export",
+        "status": 200,
+        "contentType": "application/zip",
+        "contentLength": 1680
+      }
+    }
+  },
+  "validation": {
+    "backend": "tests/test_canvas_workflow_export.py：3 项通过；导出 ZIP 中 workflow.json 的 resources 含 WAV/WebM，导入 resource_map 映射到新 /assets 路径，字节和 SHA-256 与源文件一致",
+    "page": "两个隔离真实页面均通过文件选择器导入含资源 ZIP；节点、媒体类型和文件缺失提示状态可见；刷新后音频和视频仍由浏览器解码；普通和智能页面点击导出并包含资源均收到 200 application/zip 响应",
+    "syntax": "python\\python.exe -m py_compile tests/test_canvas_workflow_export.py"
+  },
+  "limits": "只覆盖本机自制短 WAV/WebM、两种画布的工作流资源导出/导入和页面刷新；未调用真实供应商或真实用户数据。浏览器下载落盘路径由现有 F12 专项覆盖，本次用 CDP 记录页面请求的 200 ZIP 响应和类型。"
+}

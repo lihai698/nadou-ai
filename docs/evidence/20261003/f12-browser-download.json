@@ -1,0 +1,101 @@
+{
+  "date": "2026-10-03",
+  "scope": "F12 ordinary and smart canvas browser JSON and resource ZIP download landing",
+  "environment": {
+    "service": "http://127.0.0.1:3008",
+    "data": "output/acceptance-20261003/f11-fixed-data",
+    "ordinaryCanvas": "http://127.0.0.1:3008/static/canvas.html?id=a73b6977c8ed4e75b153562c19391cfe&project=default",
+    "smartCanvas": "http://127.0.0.1:3008/static/smart-canvas.html?id=c585fb8a44154acc98179d050fb6f9ac&project=default",
+    "browser": "Codex in-app browser",
+    "selected": "one valid OUTPUT node; zero connections"
+  },
+  "actions": [
+    "Opened the ordinary canvas and opened 导入导出工作流.",
+    "Selected the generated OUTPUT node and confirmed the panel showed 已选择 1 个节点，0 条连线.",
+    "Clicked 导出 JSON and then 导出并包含资源.",
+    "Repeated both button actions on the smart canvas after selecting one valid image node."
+  ],
+  "downloadEvents": [
+    {
+      "canvas": "ordinary",
+      "format": "json",
+      "suggestedFilename": "F12缺图验收-20261003T091738.json",
+      "state": "completed",
+      "totalBytes": 371,
+      "landing": "C:/Users/Administrator/Downloads/F12缺图验收-20261003T091738.json"
+    },
+    {
+      "canvas": "ordinary",
+      "format": "zip",
+      "suggestedFilename": "F12缺图验收-20261003T091921.zip",
+      "state": "completed",
+      "totalBytes": 1421,
+      "landing": "C:/Users/Administrator/Downloads/F12缺图验收-20261003T091921.zip"
+    },
+    {
+      "canvas": "smart",
+      "format": "json",
+      "suggestedFilename": "F12智能缺图验收-workflow-20261003093300.json",
+      "state": "completed",
+      "totalBytes": 2799,
+      "landing": "C:/Users/Administrator/Downloads/F12智能缺图验收-workflow-20261003093300.json"
+    },
+    {
+      "canvas": "smart",
+      "format": "zip",
+      "suggestedFilename": "F12智能缺图验收-workflow-20261003093320.zip",
+      "state": "completed",
+      "totalBytes": 5598,
+      "landing": "C:/Users/Administrator/Downloads/F12智能缺图验收-workflow-20261003093320.zip"
+    }
+  ],
+  "contentChecks": {
+    "json": {
+      "bytes": 371,
+      "format": "infinite-canvas-workflow",
+      "version": 1,
+      "nodes": 1,
+      "connections": 0,
+      "nodeId": "output_580bfe673f4eb8_1790992031519",
+      "resourceReference": "/assets/input/workflow_import_20261003-094711_2e3638/20068a89_ai_ref_c96861fe0c41.png"
+    },
+    "zip": {
+      "bytes": 1421,
+      "members": [
+        "workflow.json",
+        "resources/20068a89_ai_ref_c96861fe0c41.png"
+      ],
+      "workflowBytes": 639,
+      "resourceBytes": 1232,
+      "sourceResourceBytes": 1232,
+      "resourceSha256": "293a15b848d04d087481c2e3b555e63de92dfbcd92905fbca32231c2b87bda9e",
+      "sourceResourceSha256": "293a15b848d04d087481c2e3b555e63de92dfbcd92905fbca32231c2b87bda9e",
+      "resourceBytesEqual": true,
+      "workflowResourceEntryPresent": true
+    },
+    "smartJson": {
+      "bytes": 2799,
+      "format": "infinite-smart-canvas-workflow",
+      "version": 1,
+      "nodes": 1,
+      "connections": 0,
+      "nodeId": "smart-image_p2rvf5xnnh9q"
+    },
+    "smartZip": {
+      "bytes": 5598,
+      "members": [
+        "workflow.json",
+        "resources/9d29f2c1_ai_ref_6538bc56d4d3.jpg"
+      ],
+      "workflowBytes": 3035,
+      "resourceBytes": 5864,
+      "sourceResourceBytes": 5864,
+      "resourceSha256": "56644bf43d556c9b3382cc427207a0e2c21ce101f385b3756b1cada2d09134ff",
+      "sourceResourceSha256": "56644bf43d556c9b3382cc427207a0e2c21ce101f385b3756b1cada2d09134ff",
+      "resourceBytesEqual": true,
+      "workflowResourceEntryPresent": true
+    }
+  },
+  "verification": "CDP Page.downloadWillBegin/Page.downloadProgress reported all four completed downloads. Python json/zipfile checks confirmed the landed JSON and ZIP contents. Both ZIP resources matched their isolated source files byte-for-byte.",
+  "limits": "The browser high-level waitForEvent('download') did not surface the blob download, so the completion event was read through the supported browser CDP capability; the files were independently found in the regular Downloads directory and inspected. No private API/.env or data/asset_library.json was read or changed."
+}

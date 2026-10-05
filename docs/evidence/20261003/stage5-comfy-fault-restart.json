@@ -1,0 +1,36 @@
+{
+  "date": "2026-10-03",
+  "scope": "阶段 5：ComfyUI 独立任务接口的本机模拟故障、两种画布查询及进程重启边界",
+  "realProviderUsed": false,
+  "method": "真实 FastAPI ASGI 路由和任务 worker；main.generate 使用本机可控替身。两种画布查询测试执行生产 JavaScript 函数。没有读取私人素材、密钥或正式数据目录。",
+  "serverLifecycle": {
+    "route": "/api/canvas-comfy-tasks",
+    "runningAfterPost": true,
+    "successReturnsResult": true,
+    "timeout": {"terminalStatus": "failed", "errorContains": "读取超时", "result": null},
+    "connectionLoss": {"terminalStatus": "failed", "errorContains": "连接中断", "result": null},
+    "providerError": {"terminalStatus": "failed", "errorContains": "生成报错", "result": null},
+    "repeatedGetResubmittedGeneration": false,
+    "test": "tests/test_canvas_comfy_lifecycle.py",
+    "result": "2/2 Python tests passed; the second test checks three failure types"
+  },
+  "restartProbe": {
+    "before": {"pid": 2228, "submitStatus": 200, "taskId": "canvas_comfy_4462c07a2c92449b9d31ea5585739596", "taskStatus": "running"},
+    "after": {"pid": 18908, "httpStatus": 404, "detail": "ComfyUI 任务不存在，可能服务已重启或任务已过期"},
+    "test": "tests/test_canvas_restart_boundary.py",
+    "result": "3/3 restart tests passed, including the new ComfyUI process-boundary case"
+  },
+  "canvasQuery": {
+    "classic": "temporary 503/network loss retries GET for the same accepted ID; four consecutive 503 responses stop after 1/2/4 second backoff; 404 and confirmed failure are terminal",
+    "smart": "same behavior and a clear translated restart message for 404",
+    "submissionsDuringGetRetries": 0,
+    "test": "tests/canvas_comfy_polling.test.cjs",
+    "result": "6/6 JavaScript tests passed"
+  },
+  "checks": {
+    "javascriptSyntax": "canvas.js and smart-canvas.js passed node --check",
+    "i18n": "1084 keys passed validation",
+    "diffWhitespace": "passed"
+  },
+  "limitations": "ComfyUI 已受理任务号仍只存在当前页面内存中，页面关闭或服务重启后不能恢复同一任务；本轮只改善短暂查询故障和重启提示。ComfyUI 真实页面按钮尚未操作；真实 ComfyUI、计费服务和远端任务恢复均未验证。"
+}

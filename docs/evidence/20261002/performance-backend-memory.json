@@ -1,0 +1,182 @@
+[
+  {
+    "TimestampUtc": "2026-10-02T08:25:44.9074622Z",
+    "WorkingSetBytes": 62808064,
+    "PrivateBytes": 55431168
+  },
+  {
+    "TimestampUtc": "2026-10-02T08:25:46.9671025Z",
+    "WorkingSetBytes": 62873600,
+    "PrivateBytes": 55431168
+  },
+  {
+    "TimestampUtc": "2026-10-02T08:25:48.9810948Z",
+    "WorkingSetBytes": 62873600,
+    "PrivateBytes": 55431168
+  },
+  {
+    "TimestampUtc": "2026-10-02T08:25:50.9931348Z",
+    "WorkingSetBytes": 62873600,
+    "PrivateBytes": 55431168
+  },
+  {
+    "TimestampUtc": "2026-10-02T08:25:52.9997970Z",
+    "WorkingSetBytes": 62873600,
+    "PrivateBytes": 55431168
+  },
+  {
+    "TimestampUtc": "2026-10-02T08:25:55.0047439Z",
+    "WorkingSetBytes": 62939136,
+    "PrivateBytes": 55431168
+  },
+  {
+    "TimestampUtc": "2026-10-02T08:25:57.0081153Z",
+    "WorkingSetBytes": 62939136,
+    "PrivateBytes": 55431168
+  },
+  {
+    "TimestampUtc": "2026-10-02T08:25:59.0120732Z",
+    "WorkingSetBytes": 62939136,
+    "PrivateBytes": 55431168
+  },
+  {
+    "TimestampUtc": "2026-10-02T08:26:01.0285286Z",
+    "WorkingSetBytes": 63004672,
+    "PrivateBytes": 55431168
+  },
+  {
+    "TimestampUtc": "2026-10-02T08:26:03.0330456Z",
+    "WorkingSetBytes": 63004672,
+    "PrivateBytes": 55431168
+  },
+  {
+    "TimestampUtc": "2026-10-02T08:26:05.0480898Z",
+    "WorkingSetBytes": 63004672,
+    "PrivateBytes": 55431168
+  },
+  {
+    "TimestampUtc": "2026-10-02T08:26:07.0509280Z",
+    "WorkingSetBytes": 63004672,
+    "PrivateBytes": 55431168
+  },
+  {
+    "TimestampUtc": "2026-10-02T08:26:09.0566650Z",
+    "WorkingSetBytes": 63070208,
+    "PrivateBytes": 55648256
+  },
+  {
+    "TimestampUtc": "2026-10-02T08:26:11.0611087Z",
+    "WorkingSetBytes": 63070208,
+    "PrivateBytes": 55648256
+  },
+  {
+    "TimestampUtc": "2026-10-02T08:26:13.0647002Z",
+    "WorkingSetBytes": 63070208,
+    "PrivateBytes": 55648256
+  },
+  {
+    "TimestampUtc": "2026-10-02T08:26:15.0679057Z",
+    "WorkingSetBytes": 63070208,
+    "PrivateBytes": 55648256
+  },
+  {
+    "TimestampUtc": "2026-10-02T08:26:17.0796258Z",
+    "WorkingSetBytes": 63070208,
+    "PrivateBytes": 55648256
+  },
+  {
+    "TimestampUtc": "2026-10-02T08:26:19.0927833Z",
+    "WorkingSetBytes": 63070208,
+    "PrivateBytes": 55648256
+  },
+  {
+    "TimestampUtc": "2026-10-02T08:26:21.1045278Z",
+    "WorkingSetBytes": 63070208,
+    "PrivateBytes": 55648256
+  },
+  {
+    "TimestampUtc": "2026-10-02T08:26:23.1182178Z",
+    "WorkingSetBytes": 63070208,
+    "PrivateBytes": 55648256
+  },
+  {
+    "TimestampUtc": "2026-10-02T08:26:25.1356175Z",
+    "WorkingSetBytes": 63070208,
+    "PrivateBytes": 55648256
+  },
+  {
+    "TimestampUtc": "2026-10-02T08:26:27.1382121Z",
+    "WorkingSetBytes": 63070208,
+    "PrivateBytes": 55648256
+  },
+  {
+    "TimestampUtc": "2026-10-02T08:26:29.1486734Z",
+    "WorkingSetBytes": 63070208,
+    "PrivateBytes": 55648256
+  },
+  {
+    "TimestampUtc": "2026-10-02T08:26:31.1529134Z",
+    "WorkingSetBytes": 63070208,
+    "PrivateBytes": 55648256
+  },
+  {
+    "TimestampUtc": "2026-10-02T08:26:33.1550151Z",
+    "WorkingSetBytes": 63070208,
+    "PrivateBytes": 55648256
+  },
+  {
+    "TimestampUtc": "2026-10-02T08:26:35.1646439Z",
+    "WorkingSetBytes": 62001152,
+    "PrivateBytes": 54767616
+  },
+  {
+    "TimestampUtc": "2026-10-02T08:26:37.1778346Z",
+    "WorkingSetBytes": 62001152,
+    "PrivateBytes": 54767616
+  },
+  {
+    "TimestampUtc": "2026-10-02T08:26:39.1824299Z",
+    "WorkingSetBytes": 62001152,
+    "PrivateBytes": 54767616
+  },
+  {
+    "TimestampUtc": "2026-10-02T08:26:41.1853548Z",
+    "WorkingSetBytes": 62001152,
+    "PrivateBytes": 54767616
+  },
+  {
+    "TimestampUtc": "2026-10-02T08:26:43.2015806Z",
+    "WorkingSetBytes": 62001152,
+    "PrivateBytes": 54767616
+  },
+  {
+    "TimestampUtc": "2026-10-02T08:26:45.2093922Z",
+    "WorkingSetBytes": 62001152,
+    "PrivateBytes": 54767616
+  },
+  {
+    "TimestampUtc": "2026-10-02T08:26:47.2160798Z",
+    "WorkingSetBytes": 62001152,
+    "PrivateBytes": 54767616
+  },
+  {
+    "TimestampUtc": "2026-10-02T08:26:49.2323582Z",
+    "WorkingSetBytes": 62001152,
+    "PrivateBytes": 54767616
+  },
+  {
+    "TimestampUtc": "2026-10-02T08:26:51.2473816Z",
+    "WorkingSetBytes": 62001152,
+    "PrivateBytes": 54767616
+  },
+  {
+    "TimestampUtc": "2026-10-02T08:26:53.2493149Z",
+    "WorkingSetBytes": 62001152,
+    "PrivateBytes": 54767616
+  },
+  {
+    "TimestampUtc": "2026-10-02T08:26:55.2622937Z",
+    "WorkingSetBytes": 62001152,
+    "PrivateBytes": 54767616
+  }
+]

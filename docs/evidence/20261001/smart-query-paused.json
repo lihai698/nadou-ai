@@ -1,0 +1,63 @@
+{
+  "samples": {
+    "manual": [
+      {
+        "id": "result-check",
+        "type": "smart-image",
+        "x": 200,
+        "y": 150,
+        "title": "查询恢复测试",
+        "images": [],
+        "pending": 1,
+        "pendingTasks": [
+          {
+            "taskId": "canvas_img_31bc85aa48be4802ac348d88bc92d8a3",
+            "kind": "image",
+            "querying": false,
+            "queryPaused": true,
+            "error": "{\"detail\":\"验收模拟：任务查询短暂不可用\"}"
+          }
+        ],
+        "scale": 1,
+        "running": false
+      }
+    ],
+    "reload": [
+      {
+        "id": "result-check",
+        "type": "smart-image",
+        "x": 200,
+        "y": 150,
+        "title": "查询恢复测试",
+        "images": [],
+        "pending": 1,
+        "pendingTasks": [
+          {
+            "taskId": "canvas_img_e0cb1fac987f44f9a027e1a0ce250fae",
+            "kind": "image",
+            "querying": false,
+            "queryPaused": true,
+            "error": "{\"detail\":\"验收模拟：任务查询短暂不可用\"}"
+          }
+        ],
+        "scale": 1,
+        "running": false
+      }
+    ]
+  },
+  "state": {
+    "mode": "query-persistent",
+    "calls": 2,
+    "query_failures": 8,
+    "tasks": [
+      {
+        "id": "canvas_img_31bc85aa48be4802ac348d88bc92d8a3",
+        "status": "succeeded"
+      },
+      {
+        "id": "canvas_img_e0cb1fac987f44f9a027e1a0ce250fae",
+        "status": "succeeded"
+      }
+    ]
+  }
+}

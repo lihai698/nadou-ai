@@ -1,0 +1,12 @@
+{
+  "groups": 4,
+  "drag_round_trips": 12,
+  "marquee_groups_pass": 4,
+  "zoom_reload_groups_pass": 4,
+  "move_reload_restore_groups_pass": 4,
+  "browser_memory_samples": 18,
+  "backend_memory_samples": 36,
+  "source_data_files_unchanged": 33,
+  "generation_calls": 0,
+  "fixture_positions_text_media_connections_preserved": true
+}

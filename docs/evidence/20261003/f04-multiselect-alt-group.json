@@ -1,0 +1,33 @@
+{
+  "date": "2026-10-03",
+  "environment": {
+    "origin": "http://127.0.0.1:3012",
+    "dataRoot": "output/acceptance-20261003/f07-restart-data",
+    "providerCalls": 0,
+    "browser": "Codex in-app browser"
+  },
+  "bug": "On a normal canvas, Alt drag with two selected nodes copied only the node under the pointer because startNodeDrag cleared selection immediately after duplicateNodesForAltDrag copied one node.",
+  "change": "Alt now duplicates the full selected set when the dragged node is selected. Group members are included once, group items map to copied IDs, and Alt+Shift maps internal and external input links to copied targets. The resulting copies move together and one undo removes them.",
+  "classicPage": {
+    "canvasId": "2b07e30dd2394786ae35ee2c705caf18",
+    "selection": ["f04-prompt-a", "f04-generator"],
+    "altShiftClick": "Using the real page handler with Alt+Shift click, node count 3 to 5 and connection count 2 to 4; copied prompt maps to copied generator, unselected prompt-b remains an external input to copied generator.",
+    "diskReadback": "After autosave, GET /api/canvases/{id} returned 5 nodes and 4 connections with the expected mapped IDs. Reload rendered the same 5 nodes and 4 links.",
+    "altUndo": "A second two-node Alt copy increased nodes 5 to 7; native Control+Z once returned to 5. The saved canvas remained at 5 nodes and 4 links."
+  },
+  "groupPage": {
+    "canvasId": "f04-alt-group-20261003",
+    "seed": "Self-made 2-prompt group plus one generator and one link, four nodes total.",
+    "selection": ["f04-prompt-group", "f04-generator"],
+    "altShiftClick": "The visible page added four nodes, including both group members; node count 4 to 8 and links 1 to 2.",
+    "diskReadback": "Copied group items reference the two copied prompts and the new link joins the copied group to the copied generator. Reload rendered 8 nodes, 2 links, and two groups each reporting 2 prompts.",
+    "drag": "A separate native drag of the selected copied group moved it, both copied prompts, and the selected copied generator together; the original group and nodes stayed in place.",
+    "visibleReview": "The isolated fixture was then laid out as two separate pairs at 50% viewport scale to make the before/after groups easy to compare. The page remains open in the in-app browser."
+  },
+  "validation": [
+    "The real startNodeDrag handler in tests/canvas_alt_group_copy.test.cjs failed before the fix and passed 3/3 after it.",
+    "Both visible canvas pages were used and reloaded; no generation button was clicked.",
+    "node --check static/js/canvas.js and git diff --check passed."
+  ],
+  "limits": "The browser tool applies Alt or Alt+Shift to the initial click and performs the pointer drag separately, so a continuous held-modifier drag is not claimed. Native Ctrl+C/V remains blocked by the in-app browser virtual clipboard."
+}

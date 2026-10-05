@@ -1,0 +1,28 @@
+{
+  "date": "2026-10-03",
+  "environment": "127.0.0.1:3004 isolated acceptance service",
+  "canvas": "f07-partial-savepause2-20261003",
+  "scenario": "One task ID accepted in a two-request batch; saving the canvas repeatedly fails before recovery",
+  "observed": {
+    "submissions": 2,
+    "saveAttempts": 7,
+    "failedSaveAttempts": 4,
+    "queriesAfterSaveRecovery": ["f07_accepted_1"],
+    "savedResultImages": 1,
+    "submissionUnknownPersisted": true
+  },
+  "duringSaveFailure": {
+    "knownTaskIdRetainedOnPage": true,
+    "queries": 0,
+    "recoveryCardVisible": true
+  },
+  "afterSaveRecovery": {
+    "manualQueryUsedKnownTaskId": true,
+    "resultAndUnknownWarningVisibleAfterReload": true
+  },
+  "screenshots": [
+    "f07-accepted-save-paused.png",
+    "f07-accepted-save-recovered.png"
+  ],
+  "limits": "Local simulated service only; provider acceptance for the request without a task ID is unknown."
+}

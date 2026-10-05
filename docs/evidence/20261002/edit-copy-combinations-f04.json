@@ -1,0 +1,140 @@
+{
+  "date": "2026-10-02",
+  "base_url": "http://127.0.0.1:3002",
+  "fixtures": [
+    "f04-copy-classic-20261002",
+    "f04-copy-smart-20261002"
+  ],
+  "baseline": "两种画布均为2节点、1输入连接，来自已有自制固定样例",
+  "method": {
+    "copy_paste": "页面真实生产keydown处理器，Runtime合成Ctrl+C/V事件；工具虚拟剪贴板拦截原生按键，不能标记原生快捷键通过",
+    "alt_copy": "Playwright带Alt或Alt+Shift的节点点击，触发mousedown复制；随后独立真实鼠标拖动，不等同全程按住修饰键拖动",
+    "smart_multiselect": "合成R键按下/抬起加真实鼠标框选",
+    "undo_redo": "Playwright Ctrl+Z / Ctrl+Shift+Z",
+    "persistence": "自动保存、HTTP读取及刷新后等待目标节点可见"
+  },
+  "observations": [
+    {
+      "label": "classic-copy-paste",
+      "nodes": 4,
+      "connections": 2
+    },
+    {
+      "label": "classic-undo-paste",
+      "nodes": 2,
+      "connections": 1
+    },
+    {
+      "label": "classic-alt-shift-copy",
+      "nodes": 3,
+      "connections": 2
+    },
+    {
+      "label": "classic-alt-shift-copy-moved",
+      "nodes": 3,
+      "connections": 2
+    },
+    {
+      "label": "classic-undo-copy-move",
+      "nodes": 2,
+      "connections": 1
+    },
+    {
+      "label": "classic-reload-after-undo-confirmed",
+      "nodes": 2,
+      "connections": 1
+    },
+    {
+      "label": "classic-alt-copy-no-link",
+      "nodes": 3,
+      "connections": 1
+    },
+    {
+      "label": "classic-undo-alt",
+      "nodes": 2,
+      "connections": 1
+    },
+    {
+      "label": "smart-copy-paste",
+      "nodes": 4,
+      "connections": 2
+    },
+    {
+      "label": "smart-undo-paste",
+      "nodes": 2,
+      "connections": 1
+    },
+    {
+      "label": "smart-redo-paste",
+      "nodes": 4,
+      "connections": 2
+    },
+    {
+      "label": "smart-alt-copy-no-link",
+      "nodes": 3,
+      "connections": 1
+    },
+    {
+      "label": "smart-undo-alt",
+      "nodes": 2,
+      "connections": 1
+    },
+    {
+      "label": "smart-alt-shift-copy",
+      "nodes": 3,
+      "connections": 2
+    },
+    {
+      "label": "smart-alt-shift-copy-moved",
+      "nodes": 3,
+      "connections": 2
+    },
+    {
+      "label": "smart-undo-move",
+      "nodes": 3,
+      "connections": 2
+    },
+    {
+      "label": "smart-undo-alt-shift",
+      "nodes": 2,
+      "connections": 1
+    },
+    {
+      "label": "smart-redo-alt-shift",
+      "nodes": 3,
+      "connections": 2
+    },
+    {
+      "label": "smart-redo-move",
+      "nodes": 3,
+      "connections": 2
+    },
+    {
+      "label": "smart-reload-copy",
+      "nodes": 3,
+      "connections": 2
+    }
+  ],
+  "validation": {
+    "state_count": 20,
+    "unique_ids": true,
+    "connections_and_input_references": true,
+    "redo_state_equal": true,
+    "smart_reload_state_equal": true,
+    "simulation_calls_before": 1,
+    "simulation_calls_after": 1,
+    "new_generation_calls": 0
+  },
+  "existing_difference": "普通画布复制后独立移动，一次撤销回2节点；智能画布分两次撤销移动、复制。普通画布未提供独立重做分支，本轮不作为失败。",
+  "remaining": [
+    "真实Ctrl+C/V快捷键端到端",
+    "全程Alt+Shift拖动",
+    "组节点、多节点Alt拖动等其他组合"
+  ],
+  "source_sha256": {
+    "static/js/canvas.js": "c8de610eed5a3c83d250ec16afd91ec022e5b361e9b2fcbd096f2dda74a6742e",
+    "static/js/smart-canvas.js": "5a5915adf5b513206b62990851dfaedfe1f37ef9a27d28926370c089bce4a610"
+  },
+  "screenshot": "f04-smart-copy-reopened.jpg",
+  "raw_states": "edit-copy-combinations-f04-states.json"
+}

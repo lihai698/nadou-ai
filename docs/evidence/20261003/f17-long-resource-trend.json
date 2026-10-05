@@ -1,0 +1,36 @@
+{
+  "date": "2026-10-03",
+  "environment": {
+    "server": "http://127.0.0.1:3011",
+    "dataRoot": "output/acceptance-20261003/f17-perf-data",
+    "samples": [
+      "perf-classic-100-20261002",
+      "perf-smart-100-20261002"
+    ],
+    "browser": "Codex in-app browser",
+    "providerCalls": 0
+  },
+  "browser": {
+    "method": "CDP Performance.getMetrics at the beginning and after the 15-minute idle window; no forced garbage collection",
+    "classic100": {
+      "initial": {"JSHeapUsedSize": 20973276, "JSHeapTotalSize": 33021952, "Nodes": 4463, "JSEventListeners": 2625},
+      "final": {"JSHeapUsedSize": 22026400, "JSHeapTotalSize": 34070528, "Nodes": 4463, "JSEventListeners": 2625}
+    },
+    "smart100": {
+      "initial": {"JSHeapUsedSize": 8133336, "JSHeapTotalSize": 8626176, "Nodes": 12556, "JSEventListeners": 4503},
+      "final": {"JSHeapUsedSize": 10712156, "JSHeapTotalSize": 13090816, "Nodes": 12556, "JSEventListeners": 4503, "imageNodes": 100, "decodedSampleImages": 50, "failedSampleImages": 0}
+    }
+  },
+  "backend": {
+    "method": "PowerShell Get-Process sampling every 30 seconds for 31 points over 900.818 seconds; process remained alive",
+    "processId": 1120,
+    "csv": "output/acceptance-20261003/f17-perf-data/backend-long-trend.csv",
+    "workingSetBytes": {"min": 64897024, "median": 64897024, "max": 64962560},
+    "privateBytes": {"min": 57536512, "median": 57536512, "max": 57753600},
+    "handles": {"min": 214, "median": 214, "max": 214},
+    "threadCount": {"min": 4, "median": 4, "max": 5},
+    "cpuSeconds": {"start": 2.422, "end": 3.688}
+  },
+  "result": "During this fixed two-page idle sample, DOM/listener counts stayed constant and backend working set, private memory and handles varied only slightly. JS heap changed with ordinary browser allocation and garbage collection; this is a bounded idle observation, not proof of no leak or a per-canvas memory limit.",
+  "scope": "Self-made 100-node samples with one repeated 320x240 PNG; no generation, video, high-resolution media, concurrent canvases or real providers."
+}

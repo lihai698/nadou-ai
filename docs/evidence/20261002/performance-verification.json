@@ -1,0 +1,37 @@
+{
+  "browser_runs": 24,
+  "autosaves": 12,
+  "original_files_unchanged": 33,
+  "fixtures": [
+    {
+      "kind": "classic",
+      "count": 10,
+      "connections": 0,
+      "restored_text": true
+    },
+    {
+      "kind": "classic",
+      "count": 100,
+      "connections": 0,
+      "restored_text": true
+    },
+    {
+      "kind": "smart",
+      "count": 10,
+      "connections": 5,
+      "restored_text": true
+    },
+    {
+      "kind": "smart",
+      "count": 100,
+      "connections": 50,
+      "restored_text": true
+    }
+  ],
+  "simulation_calls": 0,
+  "source_sha256": {
+    "main.py": "3ca778510a8ed880dfef93c14200e22b5efc93cfff02b1da6c51969c73d57edb",
+    "static/js/canvas.js": "bd42d9341b0881b7b7b1054af84fb6a8ce213a916641f24751b562d4263c9d61",
+    "static/js/smart-canvas.js": "5a5915adf5b513206b62990851dfaedfe1f37ef9a27d28926370c089bce4a610"
+  }
+}

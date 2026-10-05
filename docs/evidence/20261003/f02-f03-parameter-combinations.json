@@ -1,0 +1,70 @@
+{
+  "date": "2026-10-03",
+  "scope": "阶段 3 F02/F03 两画布独有参数组合；本机隔离页面操作与保存重开，不执行生成",
+  "environment": {
+    "service": "http://127.0.0.1:3015",
+    "data_root": "output/acceptance-20261003/f05-media-data",
+    "browser": "Codex 内置浏览器；工具未提供浏览器版本",
+    "viewport": "1280x720",
+    "zoom": "浏览器默认缩放，未设置覆盖",
+    "os": "Windows 10 专业版 build 19045",
+    "cpu": "Intel Core i7-6820HK",
+    "ram_gib": 15.9,
+    "python_runtime_available": "Python 3.10.11",
+    "code_sha256": {
+      "static/js/canvas.js": "4396ca65d88fe59ab485f2c4f36da47f42d1f0736c55374cbebbd630845ea411",
+      "static/js/smart-canvas.js": "c7afaa3f0f78ee778010f85bb56d730b629517a276b8fece0809391eac198b81"
+    }
+  },
+  "f02_classic_video": {
+    "canvas_id": "1b0039a01aea45148cf4491a9a15452f",
+    "url": "http://127.0.0.1:3015/static/canvas.html?id=1b0039a01aea45148cf4491a9a15452f&project=default",
+    "saved_file": "output/acceptance-20261003/f05-media-data/data/canvases/1b0039a01aea45148cf4491a9a15452f.json",
+    "saved_sha256": "6fac242cc5254ba825f808c4f48d8ae67da94cc3f0a888ad11b82a3db33a7a15",
+    "expected": "提示词接入视频生成节点；8 秒、9:16、720p、固定镜头和生成音频在保存重开后保留",
+    "actual": {
+      "nodes": 2,
+      "types": ["prompt", "video"],
+      "connections": 1,
+      "connection": "prompt_c85742d3f4e368_1791013457115 -> vid_b8f5c60f7d8628_1791013474466",
+      "prompt": "竖屏验收短片：蓝色方块平移，橙色圆形出现。",
+      "duration_seconds": 8,
+      "aspect_ratio": "9:16",
+      "resolution": "720p",
+      "camera_fixed": true,
+      "generate_audio": true,
+      "reload_page": "连线、提示词、时长、比例、分辨率在页面显示；两个开关的 active 类均为 true",
+      "logs_count": 0
+    },
+    "result": "本组参数的页面保存重开通过；隔离配置没有可用视频模型，未点击视频生成"
+  },
+  "f03_smart_split_parallel_loop": {
+    "canvas_id": "a1b0be39f7124f9480f93f3faaf8e2c6",
+    "url": "http://127.0.0.1:3015/static/smart-canvas.html?id=a1b0be39f7124f9480f93f3faaf8e2c6&project=default",
+    "saved_file": "output/acceptance-20261003/f05-media-data/data/canvases/a1b0be39f7124f9480f93f3faaf8e2c6.json",
+    "saved_sha256": "c891878891b21d7b0ced49172e7dc6f8dd731cac20f48b7894db07d5e372a8b3",
+    "expected": "提示词以分号拆成两段，连接到并发循环；起始计数 4、次数 2、提示词输入在保存重开后保留",
+    "actual": {
+      "nodes": 2,
+      "types": ["smart-prompt", "smart-loop"],
+      "connections": 1,
+      "connection": "prompt_qptbhuudwp4b -> loop_u93wi6bqxobt (input)",
+      "prompt": "第一幕：蓝色方块;第二幕：橙色圆形",
+      "prompt_separator": ";",
+      "prompt_split_enabled": true,
+      "split_segments_visible": 2,
+      "loop_mode": "parallel",
+      "loop_count": 2,
+      "loop_start": 4,
+      "show_prompt": true,
+      "reload_page": "页面显示两段预览、循环识别到 2 条提示词、并发模式、起始计数 4 和次数 2",
+      "logs_count": 0
+    },
+    "result": "本组智能节点字段、连线和页面恢复通过；未启动循环或真实生成"
+  },
+  "limits": [
+    "仅覆盖两组新增参数组合，不能代表全部节点和参数组合",
+    "普通视频节点的隔离服务没有可用模型；不验证供应商受理或生成输出",
+    "浏览器版本号未由当前工具提供；页面缩放未单独测量"
+  ]
+}

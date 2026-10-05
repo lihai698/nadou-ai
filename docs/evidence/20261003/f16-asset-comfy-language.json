@@ -1,0 +1,47 @@
+{
+  "date": "2026-10-03",
+  "environment": "127.0.0.1:3010 isolated home page, Codex in-app browser; English, light theme, 125% manual UI scale, then Chinese and Auto scale; no real provider calls",
+  "change": "Loaded the asset-manager translation module through the shared i18n loader, refreshed the asset and ComfyUI iframe cache versions, translated dynamic controls, and kept user names and ComfyUI default field names stable across language changes.",
+  "observations": {
+    "assetLibrary": {
+      "englishTabs": ["Image Assets", "Workflows", "Prompt Library", "Canvas Assets", "Local Assets"],
+      "englishUiChecked": [
+        "heading, status and page actions",
+        "headings, buttons and search in all five tabs",
+        "default system categories, counts and empty states",
+        "new prompt form",
+        "preferences first screen",
+        "asset management page"
+      ],
+      "at125Percent": {"scrollWidth": 1152, "clientWidth": 1152},
+      "atAutoScale": {"scrollWidth": 1195, "clientWidth": 1195},
+      "chineseRestored": true,
+      "customNameRoundTrip": "Created an empty test group named 模型 in the isolated 3010 asset library; its tree label and active heading remained 模型 in English and Chinese, then the empty test group was removed."
+    },
+    "comfyuiSettings": {
+      "englishUiChecked": [
+        "backend address heading, add button, format guidance and fit-to-window title",
+        "dynamic backend Delete button"
+      ],
+      "at125Percent": {"scrollWidth": 1152, "clientWidth": 1152},
+      "latestAt125Percent": {"scrollWidth": 1162, "clientWidth": 1162},
+      "chineseRestored": true
+    },
+    "contentDataKeptInOriginalLanguage": [
+      "asset and directory names",
+      "built-in prompt bodies",
+      "custom Chinese fields and titles in saved workflows"
+    ]
+  },
+  "validation": [
+    "3010 browser page: switched to English and checked all five asset tabs and ComfyUI controls; switched back to Chinese",
+    "3010 browser page: a user-created group named 模型 remained unchanged in both languages; the empty test group was removed afterward",
+    "125% and Auto UI scale: no horizontal overflow in inspected embedded pages",
+    "node --check static/js/i18n/asset-manager.js and static/js/comfyui-settings.js: passed",
+    "node static/js/i18n/validate-i18n.js: i18n ok, 1075 keys",
+    "frontend node --test: 94/94 passed",
+    "Python unittest suite: 46/46 passed",
+    "git diff --check: passed"
+  ],
+  "limit": "Deep dialogs and error states have not been checked one by one. Some system media-type labels on asset cards and details remain Chinese to avoid changing user names in mixed content. Other page combinations and a separate clean browser remain open. F16 is partial."
+}

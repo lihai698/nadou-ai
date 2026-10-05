@@ -4,10 +4,12 @@ function tf(key, vars={}){
 }
 function refreshLanguageView(){
     document.title = tr('comfy.title');
+    renderComfyInstances();
     renderList();
     renderEditor();
     renderPreview();
     renderWorkspaceView();
+    refreshPopupBody();
     refreshIcons();
 }
 function applyLanguage(){
@@ -15,6 +17,7 @@ function applyLanguage(){
     refreshLanguageView();
 }
 function refreshIcons(){ if(window.lucide) lucide.createIcons(); }
+const settingsRules = window.ComfySettingsRules;
 
 const TYPES = [
     { v:'text', zh:'文本', en:'Text' },
@@ -106,18 +109,22 @@ const INPUT_LABELS = {
 
 function nodeLabel(node){
     if(node._meta?.title) return node._meta.title;
-    return NODE_INFO[node.class_type]?.label || node.class_type || '未命名';
+    return (currentLang() === 'en' ? node.class_type : NODE_INFO[node.class_type]?.label) || node.class_type || tr('comfy.unnamedNode');
 }
 function nodeSub(node){
     const info = NODE_INFO[node.class_type];
-    if(info && node._meta?.title) return info.label + ' · ' + node.class_type;
+    if(info && node._meta?.title) return currentLang() === 'en' ? node.class_type : info.label + ' · ' + node.class_type;
     return node.class_type || '';
 }
 function nodeIcon(node){
     return NODE_INFO[node.class_type]?.icon || '◆';
 }
 function inputLabel(name){
+    if(currentLang() === 'en') return String(name || '').replaceAll('_', ' ').replace(/\b\w/g, c => c.toUpperCase());
     return INPUT_LABELS[name] || name;
+}
+function displayFieldName(f){
+    return f.name === (INPUT_LABELS[f.input] || f.input) ? inputLabel(f.input) : (f.name || f.input);
 }
 
 let workflows = [];
@@ -148,23 +155,12 @@ const miniCanvasHost = document.getElementById('miniCanvasHost');
 function setStatus(text){ statusEl.textContent = text || ''; }
 function escapeHtml(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function escapeAttr(s){ return escapeHtml(s); }
-function fieldKind(f){
-    if(['image','video','audio'].includes(f.type)) return f.type;
-    const key = `${f.input || ''} ${f.name || ''}`.toLowerCase();
-    if(f.type === 'textarea' || /prompt|text|提示词|正向|负向/.test(key)) return 'prompt';
-    return 'setting';
-}
-function isMediaField(f){ return ['image','video','audio'].includes(fieldKind(f)); }
+const {fieldKind, isMediaField, mediaAccept, guessType} = settingsRules;
 function mediaFieldLabel(kind, count){
     const labels = currentLang() === 'en'
         ? {image:'Images', video:'Videos', audio:'Audio'}
         : {image:'图片', video:'视频', audio:'音频'};
     return `${labels[kind] || kind} ${count}`;
-}
-function mediaAccept(kind){
-    if(kind === 'video') return 'video/*';
-    if(kind === 'audio') return 'audio/*';
-    return 'image/*';
 }
 function mediaUploadText(kind){
     if(kind === 'video') return tr('comfy.clickUploadVideo');
@@ -217,7 +213,7 @@ function renderComfyInstances(){
         <div style="display:flex;align-items:center;gap:6px;padding:4px;border:1px solid var(--line);border-radius:9px;background:var(--soft)">
             <span style="width:18px;text-align:center;font-size:10.5px;color:var(--faint);font-weight:800">${i + 1}</span>
             <input class="small-input" type="text" value="${escapeAttr(addr)}" placeholder="host:port" oninput="updateComfyInstance(${i}, this.value)" style="flex:1;height:28px;padding:0 8px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--text);font-size:12px;font-family:ui-monospace,Menlo,monospace">
-            <button class="opt-del" type="button" onclick="removeComfyInstance(${i})" title="删除"><i data-lucide="x" class="w-3 h-3"></i></button>
+            <button class="opt-del" type="button" onclick="removeComfyInstance(${i})" title="${tr('common.delete')}"><i data-lucide="x" class="w-3 h-3"></i></button>
         </div>
     `).join('');
     refreshIcons();
@@ -234,25 +230,25 @@ function removeComfyInstance(index){
     renderComfyInstances();
 }
 async function saveComfyInstances(){
-    const cleaned = comfyInstances.map(s => String(s||'').trim()).filter(Boolean);
-    if(!cleaned.length){ alert('请至少填一个 ComfyUI 后端地址'); return; }
-    setStatus('保存中...');
+    const cleaned = settingsRules.cleanComfyInstances(comfyInstances);
+    if(!cleaned.length){ alert(tr('comfy.needBackend')); return; }
+    setStatus(tr('comfy.saving'));
     try {
         const res = await fetch('/api/comfyui/instances', {
             method:'PUT',
             headers:{'Content-Type':'application/json'},
             body:JSON.stringify({ instances: cleaned })
         });
-        if(!res.ok) throw new Error((await res.json()).detail || '保存失败');
+        if(!res.ok) throw new Error((await res.json()).detail || tr('comfy.saveFailed'));
         const data = await res.json();
         comfyInstances = data.instances || cleaned;
         renderComfyInstances();
         try { new BroadcastChannel('studio-api').postMessage({ type: 'comfy-instances-changed' }); } catch(e) {}
         try { window.parent?.postMessage({ type: 'comfy-instances-changed' }, '*'); } catch(e) {}
-        setStatus('ComfyUI 后端地址已保存');
+        setStatus(tr('comfy.backendsSaved'));
     } catch(e){
-        alert(e.message || '保存失败');
-        setStatus('保存失败');
+        alert(e.message || tr('comfy.saveFailed'));
+        setStatus(tr('comfy.saveFailed'));
     }
 }
 
@@ -339,7 +335,7 @@ function toggleField(node, input){
         const f = {
             id: makeFieldId(),
             node, input,
-            name: inputLabel(input),
+            name: INPUT_LABELS[input] || input,
             type,
             default: typeof rawValue === 'object' ? null : rawValue,
             options: [],
@@ -366,6 +362,10 @@ function refreshPopupBody(){
     const node = currentWorkflow[popupNodeId];
     if(!node) return;
     const popup = document.getElementById('nodePopup');
+    const title = popup.querySelector('.popup-title');
+    const sub = popup.querySelector('.popup-sub');
+    if(title) title.textContent = nodeLabel(node);
+    if(sub) sub.textContent = `${nodeSub(node)} · #${popupNodeId}`;
     const body = popup.querySelector('.popup-body');
     if(!body) return;
     const inputs = Object.entries(node.inputs || {}).filter(([k,v]) => {
@@ -375,23 +375,6 @@ function refreshPopupBody(){
         ? `<div class="popup-empty">${tr('comfy.noConfigFields')}</div>`
         : inputs.map(([key, value]) => renderInputRow(popupNodeId, key, value)).join('');
     refreshIcons();
-}
-
-function guessType(value, inputName){
-    const lc = (inputName||'').toLowerCase();
-    if(typeof value === 'boolean') return 'boolean';
-    if(typeof value === 'number'){
-        if(/strength|cfg|denoise/.test(lc)) return 'slider';
-        return 'number';
-    }
-    if(typeof value === 'string'){
-        if(/prompt|text|description/.test(lc) || (value && value.length > 60)) return 'textarea';
-        if(/video|movie|mp4|webm|mov|m4v|vhs/.test(lc) || /\.(mp4|webm|mov|m4v|avi|mkv)(\?|$)/i.test(value)) return 'video';
-        if(/audio|sound|music|voice|wav|mp3/.test(lc) || /\.(mp3|wav|m4a|aac|ogg|flac)(\?|$)/i.test(value)) return 'audio';
-        if(/image|img|mask|filename|file/.test(lc) || /\.(png|jpe?g|webp|gif|bmp|tiff?)(\?|$)/i.test(value)) return 'image';
-        return 'text';
-    }
-    return 'text';
 }
 
 function updateField(fieldId, key, value){
@@ -779,7 +762,7 @@ function renderInputRow(nodeId, inputKey, rawValue){
                 <div class="input-key">${escapeHtml(friendlyName)}${showOriginal ? ` <span style="font-size:10px;font-weight:600;color:var(--faint);margin-left:4px">${escapeHtml(inputKey)}</span>` : ''}</div>
                 <div class="input-orig">${tr('comfy.defaultValue')}${valueBadge}</div>
             </div>
-            <input class="small-input" type="text" placeholder="${tr('comfy.displayName')}" value="${active?escapeAttr(f.name):escapeAttr(friendlyName)}" ${active?'':'disabled'} oninput="updateField('${active?f.id:''}','name',this.value)">
+            <input class="small-input" type="text" placeholder="${tr('comfy.displayName')}" value="${active?escapeAttr(displayFieldName(f)):escapeAttr(friendlyName)}" ${active?'':'disabled'} oninput="updateField('${active?f.id:''}','name',this.value)">
             <select class="small-select" ${active?'':'disabled'} onchange="updateField('${active?f.id:''}','type',this.value)">
                 ${TYPES.map(t=>`<option value="${t.v}" ${active && f.type===t.v?'selected':''}>${typeLabel(t.v)}</option>`).join('')}
             </select>
@@ -791,7 +774,7 @@ function renderInputRow(nodeId, inputKey, rawValue){
 function renderExtras(f){
     if(f.type === 'slider' || f.type === 'number'){
         const randomToggle = f.type === 'number'
-            ? `<label class="random-toggle" onclick="event.stopPropagation()"><input type="checkbox" ${f.random_enabled === true ? 'checked' : ''} onchange="updateField('${f.id}','random_enabled',this.checked)">随机数</label>`
+            ? `<label class="random-toggle" onclick="event.stopPropagation()"><input type="checkbox" ${f.random_enabled === true ? 'checked' : ''} onchange="updateField('${f.id}','random_enabled',this.checked)">${tr('comfy.randomNumber')}</label>`
             : '';
         return `<div class="extras-row">
             <div class="extra-pair">min<input class="small-input" type="number" value="${f.min ?? ''}" oninput="updateField('${f.id}','min',this.value===''?null:parseFloat(this.value))"></div>
@@ -807,25 +790,25 @@ function renderExtras(f){
         const rows = opts.map((o, i) => {
             const looksNumber = String(o).trim() !== '' && !isNaN(Number(o));
             const tag = looksNumber
-                ? '<span class="opt-type-tag is-num">数字</span>'
-                : '<span class="opt-type-tag">文本</span>';
+                ? `<span class="opt-type-tag is-num">${tr('comfy.numericOption')}</span>`
+                : `<span class="opt-type-tag">${tr('comfy.textOption')}</span>`;
             return `
                 <div class="dropdown-opt-row">
                     <span class="opt-index">${i + 1}</span>
-                    <input class="small-input" type="text" placeholder="选项 ${i + 1}" value="${escapeAttr(o)}"
+                    <input class="small-input" type="text" placeholder="${tf('comfy.optionPlaceholder', {count:i + 1})}" value="${escapeAttr(o)}"
                         onmousedown="event.stopPropagation()" onclick="event.stopPropagation()"
                         oninput="updateDropdownOption('${fid}', ${i}, this.value, this)">
                     ${tag}
-                    <button class="opt-del" type="button" onclick="event.stopPropagation();removeDropdownOption('${fid}', ${i})" title="删除"><i data-lucide="x" class="w-3 h-3"></i></button>
+                    <button class="opt-del" type="button" onclick="event.stopPropagation();removeDropdownOption('${fid}', ${i})" title="${tr('common.delete')}"><i data-lucide="x" class="w-3 h-3"></i></button>
                 </div>
             `;
         }).join('');
         return `<div class="extras-row" style="flex-direction:column;align-items:stretch;gap:6px">
             <div style="font-size:11px;color:var(--muted);font-weight:700">
-                下拉选项 <span style="color:var(--faint)">· 数字形式自动作为数值传给 ComfyUI</span>
+                ${tr('comfy.dropdownOptionsLabel')} <span style="color:var(--faint)">${tr('comfy.dropdownNumericHint')}</span>
             </div>
             ${rows}
-            <button class="ghost-btn" type="button" onclick="event.stopPropagation();addDropdownOption('${fid}')" style="height:34px;padding:0 16px;font-size:12px;font-weight:800;align-self:flex-start;gap:6px"><i data-lucide="plus" class="w-3.5 h-3.5"></i><span>添加选项</span></button>
+            <button class="ghost-btn" type="button" onclick="event.stopPropagation();addDropdownOption('${fid}')" style="height:34px;padding:0 16px;font-size:12px;font-weight:800;align-self:flex-start;gap:6px"><i data-lucide="plus" class="w-3.5 h-3.5"></i><span>${tr('comfy.addOption')}</span></button>
         </div>`;
     }
     return '';
@@ -840,7 +823,7 @@ function updateDropdownOption(fieldId, index, value, inputEl){
         if(tag){
             const looksNumber = String(value).trim() !== '' && !isNaN(Number(value));
             tag.classList.toggle('is-num', looksNumber);
-            tag.textContent = looksNumber ? '数字' : '文本';
+            tag.textContent = looksNumber ? tr('comfy.numericOption') : tr('comfy.textOption');
         }
     }
     renderPreview();  // 右侧预览的下拉选项实时同步
@@ -894,7 +877,7 @@ function isPreviewRandomActive(fieldId){
 function randomButtonHtml(f){
     if(!fieldSupportsRandom(f)) return '';
     const active = isPreviewRandomActive(f.id);
-    const title = active ? '随机已开启，点击关闭' : '随机已关闭，点击开启';
+    const title = active ? tr('comfy.randomOn') : tr('comfy.randomOff');
     return `<button class="random-btn ${active ? 'active' : ''}" type="button" onclick="togglePreviewRandom('${f.id}')" title="${title}"><i data-lucide="dice-5" class="w-4 h-4"></i></button>`;
 }
 
@@ -955,7 +938,7 @@ function renderPreview(){
 }
 
 function renderPreviewField(f){
-    const label = `<div class="pfield-label">${escapeHtml(f.name || f.input)}</div>`;
+    const label = `<div class="pfield-label">${escapeHtml(displayFieldName(f))}</div>`;
     const v = previewValues[f.id] ?? f.default ?? (f.type==='boolean'?false:(f.type==='number'||f.type==='slider'?0:''));
     if(f.type === 'textarea'){
         return `<div class="pfield">${label}<textarea class="pfield-textarea" oninput="setPreviewValue('${f.id}',this.value)">${escapeHtml(v)}</textarea></div>`;
@@ -1095,7 +1078,7 @@ function renderMiniCanvasPreview(target = previewCard, large = false){
 }
 
 function renderMiniField(f){
-    const label = `<div class="pfield-label">${escapeHtml(f.name || f.input)}</div>`;
+    const label = `<div class="pfield-label">${escapeHtml(displayFieldName(f))}</div>`;
     const v = previewValues[f.id] ?? f.default ?? (f.type==='boolean'?false:(f.type==='number'||f.type==='slider'?0:''));
     if(isMediaField(f)){
         const displayUrl = previewImageUrls[f.id] || (typeof v === 'string' && /^(\/|https?:|blob:|data:)/.test(v) ? v : '');
@@ -1345,12 +1328,8 @@ async function onUpload(event){
 
 async function onSave(){
     if(!selectedName || !currentConfig) return;
-    // 校验
-    for(const f of currentConfig.fields){
-        if(!f.name || !f.name.trim()){
-            alert(tf('comfy.saveMissingName', {field:f.input})); return;
-        }
-    }
+    const missingNameField = settingsRules.firstUnnamedField(currentConfig.fields);
+    if(missingNameField){ alert(tf('comfy.saveMissingName', {field:missingNameField.input})); return; }
     setStatus(tr('comfy.saving'));
     try {
         const res = await fetch(`/api/workflows/${encodeURIComponent(selectedName)}/config`, {

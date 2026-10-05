@@ -1,0 +1,14 @@
+{
+  "date": "2026-10-03",
+  "environment": "127.0.0.1:3009, output/acceptance-20261003/f13-data",
+  "fixture": "Virtual OpenAI-protocol provider f13-local at loopback port 3999; no API key and no supplier requests.",
+  "isolation": "Acceptance server redirects provider JSON, API env, RunningHub store and static template into f13-data. Only the isolated provider JSON was written; isolated API env was not created. Real provider JSON, API/.env and static RunningHub template modification times stayed at 2026-09-30 12:41:28.",
+  "actions": [
+    "Saved virtual provider with image model f13-image-a, chat model f13-chat-a and video model f13-video-a through the isolated API.",
+    "Opened API settings and changed image model to f13-image-b using the visible Save button.",
+    "Opened chat, online generation, ordinary generator node and smart canvas; each displayed the virtual provider and corresponding image/chat model.",
+    "With all four consumer pages still open, changed image model to f13-image-c and chat model to f13-chat-b in API settings and clicked Save. All four pages updated without reload."
+  ],
+  "apiReadback": "GET /api/providers and GET /api/config agreed on f13-image-c and f13-chat-b; has_key=false.",
+  "result": "F13 passed for virtual provider configuration across the five tested pages; real provider calls and credentials were outside scope."
+}

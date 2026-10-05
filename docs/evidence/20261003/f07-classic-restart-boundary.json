@@ -1,0 +1,52 @@
+{
+  "date": "2026-10-03",
+  "status": "verified",
+  "environment": {
+    "server": "http://127.0.0.1:3012",
+    "fixture": "output/acceptance-20261003/f07_restart_server.py",
+    "dataRoot": "output/acceptance-20261003/f07-restart-data",
+    "provider": "本机模拟平台 / test-only / mock-image",
+    "realProviderUsed": false
+  },
+  "canvas": {
+    "id": "43541f5e72284de4ad418166afda5735",
+    "kind": "classic",
+    "title": "F07普通画布重启隔离验收",
+    "nodeCountAfterRestart": 5,
+    "connectionCountAfterRestart": 4,
+    "taskShape": "提示词→生成节点→输出节点，以及提示词→生成节点的普通画布自制任务"
+  },
+  "beforeRestart": {
+    "serverPid": 21820,
+    "submissions": 2,
+    "taskIds": [
+      "canvas_img_cdcd6c8bf7f04060a725558a121ba5b3",
+      "canvas_img_c5b6328ada524450b4c1ac93bfed39cd"
+    ],
+    "taskStatuses": ["running", "running"],
+    "pendingCardsPersisted": 2,
+    "pageRefreshesWithoutResubmit": 1,
+    "submissionsAfterRefresh": 2
+  },
+  "afterRestart": {
+    "serverPid": 14392,
+    "oldTaskHttpStatuses": [404, 404],
+    "oldTaskDetail": "画布任务不存在，可能服务已重启或任务已过期",
+    "newSubmissions": 0,
+    "knownTasks": [],
+    "pageQueriesOnlyOriginalIds": true,
+    "pendingCardsAfterReload": 0,
+    "failureLogCount": 2,
+    "failureMessage": "后端已重启，任务状态已丢失，本次一键运行已停止",
+    "failureLogVisibleAfterReload": true,
+    "generationButtonsRemainAvailable": true
+  },
+  "assertions": {
+    "classicCanvasReloadedWithNodesAndConnections": true,
+    "refreshDidNotDuplicateSubmission": true,
+    "restartDidNotClaimRemoteSuccess": true,
+    "restartDidNotAutomaticallyResubmit": true,
+    "restartFailureWasSavedAndVisible": true
+  },
+  "scope": "真实隔离服务进程重启和普通画布页面刷新；仅验证在线图片任务。ComfyUI、视频、Midjourney、真实供应商和付费请求未使用。"
+}

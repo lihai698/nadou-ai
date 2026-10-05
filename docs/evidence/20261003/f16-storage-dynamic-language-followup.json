@@ -1,0 +1,31 @@
+{
+  "date": "2026-10-03",
+  "scope": "F16 素材管理动态计数的中英文往返",
+  "environment": {
+    "origin": "http://127.0.0.1:3018",
+    "page": "http://127.0.0.1:3018/static/index.html",
+    "browser": "Codex In-app Browser",
+    "data": "隔离自制 PNG；未读取私人配置或生产数据"
+  },
+  "steps": [
+    "英文模式打开素材库偏好设置并进入素材管理，确认已加载 1 个隔离文件。",
+    "勾选文件，确认删除按钮显示 Delete 1。",
+    "切换回中文，确认按钮恢复为删除 1，底部计数恢复为已加载全部 1 张。"
+  ],
+  "observations": {
+    "english": {
+      "selectedDelete": "Delete 1",
+      "loaded": "Loaded all 1"
+    },
+    "chinese": {
+      "selectedDelete": "删除 1",
+      "loaded": "已加载全部 1 张"
+    }
+  },
+  "validation": [
+    "node --check static/js/i18n.js static/js/i18n/asset-manager.js：通过",
+    "node static/js/i18n/validate-i18n.js：1076 个词条通过",
+    "git diff --check：通过"
+  ],
+  "change": "补充素材管理动态删除计数、加载计数和加载中状态的中英文切换，并更新资源版本号防止旧脚本缓存。"
+}

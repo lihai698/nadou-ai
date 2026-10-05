@@ -5,8 +5,11 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+import httpx
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import main
+from backend import atomic_json
 
 
 class CanvasLogCleanupTests(unittest.IsolatedAsyncioTestCase):
@@ -313,6 +316,58 @@ class CanvasLogCleanupTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(path.exists())
         self.assertEqual(result["removed_files"], [path.name])
         self.assertEqual(json.loads(self.history.read_text(encoding="utf-8")), [])
+
+    async def test_history_replace_failure_keeps_media_and_reports_partial_delete(self):
+        path, url = self.generated_file("history-write-failure.png")
+        preview = Path(main.media_preview_cache_paths(str(path), 256)[0])
+        preview.write_bytes(b"preview")
+        original_history = json.dumps([{"timestamp": 123, "images": [url]}])
+        self.history.write_text(original_history, encoding="utf-8")
+        self.write_canvas("history_write_failure", [{"id": "log-1", "outputs": [url]}])
+        original_replace = atomic_json.os.replace
+
+        def fail_history_replace(source, destination):
+            if Path(destination) == self.history:
+                raise OSError("synthetic history replace failure")
+            return original_replace(source, destination)
+
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=main.app),
+            base_url="http://canvas-log-cleanup.test",
+        ) as client:
+            with patch.object(atomic_json.os, "replace", side_effect=fail_history_replace):
+                response = await client.post("/api/canvases/history_write_failure/logs/delete", json={
+                    "log_id": "log-1",
+                    "delete_unreferenced_media": True,
+                })
+
+        self.assertEqual(response.status_code, 500, response.text)
+        self.assertIn("媒体文件未删除", response.json()["detail"])
+        self.assertEqual(self.history.read_text(encoding="utf-8"), original_history)
+        self.assertEqual(path.read_bytes(), b"image")
+        self.assertEqual(preview.read_bytes(), b"preview")
+        self.assertEqual(list(self.root.glob(".history.json.*.tmp")), [])
+        saved = json.loads((self.canvases / "history_write_failure.json").read_text(encoding="utf-8"))
+        self.assertEqual(saved["logs"], [])
+
+    async def test_unreadable_history_keeps_media(self):
+        path, url = self.generated_file("unreadable-history.png")
+        self.history.write_text("{broken", encoding="utf-8")
+        self.write_canvas("unreadable_history", [{"id": "log-1", "outputs": [url]}])
+
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=main.app),
+            base_url="http://canvas-log-cleanup.test",
+        ) as client:
+            response = await client.post("/api/canvases/unreadable_history/logs/delete", json={
+                "log_id": "log-1",
+                "delete_unreferenced_media": True,
+            })
+
+        self.assertEqual(response.status_code, 500, response.text)
+        self.assertIn("媒体文件未删除", response.json()["detail"])
+        self.assertEqual(path.read_bytes(), b"image")
+        self.assertEqual(self.history.read_text(encoding="utf-8"), "{broken")
 
     async def test_cleanup_preserves_media_when_json_is_unreadable(self):
         path, url = self.generated_file()

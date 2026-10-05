@@ -48,15 +48,15 @@ if errorlevel 1 (
 
 echo.
 echo [2/3] Trying offline install from packages folder...
-"%PYEXE%" -m pip install --no-index --find-links=packages -r requirements.txt
+"%PYEXE%" -m pip install --no-index --find-links=packages -r requirements.lock
 if not errorlevel 1 (
     echo.
     echo [OK] Offline install succeeded.
-    goto :extra
+    goto :done
 )
 
 echo [3/3] Offline failed, trying online install...
-"%PYEXE%" -m pip install -r requirements.txt
+"%PYEXE%" -m pip install -r requirements.lock
 if errorlevel 1 (
     echo.
     echo [ERROR] Install failed. Check your network connection.
@@ -64,17 +64,9 @@ if errorlevel 1 (
     exit /b 1
 )
 
-:extra
-echo.
-echo [Extra] Installing WebSocket support for Uvicorn...
-"%PYEXE%" -m pip install "uvicorn[standard]"
-if errorlevel 1 (
-    echo [WARN] Failed to install uvicorn[standard]. WebSocket features may be unavailable.
-)
-
 :done
 echo.
 echo ============================================
-echo   Done. Run start.bat to launch the server.
+echo   Done. Run run.bat to launch the server.
 echo ============================================
 pause

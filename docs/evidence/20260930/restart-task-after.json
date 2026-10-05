@@ -1,0 +1,50 @@
+{
+  "server": {
+    "mode": "success",
+    "calls": 0,
+    "query_failures": 0,
+    "tasks": []
+  },
+  "nodes": 4,
+  "connections": 3,
+  "logs": [
+    {
+      "id": "log_1200ab2bdc6788_1790779154840",
+      "createdAt": 1790779154840,
+      "status": "failed",
+      "platform": "Comfly",
+      "nodeType": "generator",
+      "model": "API Image",
+      "request": {},
+      "prompt": "中文验收：蓝色方块与橙色圆形，保存后重新打开。",
+      "outputs": [],
+      "refs": [
+        {
+          "url": "/assets/input/ai_ref_c96861fe0c41.png",
+          "name": "中文参考图.png"
+        }
+      ],
+      "runMs": 55284,
+      "error": "后端已重启，任务状态已丢失，本次一键运行已停止"
+    },
+    {
+      "id": "log_4ed048b9bd37d_1790779029992",
+      "createdAt": 1790779029992,
+      "status": "failed",
+      "platform": "Comfly",
+      "nodeType": "generator",
+      "model": "API Image",
+      "request": {},
+      "prompt": "中文验收：蓝色方块与橙色圆形，保存后重新打开。",
+      "outputs": [],
+      "refs": [
+        {
+          "url": "/assets/input/ai_ref_c96861fe0c41.png",
+          "name": "中文参考图.png"
+        }
+      ],
+      "runMs": 82,
+      "error": "验收模拟：任务查询短暂不可用"
+    }
+  ]
+}

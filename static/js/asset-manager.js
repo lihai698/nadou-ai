@@ -110,7 +110,12 @@ let canvasAssetManageMode = false;
 let searchCompositionActive = false;
 let searchRenderTimer = null;
 let lastSearchCompositionEndAt = 0;
-let storageSettingsState = {open:false, tab:'prefs', editor:'', dirs:{}, defaults:{}, kind:'generated', items:[], selected:new Set(), loading:false, loadingMore:false, offset:0, total:0, hasMore:false, pageSize:80, restoreScrollTop:null, classificationPrompt:'', defaultClassificationPrompt:''};
+let storageSettingsState = {open:false, tab:'prefs', editor:'', dirs:{}, defaults:{}, classificationPrompt:'', defaultClassificationPrompt:''};
+const storageFileBrowser = window.AssetStorageFiles.createStorageFileBrowser({
+    loadPage:(kind, offset, limit) => apiJson(`/api/storage-files?kind=${encodeURIComponent(kind)}&offset=${encodeURIComponent(offset)}&limit=${encodeURIComponent(limit)}`),
+    onChange:() => renderStorageSettingsModal()
+});
+const storageFileState = storageFileBrowser.state;
 
 const LOCAL_MEDIA_EXTS = /\.(png|jpe?g|webp|gif|bmp|avif|svg|mp4|webm|mov|m4v|mp3|wav|flac|ogg|m4a|aac)(\?|#|$)/i;
 const SEARCH_INPUT_IDS = new Set(['assetSearch','workflowSearch','promptSearch','localSearch','localUploadSearch','canvasAssetSearch']);
@@ -150,26 +155,30 @@ async function apiJson(url, options={}){
 }
 const STORAGE_KIND_LABELS = {upload:'上传素材', generated:'生成素材', local:'本地素材'};
 async function openStorageSettings(){
+    const session = storageFileBrowser.begin();
     storageSettingsState.open = true;
-    storageSettingsState.selected = new Set();
     renderStorageSettingsModal();
     try {
         const [data, promptData] = await Promise.all([
             apiJson('/api/storage-settings'),
             apiJson('/api/asset-classification-prompt')
         ]);
+        if(!storageFileBrowser.isCurrent(session)) return;
         storageSettingsState.dirs = data.dirs || {};
         storageSettingsState.defaults = data.defaults || {};
         storageSettingsState.classificationPrompt = promptData.prompt || '';
         storageSettingsState.defaultClassificationPrompt = promptData.default_prompt || '';
-        await loadStorageFiles(storageSettingsState.kind || 'generated');
+        renderStorageSettingsModal();
+        await loadStorageFiles(storageFileState.kind || 'generated');
     } catch(err){
+        if(!storageFileBrowser.isCurrent(session)) return;
         setStatus(err.message || '加载存储设置失败');
         renderStorageSettingsModal();
     }
 }
 function closeStorageSettings(){
     storageSettingsState.open = false;
+    storageFileBrowser.close();
     document.getElementById('storageSettingsOverlay')?.remove();
 }
 function syncStorageSettingsInputsToState(){
@@ -222,51 +231,19 @@ async function saveStorageSettings(options={}){
     ]);
     if(data) storageSettingsState.dirs = data.dirs || storageSettingsState.dirs || {};
     if(promptData) storageSettingsState.classificationPrompt = promptData.prompt || storageSettingsState.classificationPrompt || '';
-    storageSettingsState.selected = new Set();
-    if(data) await loadStorageFiles(storageSettingsState.kind);
+    storageFileBrowser.clearSelection();
+    if(data && storageSettingsState.open) await loadStorageFiles(storageFileState.kind);
     setStatus('偏好设置已保存');
 }
 async function loadStorageFiles(kind, options={}){
-    const append = Boolean(options.append);
-    const nextKind = kind || 'generated';
-    if(storageSettingsState.loading || storageSettingsState.loadingMore) return;
     const currentGrid = document.querySelector('[data-storage-file-grid]');
-    const keepScrollTop = append && currentGrid ? currentGrid.scrollTop : null;
-    storageSettingsState.kind = nextKind;
-    if(append){
-        if(!storageSettingsState.hasMore) return;
-        storageSettingsState.loadingMore = true;
-    } else {
-        storageSettingsState.items = [];
-        storageSettingsState.offset = 0;
-        storageSettingsState.total = 0;
-        storageSettingsState.hasMore = false;
-        storageSettingsState.selected = new Set();
-        storageSettingsState.loading = true;
-    }
-    if(!append) renderStorageSettingsModal();
-    try {
-        const offset = append ? storageSettingsState.offset : 0;
-        const limit = storageSettingsState.pageSize || 80;
-        const data = await apiJson(`/api/storage-files?kind=${encodeURIComponent(storageSettingsState.kind)}&offset=${encodeURIComponent(offset)}&limit=${encodeURIComponent(limit)}`);
-        const items = data.items || [];
-        storageSettingsState.items = append ? [...storageSettingsState.items, ...items] : items;
-        storageSettingsState.offset = offset + items.length;
-        storageSettingsState.total = Number(data.total || storageSettingsState.items.length || 0);
-        storageSettingsState.hasMore = Boolean(data.has_more);
-        storageSettingsState.selected = new Set([...storageSettingsState.selected].filter(id => storageSettingsState.items.some(item => item.id === id)));
-    } finally {
-        storageSettingsState.loading = false;
-        storageSettingsState.loadingMore = false;
-        storageSettingsState.restoreScrollTop = keepScrollTop;
-        renderStorageSettingsModal();
-    }
+    return storageFileBrowser.load(kind, {...options, scrollTop:options.append && currentGrid ? currentGrid.scrollTop : null});
 }
 function handleStorageFileGridScroll(event){
     const grid = event.currentTarget;
-    if(!grid || storageSettingsState.loading || storageSettingsState.loadingMore || !storageSettingsState.hasMore) return;
+    if(!grid || storageFileState.loading || storageFileState.loadingMore || !storageFileState.hasMore) return;
     if(grid.scrollTop + grid.clientHeight >= grid.scrollHeight - 260){
-        loadStorageFiles(storageSettingsState.kind, {append:true}).catch(err => setStatus(err.message || '加载更多图片失败'));
+        loadStorageFiles(storageFileState.kind, {append:true}).catch(err => setStatus(err.message || '加载更多图片失败'));
     }
 }
 function renderStorageSettingsModal(){
@@ -282,8 +259,8 @@ function renderStorageSettingsModal(){
         document.body.appendChild(overlay);
     }
     const dirs = storageSettingsState.dirs || {};
-    const kind = storageSettingsState.kind || 'generated';
-    const selectedCount = storageSettingsState.selected.size;
+    const kind = storageFileState.kind || 'generated';
+    const selectedCount = storageFileState.selected.size;
     const rows = ['upload','generated','local'].map(key => `
         <label class="storage-dir-row">
             <span>${STORAGE_KIND_LABELS[key]}</span>
@@ -295,19 +272,19 @@ function renderStorageSettingsModal(){
             <span>${STORAGE_KIND_LABELS[key]}</span>
         </button>
     `).join('');
-    const loadedCount = storageSettingsState.items.length;
-    const cards = storageSettingsState.loading
+    const loadedCount = storageFileState.items.length;
+    const cards = storageFileState.loading
         ? `<div class="storage-empty">正在读取目录...</div>`
-        : storageSettingsState.items.length
-        ? storageSettingsState.items.map(item => `
-            <label class="storage-file-card ${storageSettingsState.selected.has(item.id) ? 'selected' : ''}">
-                <input type="checkbox" data-storage-file="${escapeAttr(item.id)}" data-storage-rel="${escapeAttr(item.rel)}" ${storageSettingsState.selected.has(item.id) ? 'checked' : ''}>
+        : storageFileState.items.length
+        ? storageFileState.items.map(item => `
+            <label class="storage-file-card ${storageFileState.selected.has(item.id) ? 'selected' : ''}">
+                <input type="checkbox" data-storage-file="${escapeAttr(item.id)}" data-storage-rel="${escapeAttr(item.rel)}" ${storageFileState.selected.has(item.id) ? 'checked' : ''}>
                 <img src="${escapeAttr(item.url)}" alt="">
                 <span title="${escapeAttr(item.name)}">${escapeHtml(item.name)}</span>
                 <em>${formatFileSize(item.size)}${item.width ? ` · ${item.width}×${item.height}` : ''}</em>
             </label>
-        `).join('') + (storageSettingsState.hasMore || storageSettingsState.loadingMore
-            ? `<div class="storage-load-more">${storageSettingsState.loadingMore ? '继续加载中...' : `已加载 ${loadedCount} / ${storageSettingsState.total || loadedCount}，向下滚动继续`}</div>`
+        `).join('') + (storageFileState.hasMore || storageFileState.loadingMore
+            ? `<div class="storage-load-more">${storageFileState.loadingMore ? '继续加载中...' : `已加载 ${loadedCount} / ${storageFileState.total || loadedCount}，向下滚动继续`}</div>`
             : `<div class="storage-load-more done">已加载全部 ${loadedCount} 张</div>`)
         : `<div class="storage-empty">这个目录里暂时没有图片</div>`;
     const activePrefTab = storageSettingsState.tab || 'prefs';
@@ -381,7 +358,7 @@ function renderStorageSettingsModal(){
         <div class="storage-file-head">
             <div class="storage-tabs">${tabs}</div>
             <div class="storage-file-actions">
-                <button class="asset-btn" type="button" data-storage-select-all ${storageSettingsState.items.length ? '' : 'disabled'}><i data-lucide="check-square"></i><span>全选</span></button>
+                <button class="asset-btn" type="button" data-storage-select-all ${storageFileState.items.length ? '' : 'disabled'}><i data-lucide="check-square"></i><span>全选</span></button>
                 <button class="asset-btn danger" type="button" data-storage-delete ${selectedCount ? '' : 'disabled'}><i data-lucide="trash-2"></i><span>删除 ${selectedCount || ''}</span></button>
             </div>
         </div>
@@ -405,24 +382,34 @@ function renderStorageSettingsModal(){
     `;
     const fileGrid = overlay.querySelector('[data-storage-file-grid]');
     fileGrid?.addEventListener('scroll', handleStorageFileGridScroll, {passive:true});
-    if(fileGrid && storageSettingsState.restoreScrollTop !== null){
-        fileGrid.scrollTop = storageSettingsState.restoreScrollTop;
-        storageSettingsState.restoreScrollTop = null;
+    if(fileGrid && storageFileState.restoreScrollTop !== null){
+        fileGrid.scrollTop = storageFileState.restoreScrollTop;
+        storageFileState.restoreScrollTop = null;
     }
     refreshIcons();
 }
 async function deleteSelectedStorageFiles(){
-    const selected = storageSettingsState.items.filter(item => storageSettingsState.selected.has(item.id));
+    const selected = storageFileState.items.filter(item => storageFileState.selected.has(item.id));
     if(!selected.length) return;
-    if(!confirm(`确认删除 ${selected.length} 张图片？此操作会删除磁盘文件。`)) return;
+    const kind = storageFileState.kind;
+    const session = storageFileBrowser.currentSession();
+    const confirmText = window.StudioI18n?.t('assetManager.storageDeleteConfirm') || '确认删除 {count} 张图片？此操作会删除磁盘文件。';
+    if(!confirm(confirmText.replace('{count}', String(selected.length)))) return;
     const data = await apiJson('/api/storage-files/delete', {
         method:'POST',
         headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({kind:storageSettingsState.kind, items:selected.map(item => item.rel)})
+        body:JSON.stringify({kind, items:selected.map(item => item.rel)})
     });
-    storageSettingsState.selected.clear();
-    await loadStorageFiles(storageSettingsState.kind);
-    setStatus(`已删除 ${data.removed || 0} 个文件`);
+    if(storageFileBrowser.isCurrent(session) && storageFileState.kind === kind){
+        storageFileBrowser.clearSelection();
+        await loadStorageFiles(kind);
+    }
+    const removed = data.removed || 0;
+    const retained = data.skipped_referenced?.length || 0;
+    const statusKey = removed && retained ? 'assetManager.storageDeletePartial'
+        : retained ? 'assetManager.storageDeleteKept' : 'assetManager.storageDeleteDone';
+    setStatus(window.StudioI18n.t(statusKey)
+        .replace('{removed}', String(removed)).replace('{kept}', String(retained)));
 }
 function formatDate(value){
     const num = Number(value || 0);
@@ -699,6 +686,9 @@ function assetKindLabel(item){
     if(kind === 'text') return '文本';
     return '图片';
 }
+function renderSystemLabel(label){
+    return `<span data-asset-ui-text="${escapeAttr(label)}">${escapeHtml(label)}</span>`;
+}
 // 缩略图走服务端缩放代理（/api/media-preview），把大原图降到 ~256px 再传给浏览器。素材多时滚动只解码小图，
 // 不再因为加载/解码整张原图而卡。仅对本地 /output、/assets 的图片/视频生效，其它地址原样返回。
 function assetPreviewUrl(url, w=256){
@@ -717,12 +707,12 @@ function assetThumb(item){
     const kind = assetKind(item);
     // 视频用 poster（服务端生成的一帧）+ preload=none：不再为每个视频加载元数据，素材多时滚动顺畅。
     if(kind === 'video') return `<video src="${escapeAttr(item.url)}" poster="${escapeAttr(assetPreviewUrl(item.url, 256))}" muted preload="none" playsinline></video>`;
-    if(kind === 'audio') return `<div class="asset-file-icon"><i data-lucide="file-audio"></i><span>音频</span></div>`;
-    if(kind === 'text') return `<div class="asset-file-icon"><i data-lucide="file-text"></i><span>文本</span></div>`;
+    if(kind === 'audio') return `<div class="asset-file-icon"><i data-lucide="file-audio"></i>${renderSystemLabel('音频')}</div>`;
+    if(kind === 'text') return `<div class="asset-file-icon"><i data-lucide="file-text"></i>${renderSystemLabel('文本')}</div>`;
     return `<img src="${escapeAttr(assetPreviewUrl(item.url, 256))}" alt="${escapeAttr(item.name || 'asset')}" loading="lazy" decoding="async">`;
 }
 function workflowThumb(item){
-    return `<div class="asset-file-icon workflow-file-icon"><i data-lucide="workflow"></i><span>${escapeHtml(workflowKindLabel(item))}</span></div>`;
+    return `<div class="asset-file-icon workflow-file-icon"><i data-lucide="workflow"></i>${renderSystemLabel(workflowKindLabel(item))}</div>`;
 }
 function isLocalMediaFile(file){
     if(!file) return false;
@@ -1042,10 +1032,14 @@ function groupCanvasAssetItems(items){
     (items || []).forEach(item => {
         const key = item.canvas_id || item.canvas_title || '__unknown__';
         if(!map.has(key)){
+            const kindLabel = canvasKindLabel(item.canvas_kind);
+            const dateLabel = formatDate(item.canvas_updated_at || item.created_at);
             const group = {
                 key,
                 title:item.canvas_title || '未命名画布',
-                subtitle:`${canvasKindLabel(item.canvas_kind)} / ${formatDate(item.canvas_updated_at || item.created_at)}`,
+                subtitleKind:kindLabel,
+                subtitleDate:dateLabel,
+                subtitle:`${kindLabel} / ${dateLabel}`,
                 items:[]
             };
             map.set(key, group);
@@ -1474,7 +1468,7 @@ function renderCanvasAssetGroup(group){
         <div class="canvas-asset-group-head">
             <div>
                 <strong title="${escapeAttr(group.title)}">${escapeHtml(group.title)}</strong>
-                <span>${escapeHtml(group.subtitle || '')}</span>
+                <span data-asset-ui-prefix="${escapeAttr(group.subtitleKind || '')}" data-asset-ui-suffix="${escapeAttr(group.subtitleDate || '')}">${escapeHtml(group.subtitle || '')}</span>
             </div>
             <small>${(group.items || []).length} 个资产</small>
         </div>
@@ -1489,14 +1483,15 @@ function renderCanvasAssetCard(item){
         <div class="asset-thumb canvas-asset-thumb">${assetThumb(item)}${renderCanvasAssetKindBadge(item)}</div>
         <div class="asset-card-body">
             <div class="asset-card-name" title="${escapeAttr(item.name || '')}">${escapeHtml(item.name || 'canvas asset')}</div>
-            <div class="asset-card-meta">${escapeHtml(canvasAssetKindLabel(item))} · ${escapeHtml(item.canvas_title || '未命名画布')}</div>
+            <div class="asset-card-meta">${renderSystemLabel(canvasAssetKindLabel(item))} · ${escapeHtml(item.canvas_title || '未命名画布')}</div>
         </div>
     </article>`;
 }
 function renderCanvasAssetKindBadge(item){
     const kind = assetKind(item);
     const icon = kind === 'video' ? 'play' : kind === 'audio' ? 'file-audio' : kind === 'text' ? 'file-text' : 'image';
-    return `<span class="asset-kind-badge ${escapeAttr(kind)}" title="${escapeAttr(canvasAssetKindLabel(item))}"><i data-lucide="${icon}"></i></span>`;
+    const label = canvasAssetKindLabel(item);
+    return `<span class="asset-kind-badge ${escapeAttr(kind)}" title="${escapeAttr(label)}" data-asset-ui-title="${escapeAttr(label)}"><i data-lucide="${icon}"></i></span>`;
 }
 function renderCanvasAssetDetail(item){
     if(!item) return `<div class="panel-head"><div class="panel-title"><strong>画布资产详情</strong><span>选择一个画布资产查看详情</span></div></div><div class="detail-scroll"><div class="detail-empty"><i data-lucide="layout-dashboard"></i><span>暂无画布资产</span></div></div>`;
@@ -1504,7 +1499,7 @@ function renderCanvasAssetDetail(item){
     const canPreview = ['image','video'].includes(kind);
     return `
         <div class="panel-head">
-            <div class="panel-title"><strong>画布资产详情</strong><span>${escapeHtml(canvasAssetKindLabel(item))}</span></div>
+            <div class="panel-title"><strong>画布资产详情</strong>${renderSystemLabel(canvasAssetKindLabel(item))}</div>
             <div class="panel-actions">
                 ${canPreview ? `<button class="asset-icon-btn" type="button" data-canvas-asset-preview="${escapeAttr(item.id)}" title="${kind === 'video' ? '预览视频' : '放大预览'}"><i data-lucide="${kind === 'video' ? 'play' : 'maximize-2'}"></i></button>` : ''}
                 <button class="asset-icon-btn" type="button" data-canvas-asset-open="${escapeAttr(item.id)}" title="打开链接"><i data-lucide="external-link"></i></button>
@@ -1521,8 +1516,8 @@ function renderCanvasAssetDetail(item){
             <div class="detail-body">
                 <div class="detail-name">${escapeHtml(item.name || '画布资产')}</div>
                 <div class="detail-meta-grid">
-                    <div class="detail-meta"><span>类型</span><strong>${escapeHtml(canvasAssetKindLabel(item))}</strong></div>
-                    <div class="detail-meta"><span>画布分类</span><strong>${escapeHtml(canvasKindLabel(item.canvas_kind))}</strong></div>
+                    <div class="detail-meta"><span>类型</span><strong>${renderSystemLabel(canvasAssetKindLabel(item))}</strong></div>
+                    <div class="detail-meta"><span>画布分类</span><strong>${renderSystemLabel(canvasKindLabel(item.canvas_kind))}</strong></div>
                     <div class="detail-meta"><span>来源画布</span><strong title="${escapeAttr(item.canvas_title || '')}">${escapeHtml(item.canvas_title || '未命名画布')}</strong></div>
                     <div class="detail-meta"><span>更新时间</span><strong>${escapeHtml(formatDate(item.canvas_updated_at || item.created_at))}</strong></div>
                     <div class="detail-meta"><span>来源节点</span><strong title="${escapeAttr(item.node_title || item.node_type || '')}">${escapeHtml(item.node_title || item.node_type || '节点')}</strong></div>
@@ -1759,7 +1754,7 @@ function renderLocalUploadCard(item){
         <div class="asset-thumb">${assetThumb(item)}</div>
         <div class="asset-card-body">
             <div class="asset-card-name" data-localup-rename="${escapeAttr(item.id)}" title="${escapeAttr(item.name || '')}">${escapeHtml(item.name || '本地素材')}</div>
-            <div class="asset-card-meta">${escapeHtml(assetKindLabel(item))} · ${escapeHtml(formatFileSize(item.size))}${hasCaption ? ' · 有提示词' : ''}</div>
+            <div class="asset-card-meta">${renderSystemLabel(assetKindLabel(item))} · ${escapeHtml(formatFileSize(item.size))}${hasCaption ? ' · 有提示词' : ''}</div>
         </div>
     </article>`;
 }
@@ -1768,24 +1763,24 @@ function renderLocalUploadDetail(item){
     const isImage = assetKind(item) === 'image';
     return `
         <div class="panel-head">
-            <div class="panel-title"><strong>素材预览</strong><span>${escapeHtml(assetKindLabel(item))}</span></div>
+            <div class="panel-title"><strong>素材预览</strong>${renderSystemLabel(assetKindLabel(item))}</div>
             <div class="panel-actions">
                 <button class="asset-icon-btn" type="button" data-localup-rename="${escapeAttr(item.id)}" title="重命名"><i data-lucide="pencil"></i></button>
                 <button class="asset-icon-btn" type="button" data-localup-download="${escapeAttr(item.id)}" title="下载"><i data-lucide="download"></i></button>
-                <button class="asset-icon-btn" type="button" data-localup-open="${escapeAttr(item.id)}" title="新窗口打开"><i data-lucide="external-link"></i></button>
+                <button class="asset-icon-btn" type="button" data-localup-open="${escapeAttr(item.id)}" title="新窗口打开" data-asset-ui-title="新窗口打开"><i data-lucide="external-link"></i></button>
                 <button class="asset-icon-btn" type="button" data-localup-copy="${escapeAttr(item.id)}" title="复制链接"><i data-lucide="link"></i></button>
                 <button class="asset-icon-btn danger" type="button" data-localup-delete-one="${escapeAttr(item.id)}" title="删除"><i data-lucide="trash-2"></i></button>
             </div>
         </div>
         <div class="detail-scroll">
-            <div class="detail-media"><button class="detail-media-frame detail-media-zoomable" type="button" data-localup-preview="${escapeAttr(item.id)}" title="点击放大预览">${assetThumb(item)}</button></div>
+            <div class="detail-media"><button class="detail-media-frame detail-media-zoomable" type="button" data-localup-preview="${escapeAttr(item.id)}" title="点击放大预览" data-asset-ui-title="点击放大预览">${assetThumb(item)}</button></div>
             <div class="detail-body">
                 <input class="detail-name-input" data-localup-inline-name="${escapeAttr(item.id)}" type="text" value="${escapeAttr(item.name || '本地素材')}" title="直接修改名称">
                 <div class="detail-meta-grid">
-                    <div class="detail-meta"><span>类型</span><strong>${escapeHtml(assetKindLabel(item))}</strong></div>
+                    <div class="detail-meta"><span>类型</span><strong>${renderSystemLabel(assetKindLabel(item))}</strong></div>
                     <div class="detail-meta"><span>大小</span><strong>${escapeHtml(formatFileSize(item.size))}</strong></div>
                     <div class="detail-meta"><span>上传时间</span><strong>${escapeHtml(formatDate((item.created_at||0)*1000))}</strong></div>
-                    <div class="detail-meta"><span>来源</span><strong>本地上传</strong></div>
+                    <div class="detail-meta"><span>来源</span><strong>${renderSystemLabel('本地上传')}</strong></div>
                 </div>
                 <div class="detail-url">${escapeHtml(item.url || '')}</div>
                 ${isImage ? `<div class="detail-caption-card">
@@ -1847,7 +1842,7 @@ function renderLocalCard(item){
         <div class="asset-thumb">${localAssetThumb(item)}</div>
         <div class="asset-card-body">
             <div class="asset-card-name" title="${escapeAttr(item.relativePath || item.name || '')}">${escapeHtml(item.name || 'local')}</div>
-            <div class="asset-card-meta">${escapeHtml(assetKindLabel(item))} · ${escapeHtml(formatFileSize(item.size))}${hasCaption ? ' · 有提示词' : ''}</div>
+            <div class="asset-card-meta">${renderSystemLabel(assetKindLabel(item))} · ${escapeHtml(formatFileSize(item.size))}${hasCaption ? ' · 有提示词' : ''}</div>
         </div>
     </article>`;
 }
@@ -1867,18 +1862,18 @@ function renderLocalDetail(item){
     if(!item) return `<div class="panel-head"><div class="panel-title"><strong>本地预览</strong><span>选择一个本地素材查看详情</span></div></div><div class="detail-scroll"><div class="detail-empty"><i data-lucide="folder-open"></i><span>暂无可预览素材</span></div></div>`;
     return `
         <div class="panel-head">
-            <div class="panel-title"><strong>本地预览</strong><span>${escapeHtml(assetKindLabel(item))}</span></div>
+            <div class="panel-title"><strong>本地预览</strong>${renderSystemLabel(assetKindLabel(item))}</div>
             <div class="panel-actions">
                 <button class="asset-icon-btn" type="button" data-local-open="${escapeAttr(item.id)}" title="打开预览"><i data-lucide="external-link"></i></button>
                 <button class="asset-btn primary" type="button" data-local-import-one="${escapeAttr(item.id)}"><i data-lucide="download"></i><span>导入</span></button>
             </div>
         </div>
         <div class="detail-scroll">
-            <div class="detail-media"><button class="detail-media-frame detail-media-zoomable" type="button" data-local-preview="${escapeAttr(item.id)}" title="点击放大预览">${localAssetThumb(item)}</button></div>
+            <div class="detail-media"><button class="detail-media-frame detail-media-zoomable" type="button" data-local-preview="${escapeAttr(item.id)}" title="点击放大预览" data-asset-ui-title="点击放大预览">${localAssetThumb(item)}</button></div>
             <div class="detail-body">
                 <div class="detail-name">${escapeHtml(item.name || '本地素材')}</div>
                 <div class="detail-meta-grid">
-                    <div class="detail-meta"><span>类型</span><strong>${escapeHtml(assetKindLabel(item))}</strong></div>
+                    <div class="detail-meta"><span>类型</span><strong>${renderSystemLabel(assetKindLabel(item))}</strong></div>
                     <div class="detail-meta"><span>大小</span><strong>${escapeHtml(formatFileSize(item.size))}</strong></div>
                     <div class="detail-meta"><span>修改时间</span><strong>${escapeHtml(formatDate(item.lastModified))}</strong></div>
                     <div class="detail-meta"><span>来源</span><strong>${escapeHtml(activeSharedFolderName || '共享文件夹')}</strong></div>
@@ -2062,7 +2057,7 @@ function renderWorkflowCard(item){
         <div class="asset-thumb">${workflowThumb(item)}</div>
         <div class="asset-card-body">
             <div class="asset-card-name" title="${escapeAttr(item.name || '')}">${escapeHtml(item.name || 'workflow')}</div>
-            <div class="asset-card-meta">${escapeHtml(workflowKindLabel(item))} · ${escapeHtml(formatDate(item.created_at))}</div>
+            <div class="asset-card-meta">${renderSystemLabel(workflowKindLabel(item))} · ${escapeHtml(formatDate(item.created_at))}</div>
         </div>
     </article>`;
 }
@@ -2070,7 +2065,7 @@ function renderWorkflowDetail(item){
     if(!item) return `<div class="panel-head"><div class="panel-title"><strong>工作流详情</strong><span>选择一个工作流查看详情</span></div></div><div class="detail-scroll"><div class="detail-empty"><i data-lucide="workflow"></i><span>暂无工作流</span></div></div>`;
     return `
         <div class="panel-head">
-            <div class="panel-title"><strong>工作流详情</strong><span>${escapeHtml(workflowKindLabel(item))}</span></div>
+            <div class="panel-title"><strong>工作流详情</strong>${renderSystemLabel(workflowKindLabel(item))}</div>
             <div class="panel-actions">
                 <button class="asset-icon-btn" type="button" data-workflow-download="${escapeAttr(item.id)}" title="导出工作流"><i data-lucide="download"></i></button>
                 <button class="asset-icon-btn" type="button" data-workflow-rename="${escapeAttr(item.id)}" title="重命名"><i data-lucide="pencil"></i></button>
@@ -2082,7 +2077,7 @@ function renderWorkflowDetail(item){
             <div class="detail-body">
                 <input class="detail-name-input" data-workflow-inline-name="${escapeAttr(item.id)}" type="text" value="${escapeAttr(item.name || 'workflow')}" title="直接修改名称">
                 <div class="detail-meta-grid">
-                    <div class="detail-meta"><span>类型</span><strong>${escapeHtml(workflowKindLabel(item))}</strong></div>
+                    <div class="detail-meta"><span>类型</span><strong>${renderSystemLabel(workflowKindLabel(item))}</strong></div>
                     <div class="detail-meta"><span>创建时间</span><strong>${escapeHtml(formatDate(item.created_at))}</strong></div>
                     <div class="detail-meta"><span>位置</span><strong>工作流库</strong></div>
                     <div class="detail-meta"><span>分组</span><strong>${escapeHtml(activeWorkflowCategory()?.name || '工作流')}</strong></div>
@@ -2193,7 +2188,7 @@ function renderAssetCard(item){
         <div class="asset-thumb">${assetThumb(item)}</div>
         <div class="asset-card-body">
             <div class="asset-card-name" title="${escapeAttr(item.name || '')}">${escapeHtml(item.name || 'asset')}</div>
-            <div class="asset-card-meta">${escapeHtml(assetKindLabel(item))} · ${escapeHtml(formatDate(item.created_at))}</div>
+            <div class="asset-card-meta">${renderSystemLabel(assetKindLabel(item))} · ${escapeHtml(formatDate(item.created_at))}</div>
         </div>
     </article>`;
 }
@@ -2280,11 +2275,11 @@ function renderAssetDetail(item){
                 </div>
             </div>
             <div class="detail-scroll">
-                <div class="detail-media"><button class="detail-media-frame detail-media-zoomable" type="button" data-asset-preview="${escapeAttr(item.id)}" title="点击放大预览">${assetThumb(item)}</button></div>
+                <div class="detail-media"><button class="detail-media-frame detail-media-zoomable" type="button" data-asset-preview="${escapeAttr(item.id)}" title="点击放大预览" data-asset-ui-title="点击放大预览">${assetThumb(item)}</button></div>
                 <div class="inline-edit-form">
                     <label class="inline-edit-field"><span>素材名称</span><input id="assetEditName" type="text" value="${escapeAttr(item.name || '')}" placeholder="素材名称"></label>
                     <div class="detail-meta-grid">
-                        <div class="detail-meta"><span>类型</span><strong>${escapeHtml(assetKindLabel(item))}</strong></div>
+                        <div class="detail-meta"><span>类型</span><strong>${renderSystemLabel(assetKindLabel(item))}</strong></div>
                         <div class="detail-meta"><span>创建时间</span><strong>${escapeHtml(formatDate(item.created_at))}</strong></div>
                     </div>
                     <div class="detail-url">${escapeHtml(item.url || '')}</div>
@@ -2294,7 +2289,7 @@ function renderAssetDetail(item){
     }
     return `
         <div class="panel-head">
-            <div class="panel-title"><strong>素材预览</strong><span>${escapeHtml(assetKindLabel(item))}</span></div>
+            <div class="panel-title"><strong>素材预览</strong>${renderSystemLabel(assetKindLabel(item))}</div>
             <div class="panel-actions">
                 <button class="asset-icon-btn" type="button" data-asset-download="${escapeAttr(item.id)}" title="下载素材"><i data-lucide="download"></i></button>
                 <button class="asset-icon-btn" type="button" data-asset-edit-start="${escapeAttr(item.id)}" title="编辑"><i data-lucide="pencil"></i></button>
@@ -2302,11 +2297,11 @@ function renderAssetDetail(item){
             </div>
         </div>
         <div class="detail-scroll">
-            <div class="detail-media"><button class="detail-media-frame detail-media-zoomable" type="button" data-asset-preview="${escapeAttr(item.id)}" title="点击放大预览">${assetThumb(item)}</button></div>
+            <div class="detail-media"><button class="detail-media-frame detail-media-zoomable" type="button" data-asset-preview="${escapeAttr(item.id)}" title="点击放大预览" data-asset-ui-title="点击放大预览">${assetThumb(item)}</button></div>
             <div class="detail-body">
                 <input class="detail-name-input" data-asset-inline-name="${escapeAttr(item.id)}" type="text" value="${escapeAttr(item.name || 'asset')}" title="直接修改名称">
                 <div class="detail-meta-grid">
-                    <div class="detail-meta"><span>类型</span><strong>${escapeHtml(assetKindLabel(item))}</strong></div>
+                    <div class="detail-meta"><span>类型</span><strong>${renderSystemLabel(assetKindLabel(item))}</strong></div>
                     <div class="detail-meta"><span>创建时间</span><strong>${escapeHtml(formatDate(item.created_at))}</strong></div>
                     <div class="detail-meta"><span>资产库</span><strong>${escapeHtml(activeAssetLibrary()?.name || '资产库')}</strong></div>
                     <div class="detail-meta"><span>分组</span><strong>${escapeHtml(activeAssetCategory()?.name || '分组')}</strong></div>
@@ -2833,7 +2828,7 @@ async function deleteLocalAssets(ids){
     if(!names.length) return;
     setStatus('正在删除...');
     try {
-        await apiJson('/api/local-assets/delete', {
+        const data = await apiJson('/api/local-assets/delete', {
             method:'POST',
             headers:{'Content-Type':'application/json'},
             body:JSON.stringify({names})
@@ -2843,7 +2838,12 @@ async function deleteLocalAssets(ids){
         selectedLocalUploadIds.clear();
         if(selectedLocalUploadId && !findLocalUpload(selectedLocalUploadId)) selectedLocalUploadId = '';
         render();
-        setStatus(`已删除 ${names.length} 个素材`);
+        const deleted = data.deleted?.length || 0;
+        const kept = data.skipped_referenced?.length || 0;
+        const key = deleted && kept ? 'assetManager.localDeletePartial'
+            : kept ? 'assetManager.localDeleteKept'
+            : deleted ? 'assetManager.localDeleteDone' : 'assetManager.localDeleteMissing';
+        setStatus(window.StudioI18n.t(key).replace('{deleted}', deleted).replace('{kept}', kept));
     } catch(err) {
         setStatus(err.message || '删除失败');
     }
@@ -3178,14 +3178,11 @@ async function handleClick(event){
     const storageFileInput = target.closest?.('[data-storage-file]');
     if(storageFileInput){
         const id = storageFileInput.dataset.storageFile || '';
-        if(storageFileInput.checked) storageSettingsState.selected.add(id);
-        else storageSettingsState.selected.delete(id);
-        renderStorageSettingsModal();
+        storageFileBrowser.select(id, storageFileInput.checked);
         return;
     }
     if(target.closest?.('[data-storage-select-all]')){
-        storageSettingsState.items.forEach(item => storageSettingsState.selected.add(item.id));
-        renderStorageSettingsModal();
+        storageFileBrowser.selectAll();
         return;
     }
     if(target.closest?.('[data-storage-delete]')){

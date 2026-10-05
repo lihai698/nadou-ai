@@ -1,0 +1,127 @@
+{
+  "date": "2026-10-03",
+  "stage": 7,
+  "kind": "read-only-architecture-scan",
+  "status": "candidate-only",
+  "scope": {
+    "source": "main.py",
+    "business_code_modified": false,
+    "route_or_check_core_modified": false,
+    "private_values_read": false,
+    "network_or_provider_called": false
+  },
+  "source_summary": {
+    "path": "main.py",
+    "sha256": "233be036947f669da0fec36b61fb16836298813d98e6d7132caf5ef736a664f3",
+    "bytes": 909614,
+    "lines": 19299,
+    "top_level_import_statements": 40,
+    "top_level_definitions_and_classes": 936
+  },
+  "candidate": {
+    "name": "versioning",
+    "proposed_path": "backend/versioning.py",
+    "functions": [
+      {
+        "name": "version_tuple",
+        "definition": "main.py:1937-1938",
+        "direct_callers": ["version_gt:main.py:1941"],
+        "loads": ["int", "re", "str", "value", "x"],
+        "side_effects": []
+      },
+      {
+        "name": "version_gt",
+        "definition": "main.py:1940-1945",
+        "direct_callers": [
+          "check_update:main.py:1954",
+          "validate_staged_update:main.py:2178"
+        ],
+        "loads": ["a", "b", "bool", "len", "max", "n", "ta", "tb", "version_tuple"],
+        "side_effects": []
+      }
+    ],
+    "allowed_imports": ["re"],
+    "forbidden_imports": [
+      "main",
+      "fastapi",
+      "requests",
+      "httpx",
+      "os",
+      "pathlib",
+      "data",
+      "assets"
+    ],
+    "persistent_data_owned": [],
+    "mutable_global_state_owned": false
+  },
+  "real_entry_chains": [
+    {
+      "http": "GET /api/check-update",
+      "chain": [
+        "check_update:main.py:1948",
+        "version_gt:main.py:1954"
+      ],
+      "external_or_destructive_work": "outside candidate: remote version request and local VERSION read"
+    },
+    {
+      "http": "POST /api/update-from-github",
+      "chain": [
+        "update_from_github:main.py:2315",
+        "validate_staged_update:main.py:2166",
+        "version_gt:main.py:2178"
+      ],
+      "external_or_destructive_work": "outside candidate: staging, syntax validation, backup, replacement and rollback"
+    }
+  ],
+  "reverse_import_scan": {
+    "root_python_scope": ["main.py", "tests", "tools", "API"],
+    "direct_import_main_files": [
+      "tests/test_asset_library_cleanup.py",
+      "tests/test_canvas_baseline.py",
+      "tests/test_canvas_comfy_lifecycle.py",
+      "tests/test_canvas_log_cleanup.py",
+      "tests/test_canvas_restart_boundary.py",
+      "tests/test_canvas_task_lifecycle.py",
+      "tests/test_canvas_workflow_export.py",
+      "tests/test_history_cleanup.py",
+      "tests/test_local_asset_delete_references.py",
+      "tests/test_log_redaction.py",
+      "tests/test_update_private_data.py"
+    ],
+    "candidate_module_currently_exists": false,
+    "cycles_found_in_current_tree": false,
+    "ast_graph_summary": {
+      "files_scanned": 23,
+      "internal_import_edges": 11,
+      "cycle_components": []
+    },
+    "planned_direction": "main.py -> backend.versioning; backend.versioning must not import main.py"
+  },
+  "known_duplicate": {
+    "path": "tools/prepare-release.py",
+    "symbol": "version_tuple",
+    "definition": "tools/prepare-release.py:36",
+    "decision": "keep independent during this low-risk split; do not make production main.py depend on tools"
+  },
+  "baseline_verification": {
+    "command": "python\\python.exe -m unittest discover -s tests -p \"test_update_private_data.py\" -v",
+    "result": "4 tests passed",
+    "meaning": "existing update entry chains pass before any module extraction; this is not evidence that backend/versioning.py is implemented"
+  },
+  "planned_files": [
+    "backend/__init__.py",
+    "backend/versioning.py",
+    "main.py",
+    "tests/test_versioning.py",
+    "tools/prepare-release.py"
+  ],
+  "planned_validation": [
+    "direct pure-function unit tests",
+    "tests/test_update_private_data.py",
+    "AST parse and import-direction scan",
+    "tools/prepare-release.py --preflight",
+    "git diff --check",
+    "existing core regression entry"
+  ],
+  "recovery": "delete backend package and import line, restore the two original function definitions; no data migration or user-file rollback is needed"
+}

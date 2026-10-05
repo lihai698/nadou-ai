@@ -1,0 +1,24 @@
+{
+  "date": "2026-10-03",
+  "scope": "生产画布 Ctrl+C/V 快捷键处理器的隔离回归",
+  "method": {
+    "test": "tests/canvas_native_shortcuts.test.cjs",
+    "source": "直接从 static/js/canvas.js 与 static/js/smart-canvas.js 提取生产 copy/paste 函数和 keydown 处理器，在 VM 隔离画布中派发带 ctrlKey 的 KeyboardEvent 形状",
+    "command": "node --test tests/canvas_native_shortcuts.test.cjs"
+  },
+  "observations": [
+    {
+      "canvas": "classic",
+      "copy": "2 个选中节点和 1 条内部连线写入内部剪贴板",
+      "paste": "节点 2→4、连线 1→2，副本连线两端均重映射到新 ID",
+      "editable_target": "TEXTAREA 获得焦点时 Ctrl+C 透传，内部剪贴板不被拦截"
+    },
+    {
+      "canvas": "smart",
+      "copy": "2 个选中节点和 1 条内部连线写入 nodeClipboard",
+      "paste": "节点 2→4、连线 1→2，粘贴动作记录一次撤销快照并选中新副本"
+    }
+  ],
+  "result": "2/2 tests passed",
+  "limits": "Codex 内置浏览器的 pressKey 会被虚拟剪贴板拦截，无法把原生系统 Ctrl+C/V 标记为端到端通过；连续按住 Alt 的真实鼠标拖动同样无法由该浏览器接口持续注入。现有 Alt 生产处理器及多选/分组逻辑已由 tests/canvas_alt_group_copy.test.cjs 覆盖，页面证据见 f04-multiselect-alt-group.json。"
+}

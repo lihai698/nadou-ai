@@ -17,12 +17,13 @@
             } catch(e) {}
         })();
     </script>
-    <script src="/static/vendor/js/tailwindcss-cdn.js?v=2026.08.28.1790740572"></script>
-    <script src="/static/vendor/js/lucide.js?v=2026.08.28.1790740572"></script>
-    <script src="/static/js/theme.js?v=2026.08.28.1790740572"></script>
-    <script src="/static/js/i18n.js?v=2026.08.28.1790740572"></script>
-    <script src="/static/js/image-preview.js?v=2026.08.28.1790740572"></script>
-    <script src="/static/js/history-bulk-manager.js?v=2026.08.28.1790740572"></script>
+    <script src="/static/vendor/js/tailwindcss-cdn.js?v=2026.10.05.1790740572"></script>
+    <script src="/static/vendor/js/lucide.js?v=2026.10.05.1790740572"></script>
+    <script src="/static/js/theme.js?v=2026.10.05.1790740572"></script>
+    <script src="/static/js/i18n.js?v=2026.10.05.1791022416"></script>
+    <script src="/static/js/image-preview.js?v=2026.10.05.1791101490"></script>
+    <script src="/static/js/history-bulk-manager.js?v=2026.10.05.1790740572"></script>
+    <script src="/static/js/history-page-controller.js?v=2026.10.05.1791057340"></script>
     <style>
         :root {
             --bg-base: #f8f8f8;
@@ -175,7 +176,7 @@
             display: none;
         }
     </style>
-    <link rel="stylesheet" href="/static/css/theme.css?v=2026.08.28.1790740572">
+    <link rel="stylesheet" href="/static/css/theme.css?v=2026.10.05.1790740572">
 </head>
 
 <body class="antialiased">
@@ -293,7 +294,7 @@
             if(lang && window.StudioI18n) StudioI18n.set(lang);
             document.title = tr('nav.textToImage');
             const trigger = document.getElementById('loadMoreTrigger');
-            if(trigger && !isLoading) trigger.innerText = tr('studio.loadMore');
+            if(trigger && !historyPager.state.loading) trigger.innerText = tr('studio.loadMore');
             switchEngine(currentEngine || localStorage.getItem(ENGINE_MODE_KEY) || 'local');
         }
         window.addEventListener('message', event => {
@@ -313,10 +314,17 @@
         const CLIENT_ID = localStorage.getItem("client_id") || generateUUID();
         localStorage.setItem("client_id", CLIENT_ID);
 
-        let allHistory = [];
-        let currentIndex = 0;
         const PAGE_SIZE = 15;
-        let isLoading = false;
+        const historyPager = HistoryPageController.createHistoryPager({
+            pageSize: PAGE_SIZE,
+            appendDelay: 400,
+            loadItems: async () => {
+                const response = await fetch('/api/history?type=zimage');
+                if(!response.ok) throw new Error(`History request failed: ${response.status}`);
+                const data = await response.json();
+                return Array.isArray(data) ? data : [];
+            }
+        });
 
         // WebSocket 
         const socket = new WebSocket(`${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws/stats?client_id=${encodeURIComponent(CLIENT_ID)}`);
@@ -325,9 +333,7 @@
                 const msg = JSON.parse(e.data);
                 if (msg.type === 'new_image' && msg.data?.type === 'zimage') {
                     if (!document.getElementById(`history-${msg.data.timestamp}`)) {
-                        allHistory.unshift(msg.data);
-                        renderImageCard(msg.data, true);
-                        currentIndex++;
+                        if(historyPager.prepend(msg.data)) renderImageCard(msg.data, true);
                     }
                 }
             } catch (err) { }
@@ -498,42 +504,35 @@
         }
 
         async function loadHistory(page = 0) {
-            if (isLoading) return;
             const trigger = document.getElementById('loadMoreTrigger');
+            const reset = page === 0;
 
             try {
-                isLoading = true;
-                if (page === 0) {
-                    allHistory = [];
+                if (reset) {
                     document.getElementById('masonry').innerHTML = '';
-                    currentIndex = 0;
 
                     trigger.classList.remove('hidden');
                     trigger.innerText = tr('studio.loadingArchives');
-
-                    const res = await fetch('/api/history?type=zimage');
-                    allHistory = await res.json();
                 } else {
                     trigger.innerText = "Loading...";
-                    await new Promise(r => setTimeout(r, 400));
                 }
 
-                const nextData = allHistory.slice(currentIndex, currentIndex + PAGE_SIZE);
-                nextData.forEach(item => renderImageCard(item));
-                currentIndex += nextData.length;
+                const pageData = await historyPager.load({reset});
+                if(!pageData.accepted) return false;
+                pageData.items.forEach(item => renderImageCard(item));
 
-                if (currentIndex >= allHistory.length) {
+                if (pageData.done) {
                     trigger.classList.add('hidden');
                 } else {
                     trigger.classList.remove('hidden');
                     trigger.innerText = "Load More Archive";
                 }
+                return true;
 
             } catch (e) {
                 console.error(e);
                 trigger.innerText = tr('studio.errorHistory');
-            } finally {
-                isLoading = false;
+                return false;
             }
         }
 
@@ -548,7 +547,7 @@
         }
 
         const observer = new IntersectionObserver((entries) => {
-            if (entries[0].isIntersecting && !isLoading && currentIndex < allHistory.length) {
+            if (entries[0].isIntersecting && !historyPager.state.loading && historyPager.state.hasMore) {
                 loadHistory(1);
             }
         }, { threshold: 0.1 });

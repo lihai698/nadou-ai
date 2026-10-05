@@ -16,14 +16,15 @@
             } catch(e) {}
         })();
     </script>
-    <script src="/static/vendor/js/tailwindcss-cdn.js?v=2026.08.28.1790740572"></script>
-    <script src="/static/vendor/js/lucide.js?v=2026.08.28.1790740572"></script>
-    <script src="/static/js/theme.js?v=2026.08.28.1790740572"></script>
-    <script src="/static/js/i18n.js?v=2026.08.28.1790740572"></script>
-    <script src="/static/js/image-preview.js?v=2026.08.28.1790740572"></script>
-    <script src="/static/js/history-bulk-manager.js?v=2026.08.28.1790740572"></script>
+    <script src="/static/vendor/js/tailwindcss-cdn.js?v=2026.10.05.1790740572"></script>
+    <script src="/static/vendor/js/lucide.js?v=2026.10.05.1790740572"></script>
+    <script src="/static/js/theme.js?v=2026.10.05.1790740572"></script>
+    <script src="/static/js/i18n.js?v=2026.10.05.1791022416"></script>
+    <script src="/static/js/image-preview.js?v=2026.10.05.1791101490"></script>
+    <script src="/static/js/history-bulk-manager.js?v=2026.10.05.1790740572"></script>
+    <script src="/static/js/online-image-size-rules.js?v=2026.10.05.1791055380"></script>
     <style>
-        @import url('/static/vendor/css/fonts.css?v=2026.08.28.1790740572');
+        @import url('/static/vendor/css/fonts.css?v=2026.10.05.1790740572');
         :root { --accent:#111827; --bg:#f9fafb; --card:#fff; --easing:cubic-bezier(0.4,0,0.2,1); }
         body { background:var(--bg); font-family:'Inter',-apple-system,sans-serif; color:var(--accent); -webkit-font-smoothing:antialiased; }
         .container-box { max-width:1280px; margin:0 auto; padding:0 40px; margin-top:50px; }
@@ -63,7 +64,7 @@
         .gallery-lightbox { background:rgba(255,255,255,.99); backdrop-filter:blur(22px) saturate(1.05); }
         @keyframes fadeIn { from{opacity:0} to{opacity:1} }
     </style>
-    <link rel="stylesheet" href="/static/css/theme.css?v=2026.08.28.1790740572">
+    <link rel="stylesheet" href="/static/css/theme.css?v=2026.10.05.1790740572">
     <style>
         html:not(.studio-theme-dark) body:not(.studio-theme-dark) #lightbox.gallery-lightbox {
             background: rgba(255,255,255,.99) !important;
@@ -174,8 +175,8 @@
                                 <option value="square" selected data-i18n="online.square">1:1 方图</option>
                                 <option value="portrait" data-i18n="online.portrait">2:3 竖图</option>
                                 <option value="landscape" data-i18n="online.landscape">3:2 横图</option>
-                                <option value="portrait43">3:4 竖图</option>
-                                <option value="landscape43">4:3 横图</option>
+                                <option value="portrait43" data-i18n="online.portrait43">3:4 竖图</option>
+                                <option value="landscape43" data-i18n="online.landscape43">4:3 横图</option>
                                 <option value="story" data-i18n="online.story">9:16 竖屏</option>
                                 <option value="wide" data-i18n="online.wide">16:9 宽屏</option>
                                 <option value="custom" data-i18n="online.customRatio">自定义比例</option>
@@ -267,45 +268,8 @@
         let models = {gpt:'gpt-image-2', nano:'nano-banana-pro'};
         let allHistory = [], currentIndex = 0, currentResult = null, currentLightboxData = null, isLoading = false;
         const PAGE_SIZE = 24;
-        const SIZE_OPTIONS = {
-            square: [
-                ['1024x1024', '1k'],
-                ['2048x2048', '2k'],
-                ['3840x2160', '4k']
-            ],
-            portrait: [
-                ['1024x1536', '1k'],
-                ['1360x2048', '2k'],
-                ['2352x3520', '4k']
-            ],
-            portrait43: [
-                ['1008x1344', '1k'],
-                ['1536x2048', '2k'],
-                ['2448x3264', '4k']
-            ],
-            landscape43: [
-                ['1344x1008', '1k'],
-                ['2048x1536', '2k'],
-                ['3264x2448', '4k']
-            ],
-            landscape: [
-                ['1536x1024', '1k'],
-                ['2048x1360', '2k'],
-                ['3520x2352', '4k']
-            ],
-            story: [
-                ['720x1280', '1k'],
-                ['1152x2048', '2k'],
-                ['2160x3840', '4k']
-            ],
-            wide: [
-                ['1280x720', '1k'],
-                ['2048x1152', '2k'],
-                ['3840x2160', '4k']
-            ]
-        };
-        const RES_LONG_SIDE = { '1k': 1536, '2k': 2048, '4k': 3840 };
-        const RES_PIXEL_LIMIT = { '1k': 1572864, '2k': 4194304, '4k': 8294400 };
+        const OnlineImageSizeRules = window.OnlineImageSizeRules;
+        const {SIZE_OPTIONS, parseSizeValue, currentSize: calculateCurrentSize} = OnlineImageSizeRules;
 
         function uniqueModels(list){
             const seen = new Set();
@@ -457,20 +421,6 @@
         }
         function escapeHtml(str){ return String(str || '').replace(/[&<>"']/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s])); }
 
-        function parseSizeValue(value){
-            const match = String(value || '').trim().match(/^(\d+)\s*[xX*]\s*(\d+)$/);
-            return match ? {width:match[1], height:match[2]} : null;
-        }
-        function customRatioValue(){
-            const w = Number(customRatioWidth);
-            const h = Number(customRatioHeight);
-            return w > 0 && h > 0 ? w / h : null;
-        }
-        function customSizeValue(){
-            const w = Number(customWidth);
-            const h = Number(customHeight);
-            return w > 0 && h > 0 ? `${Math.round(w)}x${Math.round(h)}` : '';
-        }
         function getImageDimensions(src){
             return new Promise((resolve, reject) => {
                 const img = new Image();
@@ -559,22 +509,7 @@
         }
 
         function currentSize(){
-            if(resolution === 'custom') return customSizeValue();
-            const options = SIZE_OPTIONS[ratio] || SIZE_OPTIONS.square;
-            if(ratio === 'custom'){
-                const parsed = customRatioValue();
-                const longSide = RES_LONG_SIDE[resolution] || 1024;
-                if(parsed){
-                    const pixelLimit = RES_PIXEL_LIMIT[resolution] || (longSide * longSide);
-                    const rawWidth = parsed >= 1 ? longSide : Math.min(longSide * parsed, Math.sqrt(pixelLimit * parsed));
-                    const rawHeight = parsed >= 1 ? Math.min(longSide / parsed, Math.sqrt(pixelLimit / parsed)) : longSide;
-                    const width = Math.floor(rawWidth / 16) * 16;
-                    const height = Math.floor(rawHeight / 16) * 16;
-                    return `${Math.max(64, width)}x${Math.max(64, height)}`;
-                }
-            }
-            const match = options.find(([, label]) => label === resolution) || SIZE_OPTIONS.square.find(([, label]) => label === resolution) || SIZE_OPTIONS.square[0];
-            return match[0];
+            return calculateCurrentSize({ratio, resolution, customRatioWidth, customRatioHeight, customWidth, customHeight});
         }
 
         [1,2,3].forEach(id => {

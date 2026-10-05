@@ -1,0 +1,86 @@
+{
+  "id": "12f04ecbf1a740ffb4687087b11ba989",
+  "title": "验收-普通画布-中文",
+  "icon": "🧩",
+  "kind": "classic",
+  "owner": "",
+  "color": "",
+  "pinned": false,
+  "project": "default",
+  "created_at": 1790772125005,
+  "updated_at": 1790772892621,
+  "nodes": [
+    {
+      "id": "prompt_794da57e28be28_1790772152330",
+      "type": "prompt",
+      "x": 111,
+      "y": 145,
+      "text": "中文验收：蓝色方块与橙色圆形，保存后重新打开。"
+    },
+    {
+      "id": "out_d6054cfdd2c6c8_1790772159348",
+      "type": "output",
+      "x": 842,
+      "y": 507,
+      "images": []
+    },
+    {
+      "id": "img_2ac7c6fb3894e8_1790772231355",
+      "type": "image",
+      "x": 109,
+      "y": 387,
+      "url": "/assets/input/ai_ref_c96861fe0c41.png",
+      "name": "中文参考图.png",
+      "mediaKind": "image",
+      "_naturalSizeLoading": false,
+      "natural_w": 320,
+      "natural_h": 240
+    },
+    {
+      "id": "gen_a837b3525e0118_1790772255456",
+      "type": "generator",
+      "x": 528,
+      "y": 146,
+      "apiProvider": "",
+      "model": "",
+      "ratio": "square",
+      "resolution": "4k",
+      "customRatio": "",
+      "customSize": "",
+      "customRatioWidth": "",
+      "customRatioHeight": "",
+      "customWidth": "",
+      "customHeight": "",
+      "inputs": [
+        "prompt_794da57e28be28_1790772152330",
+        "img_2ac7c6fb3894e8_1790772231355"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "c_83333a569b2118_1790772279262",
+      "from": "prompt_794da57e28be28_1790772152330",
+      "to": "gen_a837b3525e0118_1790772255456"
+    },
+    {
+      "id": "c_33318eb506eda8_1790772289027",
+      "from": "gen_a837b3525e0118_1790772255456",
+      "to": "out_d6054cfdd2c6c8_1790772159348"
+    },
+    {
+      "id": "c_7f2171ba8d07_1790772307630",
+      "from": "img_2ac7c6fb3894e8_1790772231355",
+      "to": "gen_a837b3525e0118_1790772255456"
+    }
+  ],
+  "viewport": {
+    "x": 0,
+    "y": 0,
+    "scale": 1
+  },
+  "board_x": 642.0,
+  "board_y": 423.0,
+  "logs": [],
+  "settings": {}
+}

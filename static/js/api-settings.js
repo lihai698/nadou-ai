@@ -243,6 +243,7 @@ const RECOMMENDED_APIS = [
         advantages:['免费额度可用', '支持 Agnes 图像与视频接口', 'OpenAI 兼容地址配置简单'],
         image_models:['agnes-image-2.1-flash', 'agnes-image-2.0-flash'],
         chat_models:[],
+        // 仅作为测试样例，用户可在 API 设置中替换为实际可用模型。
         video_models:['agnes-video-v2.0']
     }
 ];
@@ -414,7 +415,6 @@ function normalizeRhEntries(values, kind){
         if(raw?.hidden === true) entry.hidden = true;
         if(Array.isArray(raw?.fields)) entry.fields = raw.fields.map(normalizeRhWorkflowField);
         if(raw?.workflowJson && typeof raw.workflowJson === 'object') entry.workflowJson = raw.workflowJson;
-        if(raw?.raw && typeof raw.raw === 'object') entry.raw = raw.raw;
         const updatedAt = Number(raw?.updatedAt || 0);
         if(updatedAt > 0) entry.updatedAt = updatedAt;
         if(kind === 'app') entry.appId = id;
@@ -882,7 +882,7 @@ function isStaticRunningHubEntry(kind, entry){
     if(thumb.includes('/static/runninghub/')) return true;
     if(id && thumb.includes(`${kind === 'app' ? 'app' : 'workflow'}-${id}`)) return true;
     // 静态模板会随 /api/providers 合并返回完整字段；手动粘贴的新卡片通常没有这些配置。
-    return Array.isArray(entry?.fields) || (entry?.workflowJson && typeof entry.workflowJson === 'object') || (entry?.raw && typeof entry.raw === 'object');
+    return Array.isArray(entry?.fields) || (entry?.workflowJson && typeof entry.workflowJson === 'object');
 }
 async function removeRhEntry(kind, index){
     const item = provider();
@@ -1049,8 +1049,7 @@ function normalizeRhWorkflowConfig(config, entry){
         description:String(config?.description || entry?.note || ''),
         fields:(Array.isArray(config?.fields) ? config.fields : []).map(normalizeRhWorkflowField),
         workflowJson:config?.workflowJson || {},
-        optionalImageMode:String(config?.optionalImageMode || entry?.optionalImageMode || 'prune-workflow'),
-        raw:config?.raw || {}
+        optionalImageMode:String(config?.optionalImageMode || entry?.optionalImageMode || 'prune-workflow')
     };
     return applyRhImageSlotDefaults(normalized);
 }
@@ -1060,8 +1059,7 @@ function normalizeRhAppConfig(entry){
         appId,
         title:String(entry?.title || `AI 应用 ${appId.slice(-6)}` || appId),
         description:String(entry?.note || ''),
-        fields:(Array.isArray(entry?.fields) ? entry.fields : []).map(normalizeRhWorkflowField),
-        raw:entry?.raw || {}
+        fields:(Array.isArray(entry?.fields) ? entry.fields : []).map(normalizeRhWorkflowField)
     };
 }
 function applyRhImageSlotDefaults(config){
@@ -1167,8 +1165,7 @@ async function fetchRhAppEditor(force=false){
         appId,
         title:rhWorkflowEditName?.value.trim() || entry.title || `AI 应用 ${appId.slice(-6)}`,
         description:rhWorkflowEditNote?.value.trim() || entry.note || '',
-        fields,
-        raw:data.data || data
+        fields
     };
     state.graph = { k:1, x:0, y:0, w:0, h:0 };
     renderRhWorkflowEditor();
@@ -1200,8 +1197,7 @@ async function fetchRhWorkflowEditor(force=false){
         description:data.data.description,
         fields:(data.data.fields || []).map(normalizeFetchedRhWorkflowField),
         workflowJson:data.data.workflowJson || {},
-        optionalImageMode:entry.optionalImageMode || 'prune-workflow',
-        raw:data.data.raw || {}
+        optionalImageMode:entry.optionalImageMode || 'prune-workflow'
     }, entry);
     state.graph = { k:1, x:0, y:0, w:0, h:0 };
     renderRhWorkflowEditor();
@@ -1341,7 +1337,6 @@ async function saveRhWorkflowEditor(){
                 entry.title = config.title || entry.title;
                 entry.note = config.description || '';
                 entry.fields = (config.fields || []).map(normalizeRhWorkflowField);
-                entry.raw = config.raw || {};
                 renderRunningHubCards();
                 await saveProviders();
             }
@@ -1361,8 +1356,7 @@ async function saveRhWorkflowEditor(){
                 description:config.description,
                 fields:(config.fields || []).map(normalizeRhWorkflowField),
                 workflowJson:config.workflowJson || {},
-                optionalImageMode:config.optionalImageMode || 'prune-workflow',
-                raw:config.raw || {}
+                optionalImageMode:config.optionalImageMode || 'prune-workflow'
             })
         });
         const data = await res.json();
@@ -1376,7 +1370,6 @@ async function saveRhWorkflowEditor(){
             entry.fields = (state.config.fields || []).map(normalizeRhWorkflowField);
             entry.workflowJson = state.config.workflowJson || {};
             entry.optionalImageMode = state.config.optionalImageMode || 'prune-workflow';
-            entry.raw = state.config.raw || {};
             entry.updatedAt = Number(data.workflow?.updatedAt || Date.now());
             renderRunningHubCards();
             await saveProviders();
@@ -2634,8 +2627,8 @@ async function refreshJimengStatus(showCredit=true){
         setJimengStatus(data.logged_in ? '已登录' : (data.installed ? '未登录' : '未安装'), data.logged_in === true);
         if(data.installed && data.version_ok === false && jimengCredit){
             jimengCredit.textContent = `⚠ 检测到 dreamina CLI 版本 ${data.cli_version || '未知'}，低于推荐的 ${data.min_version || '1.4.2'}。旧版本任务状态可能无法更新，请升级 CLI。`;
-        } else if(showCredit && data.raw && jimengCredit){
-            jimengCredit.textContent = jimengCreditText(data.raw);
+        } else if(showCredit && data.credit && jimengCredit){
+            jimengCredit.textContent = jimengCreditText(data.credit);
         }
     } catch(e){
         setJimengStatus('检测失败', false);
@@ -2670,7 +2663,7 @@ async function pollJimengLogin(){
         if(data.logged_in){
             clearInterval(jimengLoginTimer);
             setJimengStatus('已登录', true);
-            if(jimengCredit) jimengCredit.textContent = jimengCreditText(data.raw);
+            if(jimengCredit) jimengCredit.textContent = jimengCreditText(data.credit);
         } else if(data.running){
             setJimengStatus('等待扫码...');
         } else {
@@ -2690,7 +2683,7 @@ async function refreshJimengCredit(){
             return json;
         });
         setJimengStatus('已登录', true);
-        if(jimengCredit) jimengCredit.textContent = jimengCreditText(data.raw);
+        if(jimengCredit) jimengCredit.textContent = jimengCreditText(data.credit);
     } catch(e){
         setJimengStatus('未登录', false);
         if(jimengCredit) jimengCredit.textContent = e.message || String(e);
@@ -2705,7 +2698,7 @@ async function logoutJimeng(){
             return json;
         });
         setJimengStatus('已退出', false);
-        if(jimengCredit) jimengCredit.textContent = prettyJson(data.raw);
+        if(jimengCredit) jimengCredit.textContent = data.message || '已退出登录';
         if(jimengLoginBox) jimengLoginBox.hidden = true;
     } catch(e){
         setJimengStatus('退出失败', false);
@@ -2734,7 +2727,7 @@ async function loadJimengHelp(){
             if(!r.ok) throw new Error(json.detail || '加载帮助失败');
             return json;
         });
-        jimengHelpOutput.textContent = data.text || prettyJson(data.raw);
+        jimengHelpOutput.textContent = data.text || '无可显示的帮助输出';
     } catch(e){
         jimengHelpOutput.textContent = e.message || String(e);
     }

@@ -1,0 +1,43 @@
+{
+  "state": {
+    "mode": "success",
+    "calls": 1,
+    "query_failures": 4,
+    "tasks": [
+      {
+        "id": "canvas_img_b77de0adbd484f38b4be01886c0056bc",
+        "status": "succeeded"
+      }
+    ]
+  },
+  "latest_log": {
+    "id": "log_ad6d2405b7431_1790816438530",
+    "createdAt": 1790816438530,
+    "status": "success",
+    "platform": "Comfly",
+    "nodeType": "generator",
+    "model": "API Image",
+    "request": {
+      "task_id": "",
+      "request_id": "",
+      "provider_id": "",
+      "backend": "",
+      "prompt_id": "",
+      "workflow_json": "",
+      "seed": ""
+    },
+    "prompt": "中文验收：蓝色方块与橙色圆形，保存后重新打开。",
+    "outputs": [
+      "/assets/input/ai_ref_c96861fe0c41.png"
+    ],
+    "refs": [
+      {
+        "url": "/assets/input/ai_ref_c96861fe0c41.png",
+        "name": "中文参考图.png"
+      }
+    ],
+    "runMs": 77357,
+    "error": ""
+  },
+  "pending_count": 0
+}

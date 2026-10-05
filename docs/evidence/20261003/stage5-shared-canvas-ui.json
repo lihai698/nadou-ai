@@ -1,0 +1,185 @@
+{
+  "date": "2026-10-03",
+  "scope": "阶段5：共享画布保存/读取路由对普通与智能画布的页面影响",
+  "result": "passed_in_synthetic_isolation",
+  "revision": "53168d8e6b7be6174f2d3eccae9375ce4d44cd3e",
+  "workingTree": "本项目已有阶段性未提交改动；本项不改业务代码",
+  "environment": {
+    "server": "http://127.0.0.1:3021",
+    "fixtureRoot": "D:\\daxiong\\output\\acceptance-20261003\\stage5-shared-data",
+    "browser": "Codex 内置浏览器",
+    "viewport": [
+      1280,
+      720
+    ],
+    "python": "3.10.11",
+    "externalGeneration": "未调用"
+  },
+  "sharedPath": "两个页面均经 main.py 的 /api/canvases/{id} GET/PUT；列表来自 /api/canvases",
+  "media": {
+    "name": "阶段五共用参考图.png",
+    "url": "/assets/input/%E9%98%B6%E6%AE%B5%E4%BA%94%E5%85%B1%E7%94%A8%E5%8F%82%E8%80%83%E5%9B%BE.png",
+    "bytes": 109,
+    "sha256": "6fa15130a24cfb190d1de5e9dad631b32367a908a63c21837eb2d5b707024e2e",
+    "servedBytesIdentical": true
+  },
+  "cases": {
+    "classic": {
+      "before": {
+        "nodes": 4,
+        "nodeIds": [
+          "gen_a837b3525e0118_1790772255456",
+          "img_2ac7c6fb3894e8_1790772231355",
+          "out_d6054cfdd2c6c8_1790772159348",
+          "prompt_794da57e28be28_1790772152330"
+        ],
+        "connections": 3,
+        "connectionEndpoints": [
+          [
+            "gen_a837b3525e0118_1790772255456",
+            "out_d6054cfdd2c6c8_1790772159348"
+          ],
+          [
+            "img_2ac7c6fb3894e8_1790772231355",
+            "gen_a837b3525e0118_1790772255456"
+          ],
+          [
+            "prompt_794da57e28be28_1790772152330",
+            "gen_a837b3525e0118_1790772255456"
+          ]
+        ],
+        "prompt": "中文验收：蓝色方块与橙色圆形，保存后重新打开。",
+        "uniqueParameters": {
+          "resolution": "4k",
+          "ratio": "square"
+        },
+        "syntheticMediaUrl": "/assets/input/%E9%98%B6%E6%AE%B5%E4%BA%94%E5%85%B1%E7%94%A8%E5%8F%82%E8%80%83%E5%9B%BE.png"
+      },
+      "uiActions": [
+        "打开实际页面",
+        "在节点控件修改提示词及独有参数",
+        "等待自动保存",
+        "刷新页面"
+      ],
+      "afterReloadBrowser": {
+        "prompt": "阶段五普通画布：共享接口保存中文提示词。",
+        "resolutionLabel": "2K",
+        "ratioLabel": "3:2",
+        "referenceVisible": true,
+        "linksVisible": 3,
+        "decodedPixels": [
+          32,
+          24
+        ]
+      },
+      "afterApiAndDisk": {
+        "nodes": 4,
+        "nodeIds": [
+          "gen_a837b3525e0118_1790772255456",
+          "img_2ac7c6fb3894e8_1790772231355",
+          "out_d6054cfdd2c6c8_1790772159348",
+          "prompt_794da57e28be28_1790772152330"
+        ],
+        "connections": 3,
+        "connectionEndpoints": [
+          [
+            "gen_a837b3525e0118_1790772255456",
+            "out_d6054cfdd2c6c8_1790772159348"
+          ],
+          [
+            "img_2ac7c6fb3894e8_1790772231355",
+            "gen_a837b3525e0118_1790772255456"
+          ],
+          [
+            "prompt_794da57e28be28_1790772152330",
+            "gen_a837b3525e0118_1790772255456"
+          ]
+        ],
+        "prompt": "阶段五普通画布：共享接口保存中文提示词。",
+        "uniqueParameters": {
+          "resolution": "2k",
+          "ratio": "landscape"
+        },
+        "mediaReferences": [
+          "/assets/input/%E9%98%B6%E6%AE%B5%E4%BA%94%E5%85%B1%E7%94%A8%E5%8F%82%E8%80%83%E5%9B%BE.png"
+        ],
+        "sameNodeIds": true,
+        "sameConnectionEndpoints": true,
+        "apiEqualsDisk": true,
+        "updatedAt": 1791022283370
+      },
+      "url": "http://127.0.0.1:3021/static/canvas.html?id=stage5-shared-classic-ui&project=default"
+    },
+    "smart": {
+      "before": {
+        "nodes": 3,
+        "nodeIds": [
+          "loop_zq54wv1u2tzz",
+          "prompt_faueue81nrej",
+          "smart_lwgxnjjko528"
+        ],
+        "connections": 1,
+        "connectionEndpoints": [
+          [
+            "prompt_faueue81nrej",
+            "smart_lwgxnjjko528"
+          ]
+        ],
+        "prompt": "智能验收：保留中文提示词、参考图和循环设置。",
+        "uniqueParameters": {
+          "loopCount": 3,
+          "loopMode": "serial",
+          "imageResolution": "4k"
+        },
+        "syntheticMediaUrl": "/assets/input/%E9%98%B6%E6%AE%B5%E4%BA%94%E5%85%B1%E7%94%A8%E5%8F%82%E8%80%83%E5%9B%BE.png"
+      },
+      "uiActions": [
+        "打开实际页面",
+        "在节点控件修改提示词及独有参数",
+        "等待自动保存",
+        "刷新页面"
+      ],
+      "afterReloadBrowser": {
+        "prompt": "阶段五智能画布：共享接口保存中文提示词。",
+        "loopCountLabel": "次数 4",
+        "referenceVisible": true,
+        "linksVisible": 1,
+        "decodedPixels": [
+          32,
+          24
+        ]
+      },
+      "afterApiAndDisk": {
+        "nodes": 3,
+        "nodeIds": [
+          "loop_zq54wv1u2tzz",
+          "prompt_faueue81nrej",
+          "smart_lwgxnjjko528"
+        ],
+        "connections": 1,
+        "connectionEndpoints": [
+          [
+            "prompt_faueue81nrej",
+            "smart_lwgxnjjko528"
+          ]
+        ],
+        "prompt": "阶段五智能画布：共享接口保存中文提示词。",
+        "uniqueParameters": {
+          "loopCount": 4,
+          "loopMode": "serial",
+          "imageResolution": "4k"
+        },
+        "mediaReferences": [
+          "/assets/input/%E9%98%B6%E6%AE%B5%E4%BA%94%E5%85%B1%E7%94%A8%E5%8F%82%E8%80%83%E5%9B%BE.png"
+        ],
+        "sameNodeIds": true,
+        "sameConnectionEndpoints": true,
+        "apiEqualsDisk": true,
+        "updatedAt": 1791022238126
+      },
+      "url": "http://127.0.0.1:3021/static/smart-canvas.html?id=stage5-shared-smart-ui&project=default"
+    }
+  },
+  "crossKindIsolation": "同一服务和项目列表包含两画布；两份 ID、kind、提示词与独有参数分别保持，未串写",
+  "limits": "仅使用自制 32×24 PNG、固定节点样例与内置浏览器 1280×720；不覆盖真实供应商、旧版本数据或所有节点类型。页面截图已目视检查但未另存文件。"
+}

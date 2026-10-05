@@ -1,0 +1,61 @@
+{
+  "state": {
+    "mode": "query-persistent",
+    "calls": 1,
+    "query_failures": 4,
+    "tasks": [
+      {
+        "id": "canvas_img_b77de0adbd484f38b4be01886c0056bc",
+        "status": "succeeded"
+      }
+    ]
+  },
+  "pending": [
+    {
+      "id": "p_3881bc99ad9ae_1790816361173",
+      "startedAt": 1790816361173,
+      "run": {
+        "nodeType": "generator",
+        "node": {
+          "id": "gen_a837b3525e0118_1790772255456",
+          "type": "generator",
+          "x": 528,
+          "y": 146,
+          "apiProvider": "",
+          "model": "",
+          "ratio": "square",
+          "resolution": "4k",
+          "customRatio": "",
+          "customSize": "",
+          "customRatioWidth": "",
+          "customRatioHeight": "",
+          "customWidth": "",
+          "customHeight": "",
+          "generatedOutputs": [
+            "/assets/input/ai_ref_c96861fe0c41.png"
+          ]
+        },
+        "prompt": "中文验收：蓝色方块与橙色圆形，保存后重新打开。",
+        "refs": [
+          {
+            "url": "/assets/input/ai_ref_c96861fe0c41.png",
+            "name": "中文参考图.png"
+          }
+        ]
+      },
+      "canvasTaskId": "canvas_img_b77de0adbd484f38b4be01886c0056bc",
+      "canvasTaskType": "online-image",
+      "providerId": "",
+      "model": "gpt-image-2",
+      "appendGenerated": false,
+      "previewSize": {
+        "w": 4096,
+        "h": 4096
+      },
+      "queryPaused": true,
+      "queryRecoverable": true,
+      "error": "验收模拟：任务查询短暂不可用",
+      "cascadeTargetId": ""
+    }
+  ]
+}

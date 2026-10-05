@@ -1,0 +1,33 @@
+{
+  "date": "2026-10-02",
+  "server": "127.0.0.1:3002",
+  "canvas_id": "smart-direct-chain-20261002",
+  "mode": "success",
+  "operation": "smart_canvas_loop_run_success_save_reload",
+  "ui_result": {
+    "action": "点击循环节点‘一键运行’",
+    "toast": "一键运行完成",
+    "nodes_before": 4,
+    "nodes_after": 5,
+    "connections_after": 4,
+    "new_output_node": {
+      "type": "smart-image",
+      "name": "output-1.png",
+      "url": "/assets/input/ai_ref_c96861fe0c41.png"
+    },
+    "after_reload_nodes": 5,
+    "after_reload_output_present": true,
+    "prompt_preserved": "智能验收：保留中文提示词、参考图和循环设置。"
+  },
+  "task": {
+    "server_calls": 1,
+    "task_status": "succeeded",
+    "task_id": "canvas_img_1d729c64c9cb452594fe39ea7ba57254",
+    "log_status": "success",
+    "run_ms": 2130,
+    "error": ""
+  },
+  "simulation_generation_calls": 1,
+  "real_provider_calls": 0,
+  "conclusion": "The smart canvas simulated task was submitted once, completed successfully, created an output node, persisted the canvas, and restored the output after reload. This covers the local simulated success path only; it is not a real provider or concurrency result."
+}

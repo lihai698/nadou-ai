@@ -1,0 +1,10 @@
+{
+  "date": "2026-10-03",
+  "environment": "127.0.0.1:3010 isolated empty data, in-app browser 1280px viewport",
+  "theme": "Expanded More Settings, switched Light to Dark. The home and embedded Text to Image page both visibly changed to dark; the root gained studio-theme-dark. Switched back to Light at the end.",
+  "language": "Switched Chinese to English. Sidebar and embedded Text to Image labels both changed, including system status and Generate. Switched back to Chinese at the end.",
+  "scale": "Resized the browser from its ordinary 1280px viewport to 1024x768 and 1600x900. Automatic UI scale changed from 0.766 to 0.683 and 0.957 respectively; document scrollWidth equaled clientWidth at all three widths. The temporary viewport override was reset and the 0.766 scale returned. Manual scale-mode selection is not exposed in this page and was not tested.",
+  "states": "The first home load briefly displayed 正在加载归档 and then resolved. In the empty project, the embedded canvas list showed 0 canvases, 暂无画布 and a visible 新建画布 button. No horizontal clipping was seen in the inspected home and empty-list screens. The ordinary canvas rejected a malformed self-made workflow JSON without adding nodes; its original error exposed an English JSON parser message.",
+  "fix": "main.py now returns 工作流 JSON 格式错误 with line and column numbers plus a Chinese retry hint for JSONDecodeError. The isolated API returned HTTP 400 with this text, and the canvas error modal displayed it after selecting the same malformed file again.",
+  "result": "F16 partially passed: theme, language, embedded-page synchronization, responsive automatic scale and representative empty/loading/error states were verified; manual scale-mode switching and broader page combinations remain."
+}

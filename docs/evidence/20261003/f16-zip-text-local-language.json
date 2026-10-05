@@ -1,0 +1,52 @@
+{
+  "date": "2026-10-03",
+  "scope": "F16 ZIP 工作流、文本素材、本地素材卡片的实际页面语言验收",
+  "environment": {
+    "origin": "http://127.0.0.1:3019",
+    "page": "http://127.0.0.1:3019/static/asset-manager.html",
+    "fixtureServer": "output/acceptance-20261003/f16_more_server.py",
+    "isolatedDataRoot": "output/acceptance-20261003/f16-more-data",
+    "browser": "Codex In-app Browser",
+    "data": "自制 ZIP、TXT、WAV；与私人配置和真实素材隔离"
+  },
+  "observations": {
+    "zipWorkflow": {
+      "upload": "通过页面文件选择器上传自制 ZIP，状态显示“已上传 1 个工作流”；刷新后卡片和详情保留。",
+      "english": "ZIP Workflow Package",
+      "chinese": "ZIP 工作流包",
+      "customName": "f16_中文工作流保留原文",
+      "bytes": 164,
+      "sha256": "f8f5e8919ed218c4fc0d8ebd478bb221efe37043cd810ddccc783f605a9c01c3",
+      "matchesSource": true
+    },
+    "textAsset": {
+      "setup": "在隔离索引和磁盘添加自制 TXT 条目；本次只验证现有条目的界面呈现，没有验证 TXT 上传入口。",
+      "english": "Text; detail preview title Click to enlarge preview",
+      "chinese": "文本",
+      "customName": "用户文案样例保留原文",
+      "bytes": 32,
+      "sha256": "b616949cb6c3d408f98b7621559ca5194d7239033e43f353db726005b30af08c",
+      "matchesSource": true
+    },
+    "localAsset": {
+      "upload": "通过页面文件选择器上传自制 WAV，状态显示“已上传 1 个素材”；刷新后卡片和详情保留。",
+      "english": "Audio; detail actions Open in new window and Click to enlarge preview; source Local Uploads",
+      "chinese": "音频；详情按钮新窗口打开、点击放大预览；来源本地上传",
+      "customName": "音频原文件名保留原文",
+      "bytes": 4044,
+      "sha256": "f9bbe28bc5af66266961c931e2cd7ae4b6c3f863428ef2b1ade242690c42d327",
+      "matchesSource": true
+    },
+    "deepStatus": {
+      "trigger": "英文模式点击 TXT 详情中的预览按钮",
+      "afterFix": "Only images and videos can be previewed",
+      "result": "固定错误状态已翻译；页面保持正常"
+    },
+    "languageRoundTrip": "在隔离主页展开“更多设置”，切到英文后逐项检查，再切回中文并刷新；三类系统类型文字恢复，自定义中文名称保持。"
+  },
+  "validation": [
+    "实际浏览器页面的 ZIP、TXT、WAV 卡片和详情、状态提示核对通过。",
+    "隔离 API 读回三份文件的字节与自制源文件逐字节一致。"
+  ],
+  "remaining": "TXT 详情的注册平台区域仍有中文固定文案，其他深层弹窗和错误状态未逐项覆盖。F16 保持部分通过。"
+}

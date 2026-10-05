@@ -1,0 +1,25 @@
+{
+  "date": "2026-10-03",
+  "scope": "阶段 6 错误处理与阶段 8 试拆后的公开包预检",
+  "command": "python\\python.exe tools\\prepare-release.py --preflight",
+  "result": "passed",
+  "versionChecked": "2026.08.28",
+  "fileCount": 287,
+  "updateMode": "full_install",
+  "privateBoundary": "API/.env、data、assets、output 和验收证据不纳入公开文件；API/.env.example 按白名单纳入。",
+  "build": "本轮仅运行预检，未重新生成安装包或 ZIP。",
+  "runtimeSmoke": {
+    "scope": "临时目录仅复制 main.py、VERSION、backend、static、workflows，无个人配置和用户数据",
+    "server": "http://127.0.0.1:3023",
+    "responses": {
+      "/static/index.html": 200,
+      "/api/queue_status?client_id=preview1": 200,
+      "/api/providers": 200
+    },
+    "providers": 3,
+    "requestTracingHeaders": true,
+    "canvasCreatedAndOpened": true
+  },
+  "network": "未调用真实供应商；未发布、未推送。",
+  "limitation": "正式首发前仍需把 VERSION 提升到高于 2026.08.28 的版本，重新生成安装包，并在干净安装目录启动主要页面。"
+}

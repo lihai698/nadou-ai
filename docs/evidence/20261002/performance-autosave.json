@@ -1,0 +1,113 @@
+{
+  "method": "UI textarea fill; callStartToRequestMs includes automation latency and debounce; requestToFinishMs uses CDP monotonic timestamps; third edit restores original text and reload verifies",
+  "runs": [
+    {
+      "kind": "classic",
+      "count": 10,
+      "run": 0,
+      "status": 200,
+      "callStartToRequestMs": 529,
+      "requestToFinishMs": 21.74,
+      "expectedText": "性能保存验收：classic-10-0"
+    },
+    {
+      "kind": "classic",
+      "count": 10,
+      "run": 1,
+      "status": 200,
+      "callStartToRequestMs": 518,
+      "requestToFinishMs": 8.49,
+      "expectedText": "性能保存验收：classic-10-1"
+    },
+    {
+      "kind": "classic",
+      "count": 10,
+      "run": 2,
+      "status": 200,
+      "callStartToRequestMs": 525,
+      "requestToFinishMs": 8.99,
+      "expectedText": "性能样例0：中文提示词"
+    },
+    {
+      "kind": "classic",
+      "count": 100,
+      "run": 0,
+      "status": 200,
+      "callStartToRequestMs": 532,
+      "requestToFinishMs": 26.13,
+      "expectedText": "性能保存验收：classic-100-0"
+    },
+    {
+      "kind": "classic",
+      "count": 100,
+      "run": 1,
+      "status": 200,
+      "callStartToRequestMs": 529,
+      "requestToFinishMs": 17,
+      "expectedText": "性能保存验收：classic-100-1"
+    },
+    {
+      "kind": "classic",
+      "count": 100,
+      "run": 2,
+      "status": 200,
+      "callStartToRequestMs": 523,
+      "requestToFinishMs": 19.5,
+      "expectedText": "性能样例0：中文提示词"
+    },
+    {
+      "kind": "smart",
+      "count": 10,
+      "run": 0,
+      "status": 200,
+      "callStartToRequestMs": 473,
+      "requestToFinishMs": 12.3,
+      "expectedText": "性能保存验收：smart-10-0"
+    },
+    {
+      "kind": "smart",
+      "count": 10,
+      "run": 1,
+      "status": 200,
+      "callStartToRequestMs": 481,
+      "requestToFinishMs": 21.07,
+      "expectedText": "性能保存验收：smart-10-1"
+    },
+    {
+      "kind": "smart",
+      "count": 10,
+      "run": 2,
+      "status": 200,
+      "callStartToRequestMs": 474,
+      "requestToFinishMs": 23.35,
+      "expectedText": "性能样例0：中文提示词"
+    },
+    {
+      "kind": "smart",
+      "count": 100,
+      "run": 0,
+      "status": 200,
+      "callStartToRequestMs": 478,
+      "requestToFinishMs": 26.92,
+      "expectedText": "性能保存验收：smart-100-0"
+    },
+    {
+      "kind": "smart",
+      "count": 100,
+      "run": 1,
+      "status": 200,
+      "callStartToRequestMs": 472,
+      "requestToFinishMs": 36.26,
+      "expectedText": "性能保存验收：smart-100-1"
+    },
+    {
+      "kind": "smart",
+      "count": 100,
+      "run": 2,
+      "status": 200,
+      "callStartToRequestMs": 478,
+      "requestToFinishMs": 72.37,
+      "expectedText": "性能样例0：中文提示词"
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "mode": "success",
+  "calls": 4,
+  "query_failures": 16,
+  "tasks": [
+    {
+      "id": "canvas_img_62eb005e1b8647a7b3b1103eec816c97",
+      "status": "succeeded"
+    },
+    {
+      "id": "canvas_img_c4cce8d36b10452ab4c6cb5e24917484",
+      "status": "succeeded"
+    },
+    {
+      "id": "canvas_img_50edd482ff704b18b65fcdca5f5bfd8f",
+      "status": "succeeded"
+    },
+    {
+      "id": "canvas_img_418301535039489082fbda042e9d9a59",
+      "status": "succeeded"
+    }
+  ]
+}

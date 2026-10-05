@@ -1,0 +1,17 @@
+{
+  "date": "2026-10-03",
+  "environment": "127.0.0.1:3009, output/acceptance-20261003/f13-data; repository 53168d8; Python 3.10.11",
+  "isolation": "The chat provider pointed only to a loopback mock at 127.0.0.1:3999. Its placeholder key was stored only in the isolated acceptance directory. No paid provider was called; real API/.env, provider JSON and prompt library timestamps did not change.",
+  "chat": {
+    "action": "On the GPT chat page, create a conversation, type F15页面发送验收：请回复确认 and click Send. The local mock returned F15页面回复：本地模拟成功. Reload the page and open History.",
+    "conversationId": "b7ab0c80f08f4429b7ace3c84bbe4574",
+    "observed": "The original user message, mock assistant reply and f13-chat-b model remained visible after reload and in History. The isolated conversation JSON contained exactly those two messages in that order."
+  },
+  "workflow": {
+    "fixture": "output/acceptance-20261003/f15-parameter-workflow.json",
+    "canvasId": "60a758ed9bdb41a39bf145848da858e1",
+    "action": "In the ordinary canvas Import/Export panel, select the custom workflow JSON through the file chooser, then reload the canvas.",
+    "observed": "Two nodes and one connection persisted. The prompt text remained intact; generator provider/model were f13-local/f13-image-c, resolution 2k, ratio 2:3. Its input and connection pointed to the newly remapped prompt ID, and the original fixture IDs were not reused. The page displayed the same parameters after reload."
+  },
+  "result": "F15 passed for isolated chat persistence and ordinary canvas workflow field mapping. Real provider responses and other workflow node types were outside this sample."
+}

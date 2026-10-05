@@ -1,0 +1,28 @@
+{
+  "date": "2026-10-03",
+  "scope": "首发公开包本地预检",
+  "command": "python\\python.exe -X utf8 tools\\prepare-release.py --preflight [--build]",
+  "result": "passed",
+  "versionChecked": "2026.08.28",
+  "fileCount": 267,
+  "updateMode": "full_install",
+  "privateBoundary": "API/.env、data、assets、output 及验收证据未纳入公开文件；API/.env.example 按精确白名单纳入。",
+  "build": {
+    "directory": "output/release/nadou-ai-2026.08.28",
+    "zip": "output/release/nadou-ai-2026.08.28.zip",
+    "zipEntries": 268,
+    "privateEntries": [],
+    "containsEnvExample": true,
+    "containsManifest": true,
+    "runtimeDataRemovedAfterCheck": true
+  },
+  "runtimeSmoke": {
+    "server": "http://127.0.0.1:3022",
+    "command": "python -m uvicorn main:app --host 127.0.0.1 --port 3022",
+    "responses": {"/": 200, "/static/canvas-list.html": 200, "/api/canvases": 200, "/api/local-assets": 200},
+    "stopped": true,
+    "runtime": "项目 Python 3.10.11（使用已安装依赖）"
+  },
+  "network": "未访问 GitHub 远端树；未发布、未推送。预检生成的目录和 ZIP 仅在本机 output/release。",
+  "limitation": "正式首发前仍需在独立导出目录把 VERSION 提升到高于 2026.08.28 的版本，重新运行发布检查和 --build，并在干净安装目录启动主要页面。"
+}

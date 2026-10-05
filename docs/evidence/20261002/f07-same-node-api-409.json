@@ -1,0 +1,24 @@
+{
+  "date": "2026-10-02",
+  "environment": "127.0.0.1:3003，隔离数据目录 output/acceptance-20261002/f07-save-data",
+  "fixture_canvas_id": "8a6b3fb21a5f49e094244908b0dad718",
+  "node_id": "f07_shared_prompt",
+  "steps": [
+    "创建独立智能画布，保存一个文字为“原始文字”的提示节点",
+    "两个请求使用相同的 base_updated_at，分别将该节点文字改为“服务端并发文字”和“本地并发文字”",
+    "先提交服务端请求，再提交持有旧版本的本地请求；随后 GET 画布核对磁盘内容",
+    "验收后把独立画布节点重置为“原始文字”，供浏览器双页验收"
+  ],
+  "result": {
+    "stale_put_status": 409,
+    "first_save_updated_at": 1790953974106,
+    "conflict_detail_updated_at": 1790953974106,
+    "conflict_detail_canvas_node_text": "服务端并发文字",
+    "get_canvas_node_text": "服务端并发文字",
+    "get_canvas_updated_at": 1790953974106,
+    "reset_node_text": "原始文字",
+    "reset_updated_at": 1790953999915
+  },
+  "source_validation": "node --check static/js/smart-canvas.js 通过；node --test tests/smart_canvas_history.test.cjs 18/18 通过；git diff --check 通过",
+  "scope": "这次 API 验证确认 409 响应包含完整服务端画布和版本，旧请求未覆盖已保存内容。浏览器双页合并及刷新由主任务另行验收。"
+}

@@ -1,0 +1,29 @@
+{
+  "date": "2026-10-03",
+  "scope": "POST /api/local-assets/delete with synthetic files and isolated public-code copy",
+  "beforeFix": {
+    "legacyCanvasBatch": "Deleting classic.png, smart.png and free.png removed all three even though legacy ordinary and smart nodes still referenced the first two.",
+    "libraryAndHistory": "Deleting library.png and history.png removed both despite persisted references.",
+    "caption": "After the first fix, deleting captioned.png still removed its captioned.txt sidecar even though a canvas referenced that text file."
+  },
+  "afterFix": {
+    "legacyCanvasBatch": "Only free.png was deleted. The two referenced files stayed intact; the ordinary canvas list entry normalized a missing kind to classic, and GET /api/storage-files/local/classic.png returned HTTP 200 with the original bytes.",
+    "libraryAndHistory": "Referenced local uploads stayed on disk and were reported in skipped_referenced.",
+    "sidecars": "A reference to captioned.txt preserved the requested image, caption and classification sidecar as one group. An unreferenced group was deleted together.",
+    "unreadableDocuments": "Malformed canvas or history JSON blocked deletion instead of assuming the file was free."
+  },
+  "pageLogic": "Two JavaScript tests executed the actual asset-manager and smart-canvas deletion handlers. Partial deletion showed one deleted and one retained in Chinese and English; the smart-canvas handler reported retention instead of false success.",
+  "pageActions": {
+    "server": "http://127.0.0.1:3021",
+    "fixture": "Temporary public-code copy with synthetic 1x1 PNG used.png and free.png, legacy-classic-ui and legacy-smart-ui JSON canvases; no API/, data/ or assets/ from the project was copied.",
+    "assetManager": "On /static/asset-manager.html, the Local Assets tab showed two cards. Clicking used.png then Delete showed the visible status '1 个素材仍被使用或无法确认安全，已保留' and left the card. Clicking free.png then Delete showed '已删除 1 个素材', reduced the folder count to 1, and removed the card. Clicking Refresh left only used.png.",
+    "classicCanvas": "After the deletion actions, /static/canvas.html?id=legacy-classic-ui rendered the old ordinary canvas and its image element reported complete=true, naturalWidth=1, naturalHeight=1, src=/assets/uploads/used.png.",
+    "smartCanvas": "After the same actions, /static/smart-canvas.html?id=legacy-smart-ui normalized the legacy smart-container and its image element reported complete=true, naturalWidth=1, naturalHeight=1, src=/assets/uploads/used.png.",
+    "httpAndDisk": "GET /api/storage-files/local/used.png returned 200 with 68 bytes; free.png returned 404. The used image and both sidecars remained on disk; free image and both sidecars were absent after refresh."
+  },
+  "verification": {
+    "python": "5 focused unittest cases passed in a temporary copy containing only main.py, static/, workflows/ and the new test; no real API, data or assets were copied.",
+    "javascript": "2 focused node:test cases passed; modified scripts passed node --check; i18n validator passed with 1084 keys."
+  },
+  "limits": "The page check used a temporary localhost server and browser tab with synthetic files only; no external provider or user data was involved."
+}

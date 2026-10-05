@@ -1,0 +1,44 @@
+name: Release nadou ai
+
+on:
+  push:
+    tags:
+      - 'v[0-9]*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Check version and tag
+        shell: bash
+        run: |
+          version=$(head -n 1 VERSION | tr -d '\r\n')
+          test "${GITHUB_REF_NAME}" = "v${version}"
+          python -m json.tool static/update-notes.json > /dev/null
+          VERSION="$version" python - <<'PY'
+          import json, os
+          with open('static/update-notes.json', encoding='utf-8') as f:
+              notes = json.load(f)
+          assert notes.get('version') == os.environ['VERSION']
+          assert notes.get('update_mode') in {'in_app', 'full_install'}
+          assert notes.get('items')
+          PY
+      - name: Check and build public release
+        run: python tools/prepare-release.py --allow-current-version --build
+      - name: Publish complete ZIP
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          version=$(head -n 1 VERSION | tr -d '\r\n')
+          gh release create "v${version}" \
+            "output/release/nadou-ai-${version}.zip" \
+            --title "nadou ai ${version}" \
+            --notes-file "output/release/nadou-ai-${version}-notes.md" \
+            --verify-tag

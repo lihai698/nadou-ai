@@ -1,0 +1,18 @@
+{
+  "date": "2026-10-03",
+  "scope": "Stop tracking the local API configuration and asset library index",
+  "paths": ["API/.env", "data/asset_library.json"],
+  "preparation": {
+    "local_backup_outside_repository": true,
+    "backup_sha256_matches_worktree": true,
+    "isolated_git_rehearsal": "git rm --cached kept both disposable files and their uncommitted contents unchanged"
+  },
+  "worktree_result": {
+    "files_still_exist": true,
+    "sha256_unchanged": true,
+    "git_index_no_longer_tracks_paths": true,
+    "gitignore_matches_both_paths": true,
+    "environment_check": "passed with the local files present"
+  },
+  "limits": "The removals are staged in the local Git index. They are not committed or pushed; HEAD, Git history, and other checkouts still track these paths until a reviewed commit is integrated. A future checkout or pull of that commit may remove tracked copies on other machines, so those users must back up and restore their private files."
+}

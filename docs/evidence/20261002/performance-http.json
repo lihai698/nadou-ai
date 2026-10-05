@@ -1,0 +1,181 @@
+{
+  "python": "3.10.11",
+  "os": "Windows-10-10.0.19045-SP0",
+  "media_bytes": 1232,
+  "media_sha256": "293a15b848d04d087481c2e3b555e63de92dfbcd92905fbca32231c2b87bda9e",
+  "method": "Persistent loopback HTTP client, sequential GET/PUT/GET; excludes browser render and autosave debounce",
+  "samples": [
+    {
+      "id": "perf-classic-10-20261002",
+      "kind": "classic",
+      "node_count": 10,
+      "connection_count": 0,
+      "fixture_bytes": 2250,
+      "fixture_sha256": "81ab41eb09d6fbcfda2254964b4dc4ac7cab5a2fa73b208a6f11747e7396e9dc",
+      "runs": [
+        {
+          "phase": "first",
+          "get_ms": 70.367,
+          "put_ms": 27.051,
+          "reopen_ms": 8.343,
+          "content_equal": true
+        },
+        {
+          "phase": "warm",
+          "get_ms": 2.329,
+          "put_ms": 27.037,
+          "reopen_ms": 8.668,
+          "content_equal": true
+        },
+        {
+          "phase": "warm",
+          "get_ms": 3.819,
+          "put_ms": 12.063,
+          "reopen_ms": 11.07,
+          "content_equal": true
+        },
+        {
+          "phase": "warm",
+          "get_ms": 2.267,
+          "put_ms": 11.851,
+          "reopen_ms": 9.746,
+          "content_equal": true
+        }
+      ],
+      "warm_median_ms": {
+        "get_ms": 2.329,
+        "put_ms": 12.063,
+        "reopen_ms": 9.746
+      }
+    },
+    {
+      "id": "perf-classic-100-20261002",
+      "kind": "classic",
+      "node_count": 100,
+      "connection_count": 0,
+      "fixture_bytes": 20466,
+      "fixture_sha256": "534b245d6d6b09e5589dacb39f43ce668acf0f7240b06c77934e6009e4356021",
+      "runs": [
+        {
+          "phase": "first",
+          "get_ms": 13.873,
+          "put_ms": 22.554,
+          "reopen_ms": 13.079,
+          "content_equal": true
+        },
+        {
+          "phase": "warm",
+          "get_ms": 4.78,
+          "put_ms": 23.797,
+          "reopen_ms": 12.626,
+          "content_equal": true
+        },
+        {
+          "phase": "warm",
+          "get_ms": 5.274,
+          "put_ms": 9.767,
+          "reopen_ms": 13.27,
+          "content_equal": true
+        },
+        {
+          "phase": "warm",
+          "get_ms": 5.013,
+          "put_ms": 10.427,
+          "reopen_ms": 11.686,
+          "content_equal": true
+        }
+      ],
+      "warm_median_ms": {
+        "get_ms": 5.013,
+        "put_ms": 10.427,
+        "reopen_ms": 12.626
+      }
+    },
+    {
+      "id": "perf-smart-10-20261002",
+      "kind": "smart",
+      "node_count": 10,
+      "connection_count": 5,
+      "fixture_bytes": 3406,
+      "fixture_sha256": "5d7ba043db717a9c3f6ea66f78e91b746ad88fccd722550465299acddb638a24",
+      "runs": [
+        {
+          "phase": "first",
+          "get_ms": 10.419,
+          "put_ms": 5.319,
+          "reopen_ms": 9.609,
+          "content_equal": true
+        },
+        {
+          "phase": "warm",
+          "get_ms": 2.376,
+          "put_ms": 6.244,
+          "reopen_ms": 8.893,
+          "content_equal": true
+        },
+        {
+          "phase": "warm",
+          "get_ms": 2.595,
+          "put_ms": 6.527,
+          "reopen_ms": 9.446,
+          "content_equal": true
+        },
+        {
+          "phase": "warm",
+          "get_ms": 3.455,
+          "put_ms": 5.344,
+          "reopen_ms": 8.667,
+          "content_equal": true
+        }
+      ],
+      "warm_median_ms": {
+        "get_ms": 2.595,
+        "put_ms": 6.244,
+        "reopen_ms": 8.893
+      }
+    },
+    {
+      "id": "perf-smart-100-20261002",
+      "kind": "smart",
+      "node_count": 100,
+      "connection_count": 50,
+      "fixture_bytes": 32152,
+      "fixture_sha256": "4e23f48d553e329bac131be5a4e58446456f9790c865d91e1c4dfe285f3bb3b9",
+      "runs": [
+        {
+          "phase": "first",
+          "get_ms": 14.94,
+          "put_ms": 12.909,
+          "reopen_ms": 14.169,
+          "content_equal": true
+        },
+        {
+          "phase": "warm",
+          "get_ms": 6.436,
+          "put_ms": 14.617,
+          "reopen_ms": 16.17,
+          "content_equal": true
+        },
+        {
+          "phase": "warm",
+          "get_ms": 7.762,
+          "put_ms": 12.303,
+          "reopen_ms": 13.884,
+          "content_equal": true
+        },
+        {
+          "phase": "warm",
+          "get_ms": 7.553,
+          "put_ms": 12.47,
+          "reopen_ms": 13.576,
+          "content_equal": true
+        }
+      ],
+      "warm_median_ms": {
+        "get_ms": 7.553,
+        "put_ms": 12.47,
+        "reopen_ms": 13.884
+      }
+    }
+  ]
+}

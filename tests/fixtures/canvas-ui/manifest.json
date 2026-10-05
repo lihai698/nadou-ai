@@ -1,0 +1,30 @@
+{
+  "date": "2026-09-30",
+  "baseline_commit": "53168d8",
+  "python": "3.10.11",
+  "samples": [
+    {
+      "kind": "classic",
+      "nodes": 4,
+      "connections": 3,
+      "resources": 1,
+      "file": "classic-workflow.zip",
+      "sha256": "b18823ee83540b39ebc23a1d3fa8e1768fb20c629f2e8cea6d59259f2c1c2338",
+      "reopen_and_restore_fields_equal": true
+    },
+    {
+      "kind": "smart",
+      "nodes": 3,
+      "connections": 1,
+      "resources": 1,
+      "file": "smart-workflow.zip",
+      "sha256": "46ac9e8e585a21287a143cb99d9406f3fdffd9d88b843203d0da707fadff550e",
+      "reopen_and_restore_fields_equal": true
+    }
+  ],
+  "source_files": {
+    "main.py": "3ca778510a8ed880dfef93c14200e22b5efc93cfff02b1da6c51969c73d57edb",
+    "static/js/canvas.js": "248062a81bcb98e5306cb072931b46615a6eab0ed25b1a36df263d038339bc19",
+    "static/js/smart-canvas.js": "30d1d5af8666d5e7310e0cc08d05474635fbb39f0f30059534e595eff75fb824"
+  }
+}

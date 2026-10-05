@@ -1,0 +1,29 @@
+{
+  "date": "2026-10-03",
+  "environment": "127.0.0.1:3006; output/acceptance-20261003/f08-f09-data",
+  "fixtures": "Synthetic 1x1 PNG files and isolated ordinary/smart canvases; no provider requests",
+  "method": "First used the application HTTP route for seven reference cases. Then used the visible ordinary and smart canvas pages to click each log action, accept the browser confirmation, and reload the pages.",
+  "cases": {
+    "f08-classic": {"mode": "record-only", "logsAfter": 0, "mediaKept": true, "resultImageKept": true, "nodesAfter": 2, "connectionsAfter": 1},
+    "f08-smart": {"mode": "record-only", "logsAfter": 0, "mediaKept": true, "resultImageKept": true, "nodesAfter": 2, "connectionsAfter": 1},
+    "f09-classic-owned": {"mode": "log-and-media", "logsAfter": 0, "mediaRemoved": true, "resultNodeReset": true, "nodesAfter": 2, "connectionsAfter": 1},
+    "f09-smart-owned": {"mode": "log-and-media", "logsAfter": 0, "mediaRemoved": true, "resultNodeReset": true, "nodesAfter": 2, "connectionsAfter": 1},
+    "f09-smart-free": {"mode": "log-and-media", "logsAfter": 0, "mediaRemoved": true, "nodesAfter": 1, "connectionsAfter": 0},
+    "f09-classic-shared": {"mode": "log-and-media", "logsAfter": 0, "mediaKeptForOtherCanvas": true, "nodesAfter": 1, "connectionsAfter": 0},
+    "f09-smart-local-ref": {"mode": "log-and-media", "logsAfter": 0, "mediaKeptForDownstreamInput": true, "sourceResultReset": true, "nodesAfter": 2, "connectionsAfter": 1}
+  },
+  "pageReadback": {
+    "classicRemovedResult": "Prompt and output nodes remained; output image absent; log panel showed no generation log.",
+    "smartRecordOnly": "Prompt, connection and result media remained visible after opening the saved canvas; the log panel showed no generation log."
+  },
+  "pageCases": {
+    "f08-ui-classic": "Clicked delete record and accepted the browser confirmation; log absent, image and connection retained after reload.",
+    "f08-ui-smart": "Clicked delete record and accepted the browser confirmation; log absent, image and connection retained after reload.",
+    "f09-ui-classic-owned": "Clicked delete record and original media; original removed, result node empty, prompt and connection retained after reload.",
+    "f09-ui-smart-owned": "Clicked delete record and original media; original removed, result node empty, prompt and connection retained after reload.",
+    "f09-ui-smart-free": "Clicked delete record and original media; unreferenced original removed after reload.",
+    "f09-ui-smart-local-ref": "Clicked delete record and original media; source result reset, downstream input and shared original retained after reload.",
+    "f09-ui-classic-shared": "Clicked delete record and original media; another canvas retained the original and still opened its result node."
+  },
+  "limits": "Only local synthetic PNG originals were exercised. Provider media and unrelated deletion flows were not tested here."
+}

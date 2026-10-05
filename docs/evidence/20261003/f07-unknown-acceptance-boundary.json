@@ -1,0 +1,46 @@
+{
+  "date": "2026-10-03",
+  "status": "verified-with-local-fake-service",
+  "scope": "普通画布与智能画布在线图片生成的无编号提交和防重提；未调用真实供应商",
+  "isolation": {
+    "server": "Node.js HTTP 假服务，127.0.0.1 随机端口",
+    "data": "系统临时目录 daxiong-f07-unknown-*，测试后删除",
+    "responses": ["HTTP 408", "HTTP 200 且缺少 task_id"]
+  },
+  "observed": {
+    "firstSubmit": "生成节点写入受理状态未知字段，节点标题渲染器显示该警告",
+    "automaticRetryPosts": 0,
+    "postsAfterUserCancelsConfirmation": 1,
+    "postsAfterUserConfirmsNewSubmission": 2,
+    "newKnownTaskQueried": "known-after-manual-submit",
+    "oldUnknownWarningAfterNewSuccess": true,
+    "cascadeResubmitBlockedBeforePost": true,
+    "http408ClassifiedAsUnknown": true
+  },
+  "smartCanvas": {
+    "responses": ["HTTP 408", "HTTP 200 且缺少 task_id"],
+    "firstSubmitPosts": 1,
+    "postsAfterCancel": 1,
+    "postsAfterConfirm": 2,
+    "oldUnknownWarningAfterNewSuccess": true,
+    "connectedOutputBranchChecked": true,
+    "oneClickPreflightStopsBeforeSubmit": true,
+    "cascadeStepStopsIfUnknownAppearsLater": true,
+    "partialBatchMarksSharedCascadeUnknown": true,
+    "parallelWorkerFixture": {
+      "alreadyStarted": [1, 2],
+      "notStartedAfterUnknown": [3, 4, 5],
+      "inFlightRoundsSettledBeforeStopIsReported": true
+    }
+  },
+  "validation": {
+    "targetedNodeTests": "42 passed",
+    "canvasJavaScriptSyntax": "passed",
+    "canvasHtmlCacheVersionUpdated": true,
+    "smartTargetedNodeTests": "31 passed",
+    "smartJavaScriptSyntax": "passed",
+    "smartCanvasHtmlCacheVersionUpdated": true,
+    "scopedGitDiffCheck": "passed"
+  },
+  "limits": "请求没有 task_id 时，本地无法证明供应商是否受理；用户明确确认后再次提交仍可能产生第二次计费。并行运行发现未知状态前已经发出的轮次无法撤回，可能继续产生费用；只阻止之后的新轮次。本轮只验证本机假服务和代码中的提示、确认、阻断行为，未做真实供应商和完整浏览器页面复验。"
+}

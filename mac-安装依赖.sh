@@ -1,7 +1,7 @@
 #!/bin/bash
 cd "$(dirname "$0")"
 echo "============================================"
-echo "   Installing dependencies (offline)"
+echo "   Installing pinned dependencies"
 echo "============================================"
 echo ""
 
@@ -20,18 +20,20 @@ echo "[1/2] Checking pip..."
 python3 -m pip --version &> /dev/null
 if [ $? -ne 0 ]; then
     echo "pip not found, bootstrapping..."
-    python3 -m ensurepip --upgrade
+    if ! python3 -m ensurepip --upgrade; then
+        echo "[ERROR] Could not install pip."
+        exit 1
+    fi
 fi
 
-echo "[2/2] Installing from local packages folder..."
-python3 -m pip install --no-index --find-links=packages -r requirements.txt
-
-if [ $? -ne 0 ]; then
-    echo ""
-    echo "[WARN] Offline install failed, trying online..."
-    python3 -m pip install -r requirements.txt
+echo "[2/2] Installing from package index..."
+if ! python3 -m pip install -r requirements.lock; then
+    echo "[ERROR] Dependency installation failed."
+    exit 1
 fi
 
 echo ""
-echo "Done. Run './启动服务.sh' to start."
-read -p "Press Enter to exit..."
+echo "Done. Run 'bash mac-启动服务.sh' to start."
+if [ -t 0 ]; then
+    read -r -p "Press Enter to exit..." _
+fi

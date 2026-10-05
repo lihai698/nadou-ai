@@ -1,0 +1,61 @@
+{
+  "date": "2026-10-02",
+  "server": "127.0.0.1:3002",
+  "canvas_id": "perf-smart-100-20261002",
+  "scope": "isolated synthetic video and audio assets",
+  "fixtures": [
+    {
+      "name": "验收短视频",
+      "kind": "video",
+      "format": "WebM",
+      "source": {
+        "path": "output/acceptance-20260930/assets/input/验收短视频.webm",
+        "bytes": 741,
+        "sha256": "80E1F29301D366FFAE1B26FF1472E65AED31FC3A4A18C791B58511BCF5D0CBEF"
+      },
+      "library_copy": {
+        "path": "output/acceptance-20260930/assets/library/角色/lib_1a1205de36df_验收短视频.webm",
+        "bytes": 741,
+        "sha256": "80E1F29301D366FFAE1B26FF1472E65AED31FC3A4A18C791B58511BCF5D0CBEF"
+      },
+      "library_item_id": "asset_691b65507e53",
+      "library_url": "/assets/library/%E8%A7%92%E8%89%B2/lib_1a1205de36df_%E9%AA%8C%E6%94%B6%E7%9F%AD%E8%A7%86%E9%A2%91.webm"
+    },
+    {
+      "name": "验收音频",
+      "kind": "audio",
+      "format": "WAV",
+      "source": {
+        "path": "output/acceptance-20260930/assets/input/验收音频.wav",
+        "bytes": 4044,
+        "sha256": "F9BBE28BC5AF66266961C931E2CD7AE4B6C3F863428EF2B1ADE242690C42D327"
+      },
+      "library_copy": {
+        "path": "output/acceptance-20260930/assets/library/角色/lib_90b6f2a882bf_验收音频.wav",
+        "bytes": 4044,
+        "sha256": "F9BBE28BC5AF66266961C931E2CD7AE4B6C3F863428EF2B1ADE242690C42D327"
+      },
+      "library_item_id": "asset_a9a9ec797203",
+      "library_url": "/assets/library/%E8%A7%92%E8%89%B2/lib_90b6f2a882bf_%E9%AA%8C%E6%94%B6%E9%9F%B3%E9%A2%91.wav"
+    }
+  ],
+  "ui_result": {
+    "asset_panel": "open",
+    "category": "角色",
+    "drop_method": "page DragEvent with application/x-smart-asset payload",
+    "native_pointer_drag": "not confirmed: the current browser automation drag did not produce a page drop event",
+    "canvas_nodes_before": 100,
+    "canvas_nodes_after": 102,
+    "saved_nodes_after_reload": 102,
+    "saved_media": [
+      {"type": "smart-image", "kind": "audio", "name": "验收音频"},
+      {"type": "smart-image", "kind": "video", "name": "验收短视频"}
+    ],
+    "browser_media_decode_after_reload": {
+      "audio": {"readyState": 4, "durationSeconds": 0.25, "error": null},
+      "video": {"readyState": 4, "durationSeconds": 0.33004, "videoWidth": 64, "videoHeight": 48, "error": null}
+    }
+  },
+  "simulation_generation_calls": 0,
+  "conclusion": "Video and audio files were copied into the isolated asset library, inserted into the smart canvas, persisted, reopened, and decoded successfully in the browser. Native pointer drag remains unconfirmed because the available browser automation did not trigger the drop handler; the verified path is the page drop payload handler."
+}

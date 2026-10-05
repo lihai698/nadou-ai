@@ -1,0 +1,13 @@
+{
+  "date": "2026-10-03",
+  "scope": "F12 workflow ZIP export with missing local media",
+  "environment": "Isolated 127.0.0.1:3013 service using output/acceptance-20261003/f12-export-check-20261003",
+  "before": "The export endpoint filtered out missing local media references, built an incomplete ZIP, and the page reported export success.",
+  "after": {
+    "api_missing": "HTTP 400 with a Chinese message reporting one missing local file and explaining how to export JSON instead",
+    "api_valid": "HTTP 200 ZIP contains workflow.json and the exact bytes of both a local asset and a storage-files resource",
+    "page_missing": "The ordinary canvas opened the 导出工作流 error dialog with the missing-file message. The smart canvas showed the same message and restored its selected-node count instead of staying at 正在打包资源..."
+  },
+  "verification": "45 Python tests passed; main.py and smart-canvas.js syntax checks passed. The two isolated page flows showed the expected error state.",
+  "remaining": "The in-app browser still has not provided a downloaded JSON or ZIP file for file-content comparison; F12 remains partially verified."
+}

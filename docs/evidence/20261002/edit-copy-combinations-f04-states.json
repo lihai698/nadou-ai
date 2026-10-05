@@ -1,0 +1,751 @@
+[
+  {
+    "label": "classic-copy-paste",
+    "nodes": [
+      {
+        "id": "prompt_794da57e28be28_1790772152330",
+        "type": "prompt",
+        "text": "中文验收：蓝色方块与橙色圆形，保存后重新打开。",
+        "x": 80,
+        "y": 100
+      },
+      {
+        "id": "gen_a837b3525e0118_1790772255456",
+        "type": "generator",
+        "x": 580,
+        "y": 100,
+        "inputs": [
+          "prompt_794da57e28be28_1790772152330"
+        ]
+      },
+      {
+        "id": "generator_9698679c1867a8_1790947110071",
+        "type": "generator",
+        "x": 485.38461538461536,
+        "y": 121.53846153846153,
+        "inputs": [
+          "prompt_3d08cb37ac4858_1790947110071"
+        ]
+      },
+      {
+        "id": "prompt_3d08cb37ac4858_1790947110071",
+        "type": "prompt",
+        "text": "中文验收：蓝色方块与橙色圆形，保存后重新打开。",
+        "x": -14.615384615384613,
+        "y": 121.53846153846153
+      }
+    ],
+    "connections": [
+      {
+        "id": "c_83333a569b2118_1790772279262",
+        "from": "prompt_794da57e28be28_1790772152330",
+        "to": "gen_a837b3525e0118_1790772255456"
+      },
+      {
+        "id": "c_508ca53f2d6cc8_1790947110071",
+        "from": "prompt_3d08cb37ac4858_1790947110071",
+        "to": "generator_9698679c1867a8_1790947110071"
+      }
+    ]
+  },
+  {
+    "label": "classic-undo-paste",
+    "nodes": [
+      {
+        "id": "prompt_794da57e28be28_1790772152330",
+        "type": "prompt",
+        "text": "中文验收：蓝色方块与橙色圆形，保存后重新打开。",
+        "x": 80,
+        "y": 100
+      },
+      {
+        "id": "gen_a837b3525e0118_1790772255456",
+        "type": "generator",
+        "x": 580,
+        "y": 100,
+        "inputs": [
+          "prompt_794da57e28be28_1790772152330"
+        ]
+      }
+    ],
+    "connections": [
+      {
+        "id": "c_83333a569b2118_1790772279262",
+        "from": "prompt_794da57e28be28_1790772152330",
+        "to": "gen_a837b3525e0118_1790772255456"
+      }
+    ]
+  },
+  {
+    "label": "classic-alt-shift-copy",
+    "nodes": [
+      {
+        "id": "prompt_794da57e28be28_1790772152330",
+        "type": "prompt",
+        "text": "中文验收：蓝色方块与橙色圆形，保存后重新打开。",
+        "x": 80,
+        "y": 100
+      },
+      {
+        "id": "gen_a837b3525e0118_1790772255456",
+        "type": "generator",
+        "x": 580,
+        "y": 100,
+        "inputs": [
+          "prompt_794da57e28be28_1790772152330"
+        ]
+      },
+      {
+        "id": "generator_b76a41f377d97_1790947133328",
+        "type": "generator",
+        "x": 580,
+        "y": 100,
+        "inputs": [
+          "prompt_794da57e28be28_1790772152330"
+        ]
+      }
+    ],
+    "connections": [
+      {
+        "id": "c_83333a569b2118_1790772279262",
+        "from": "prompt_794da57e28be28_1790772152330",
+        "to": "gen_a837b3525e0118_1790772255456"
+      },
+      {
+        "id": "c_46f34deec387_1790947133328",
+        "from": "prompt_794da57e28be28_1790772152330",
+        "to": "generator_b76a41f377d97_1790947133328"
+      }
+    ]
+  },
+  {
+    "label": "classic-alt-shift-copy-moved",
+    "nodes": [
+      {
+        "id": "prompt_794da57e28be28_1790772152330",
+        "type": "prompt",
+        "text": "中文验收：蓝色方块与橙色圆形，保存后重新打开。",
+        "x": 80,
+        "y": 100
+      },
+      {
+        "id": "gen_a837b3525e0118_1790772255456",
+        "type": "generator",
+        "x": 580,
+        "y": 100,
+        "inputs": [
+          "prompt_794da57e28be28_1790772152330"
+        ]
+      },
+      {
+        "id": "generator_b76a41f377d97_1790947133328",
+        "type": "generator",
+        "x": 1026.1538461538462,
+        "y": 626.1538461538462,
+        "inputs": [
+          "prompt_794da57e28be28_1790772152330"
+        ]
+      }
+    ],
+    "connections": [
+      {
+        "id": "c_83333a569b2118_1790772279262",
+        "from": "prompt_794da57e28be28_1790772152330",
+        "to": "gen_a837b3525e0118_1790772255456"
+      },
+      {
+        "id": "c_46f34deec387_1790947133328",
+        "from": "prompt_794da57e28be28_1790772152330",
+        "to": "generator_b76a41f377d97_1790947133328"
+      }
+    ]
+  },
+  {
+    "label": "classic-undo-copy-move",
+    "nodes": [
+      {
+        "id": "prompt_794da57e28be28_1790772152330",
+        "type": "prompt",
+        "text": "中文验收：蓝色方块与橙色圆形，保存后重新打开。",
+        "x": 80,
+        "y": 100
+      },
+      {
+        "id": "gen_a837b3525e0118_1790772255456",
+        "type": "generator",
+        "x": 580,
+        "y": 100,
+        "inputs": [
+          "prompt_794da57e28be28_1790772152330"
+        ]
+      }
+    ],
+    "connections": [
+      {
+        "id": "c_83333a569b2118_1790772279262",
+        "from": "prompt_794da57e28be28_1790772152330",
+        "to": "gen_a837b3525e0118_1790772255456"
+      }
+    ]
+  },
+  {
+    "label": "smart-copy-paste",
+    "nodes": [
+      {
+        "id": "prompt_faueue81nrej",
+        "type": "smart-prompt",
+        "text": "智能验收：保留中文提示词、参考图和循环设置。",
+        "x": 80,
+        "y": 100
+      },
+      {
+        "id": "smart_lwgxnjjko528",
+        "type": "smart-image",
+        "x": 580,
+        "y": 100,
+        "inputNodeIds": [
+          "prompt_faueue81nrej"
+        ]
+      },
+      {
+        "id": "prompt_f44curgnse2r",
+        "type": "smart-prompt",
+        "text": "智能验收：保留中文提示词、参考图和循环设置。",
+        "x": 880.7692307692307,
+        "y": 523.0769230769231
+      },
+      {
+        "id": "smart_1kmqh92ese2r",
+        "type": "smart-image",
+        "x": 1380.7692307692307,
+        "y": 523.0769230769231,
+        "inputNodeIds": [
+          "prompt_f44curgnse2r"
+        ]
+      }
+    ],
+    "connections": [
+      {
+        "from": "prompt_faueue81nrej",
+        "to": "smart_lwgxnjjko528",
+        "kind": "input"
+      },
+      {
+        "from": "prompt_f44curgnse2r",
+        "to": "smart_1kmqh92ese2r",
+        "kind": "input"
+      }
+    ]
+  },
+  {
+    "label": "smart-undo-paste",
+    "nodes": [
+      {
+        "id": "prompt_faueue81nrej",
+        "type": "smart-prompt",
+        "text": "智能验收：保留中文提示词、参考图和循环设置。",
+        "x": 80,
+        "y": 100
+      },
+      {
+        "id": "smart_lwgxnjjko528",
+        "type": "smart-image",
+        "x": 580,
+        "y": 100,
+        "inputNodeIds": [
+          "prompt_faueue81nrej"
+        ]
+      }
+    ],
+    "connections": [
+      {
+        "from": "prompt_faueue81nrej",
+        "to": "smart_lwgxnjjko528",
+        "kind": "input"
+      }
+    ]
+  },
+  {
+    "label": "smart-redo-paste",
+    "nodes": [
+      {
+        "id": "prompt_faueue81nrej",
+        "type": "smart-prompt",
+        "text": "智能验收：保留中文提示词、参考图和循环设置。",
+        "x": 80,
+        "y": 100
+      },
+      {
+        "id": "smart_lwgxnjjko528",
+        "type": "smart-image",
+        "x": 580,
+        "y": 100,
+        "inputNodeIds": [
+          "prompt_faueue81nrej"
+        ]
+      },
+      {
+        "id": "prompt_f44curgnse2r",
+        "type": "smart-prompt",
+        "text": "智能验收：保留中文提示词、参考图和循环设置。",
+        "x": 880.7692307692307,
+        "y": 523.0769230769231
+      },
+      {
+        "id": "smart_1kmqh92ese2r",
+        "type": "smart-image",
+        "x": 1380.7692307692307,
+        "y": 523.0769230769231,
+        "inputNodeIds": [
+          "prompt_f44curgnse2r"
+        ]
+      }
+    ],
+    "connections": [
+      {
+        "from": "prompt_faueue81nrej",
+        "to": "smart_lwgxnjjko528",
+        "kind": "input"
+      },
+      {
+        "from": "prompt_f44curgnse2r",
+        "to": "smart_1kmqh92ese2r",
+        "kind": "input"
+      }
+    ]
+  },
+  {
+    "label": "smart-alt-copy-no-link",
+    "nodes": [
+      {
+        "id": "prompt_faueue81nrej",
+        "type": "smart-prompt",
+        "text": "智能验收：保留中文提示词、参考图和循环设置。",
+        "x": 80,
+        "y": 100
+      },
+      {
+        "id": "smart_lwgxnjjko528",
+        "type": "smart-image",
+        "x": 580,
+        "y": 100,
+        "inputNodeIds": [
+          "prompt_faueue81nrej"
+        ]
+      },
+      {
+        "id": "smart_3palgujdt4b2",
+        "type": "smart-image",
+        "x": 580,
+        "y": 100,
+        "inputNodeIds": []
+      }
+    ],
+    "connections": [
+      {
+        "from": "prompt_faueue81nrej",
+        "to": "smart_lwgxnjjko528",
+        "kind": "input"
+      }
+    ]
+  },
+  {
+    "label": "smart-undo-alt",
+    "nodes": [
+      {
+        "id": "prompt_faueue81nrej",
+        "type": "smart-prompt",
+        "text": "智能验收：保留中文提示词、参考图和循环设置。",
+        "x": 80,
+        "y": 100
+      },
+      {
+        "id": "smart_lwgxnjjko528",
+        "type": "smart-image",
+        "x": 580,
+        "y": 100,
+        "inputNodeIds": [
+          "prompt_faueue81nrej"
+        ]
+      }
+    ],
+    "connections": [
+      {
+        "from": "prompt_faueue81nrej",
+        "to": "smart_lwgxnjjko528",
+        "kind": "input"
+      }
+    ]
+  },
+  {
+    "label": "smart-alt-shift-copy",
+    "nodes": [
+      {
+        "id": "prompt_faueue81nrej",
+        "type": "smart-prompt",
+        "text": "智能验收：保留中文提示词、参考图和循环设置。",
+        "x": 80,
+        "y": 100
+      },
+      {
+        "id": "smart_lwgxnjjko528",
+        "type": "smart-image",
+        "x": 580,
+        "y": 100,
+        "inputNodeIds": [
+          "prompt_faueue81nrej"
+        ]
+      },
+      {
+        "id": "smart_jdsizvudt4h1",
+        "type": "smart-image",
+        "x": 580,
+        "y": 100,
+        "inputNodeIds": [
+          "prompt_faueue81nrej"
+        ]
+      }
+    ],
+    "connections": [
+      {
+        "from": "prompt_faueue81nrej",
+        "to": "smart_lwgxnjjko528",
+        "kind": "input"
+      },
+      {
+        "from": "prompt_faueue81nrej",
+        "to": "smart_jdsizvudt4h1",
+        "kind": "input"
+      }
+    ]
+  },
+  {
+    "label": "smart-alt-shift-copy-moved",
+    "nodes": [
+      {
+        "id": "prompt_faueue81nrej",
+        "type": "smart-prompt",
+        "text": "智能验收：保留中文提示词、参考图和循环设置。",
+        "x": 80,
+        "y": 100
+      },
+      {
+        "id": "smart_lwgxnjjko528",
+        "type": "smart-image",
+        "x": 580,
+        "y": 100,
+        "inputNodeIds": [
+          "prompt_faueue81nrej"
+        ]
+      },
+      {
+        "id": "smart_jdsizvudt4h1",
+        "type": "smart-image",
+        "x": 1026.1538461538462,
+        "y": 561.5384615384615,
+        "inputNodeIds": [
+          "prompt_faueue81nrej"
+        ]
+      }
+    ],
+    "connections": [
+      {
+        "from": "prompt_faueue81nrej",
+        "to": "smart_lwgxnjjko528",
+        "kind": "input"
+      },
+      {
+        "from": "prompt_faueue81nrej",
+        "to": "smart_jdsizvudt4h1",
+        "kind": "input"
+      }
+    ]
+  },
+  {
+    "label": "smart-undo-move",
+    "nodes": [
+      {
+        "id": "prompt_faueue81nrej",
+        "type": "smart-prompt",
+        "text": "智能验收：保留中文提示词、参考图和循环设置。",
+        "x": 80,
+        "y": 100
+      },
+      {
+        "id": "smart_lwgxnjjko528",
+        "type": "smart-image",
+        "x": 580,
+        "y": 100,
+        "inputNodeIds": [
+          "prompt_faueue81nrej"
+        ]
+      },
+      {
+        "id": "smart_jdsizvudt4h1",
+        "type": "smart-image",
+        "x": 580,
+        "y": 100,
+        "inputNodeIds": [
+          "prompt_faueue81nrej"
+        ]
+      }
+    ],
+    "connections": [
+      {
+        "from": "prompt_faueue81nrej",
+        "to": "smart_lwgxnjjko528",
+        "kind": "input"
+      },
+      {
+        "from": "prompt_faueue81nrej",
+        "to": "smart_jdsizvudt4h1",
+        "kind": "input"
+      }
+    ]
+  },
+  {
+    "label": "smart-undo-alt-shift",
+    "nodes": [
+      {
+        "id": "prompt_faueue81nrej",
+        "type": "smart-prompt",
+        "text": "智能验收：保留中文提示词、参考图和循环设置。",
+        "x": 80,
+        "y": 100
+      },
+      {
+        "id": "smart_lwgxnjjko528",
+        "type": "smart-image",
+        "x": 580,
+        "y": 100,
+        "inputNodeIds": [
+          "prompt_faueue81nrej"
+        ]
+      }
+    ],
+    "connections": [
+      {
+        "from": "prompt_faueue81nrej",
+        "to": "smart_lwgxnjjko528",
+        "kind": "input"
+      }
+    ]
+  },
+  {
+    "label": "smart-redo-alt-shift",
+    "nodes": [
+      {
+        "id": "prompt_faueue81nrej",
+        "type": "smart-prompt",
+        "text": "智能验收：保留中文提示词、参考图和循环设置。",
+        "x": 80,
+        "y": 100
+      },
+      {
+        "id": "smart_lwgxnjjko528",
+        "type": "smart-image",
+        "x": 580,
+        "y": 100,
+        "inputNodeIds": [
+          "prompt_faueue81nrej"
+        ]
+      },
+      {
+        "id": "smart_jdsizvudt4h1",
+        "type": "smart-image",
+        "x": 580,
+        "y": 100,
+        "inputNodeIds": [
+          "prompt_faueue81nrej"
+        ]
+      }
+    ],
+    "connections": [
+      {
+        "from": "prompt_faueue81nrej",
+        "to": "smart_lwgxnjjko528",
+        "kind": "input"
+      },
+      {
+        "from": "prompt_faueue81nrej",
+        "to": "smart_jdsizvudt4h1",
+        "kind": "input"
+      }
+    ]
+  },
+  {
+    "label": "smart-redo-move",
+    "nodes": [
+      {
+        "id": "prompt_faueue81nrej",
+        "type": "smart-prompt",
+        "text": "智能验收：保留中文提示词、参考图和循环设置。",
+        "x": 80,
+        "y": 100
+      },
+      {
+        "id": "smart_lwgxnjjko528",
+        "type": "smart-image",
+        "x": 580,
+        "y": 100,
+        "inputNodeIds": [
+          "prompt_faueue81nrej"
+        ]
+      },
+      {
+        "id": "smart_jdsizvudt4h1",
+        "type": "smart-image",
+        "x": 1026.1538461538462,
+        "y": 561.5384615384615,
+        "inputNodeIds": [
+          "prompt_faueue81nrej"
+        ]
+      }
+    ],
+    "connections": [
+      {
+        "from": "prompt_faueue81nrej",
+        "to": "smart_lwgxnjjko528",
+        "kind": "input"
+      },
+      {
+        "from": "prompt_faueue81nrej",
+        "to": "smart_jdsizvudt4h1",
+        "kind": "input"
+      }
+    ]
+  },
+  {
+    "label": "smart-reload-copy",
+    "nodes": [
+      {
+        "id": "prompt_faueue81nrej",
+        "type": "smart-prompt",
+        "text": "智能验收：保留中文提示词、参考图和循环设置。",
+        "x": 80,
+        "y": 100
+      },
+      {
+        "id": "smart_lwgxnjjko528",
+        "type": "smart-image",
+        "x": 580,
+        "y": 100,
+        "inputNodeIds": [
+          "prompt_faueue81nrej"
+        ]
+      },
+      {
+        "id": "smart_jdsizvudt4h1",
+        "type": "smart-image",
+        "x": 1026.1538461538462,
+        "y": 561.5384615384615,
+        "inputNodeIds": [
+          "prompt_faueue81nrej"
+        ]
+      }
+    ],
+    "connections": [
+      {
+        "from": "prompt_faueue81nrej",
+        "to": "smart_lwgxnjjko528",
+        "kind": "input"
+      },
+      {
+        "from": "prompt_faueue81nrej",
+        "to": "smart_jdsizvudt4h1",
+        "kind": "input"
+      }
+    ]
+  },
+  {
+    "label": "classic-reload-after-undo-confirmed",
+    "nodes": [
+      {
+        "id": "prompt_794da57e28be28_1790772152330",
+        "type": "prompt",
+        "text": "中文验收：蓝色方块与橙色圆形，保存后重新打开。",
+        "x": 80,
+        "y": 100
+      },
+      {
+        "id": "gen_a837b3525e0118_1790772255456",
+        "type": "generator",
+        "x": 580,
+        "y": 100,
+        "inputs": [
+          "prompt_794da57e28be28_1790772152330"
+        ]
+      }
+    ],
+    "connections": [
+      {
+        "id": "c_83333a569b2118_1790772279262",
+        "from": "prompt_794da57e28be28_1790772152330",
+        "to": "gen_a837b3525e0118_1790772255456"
+      }
+    ]
+  },
+  {
+    "label": "classic-alt-copy-no-link",
+    "nodes": [
+      {
+        "id": "prompt_794da57e28be28_1790772152330",
+        "type": "prompt",
+        "text": "中文验收：蓝色方块与橙色圆形，保存后重新打开。",
+        "x": 80,
+        "y": 100
+      },
+      {
+        "id": "gen_a837b3525e0118_1790772255456",
+        "type": "generator",
+        "x": 580,
+        "y": 100,
+        "inputs": [
+          "prompt_794da57e28be28_1790772152330"
+        ]
+      },
+      {
+        "id": "generator_1b50d64dc1082_1790947419946",
+        "type": "generator",
+        "x": 580,
+        "y": 100,
+        "inputs": []
+      }
+    ],
+    "connections": [
+      {
+        "id": "c_83333a569b2118_1790772279262",
+        "from": "prompt_794da57e28be28_1790772152330",
+        "to": "gen_a837b3525e0118_1790772255456"
+      }
+    ]
+  },
+  {
+    "label": "classic-undo-alt",
+    "nodes": [
+      {
+        "id": "prompt_794da57e28be28_1790772152330",
+        "type": "prompt",
+        "text": "中文验收：蓝色方块与橙色圆形，保存后重新打开。",
+        "x": 80,
+        "y": 100
+      },
+      {
+        "id": "gen_a837b3525e0118_1790772255456",
+        "type": "generator",
+        "x": 580,
+        "y": 100,
+        "inputs": [
+          "prompt_794da57e28be28_1790772152330"
+        ]
+      }
+    ],
+    "connections": [
+      {
+        "id": "c_83333a569b2118_1790772279262",
+        "from": "prompt_794da57e28be28_1790772152330",
+        "to": "gen_a837b3525e0118_1790772255456"
+      }
+    ]
+  }
+]

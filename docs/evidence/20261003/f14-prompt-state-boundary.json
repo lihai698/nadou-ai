@@ -1,0 +1,18 @@
+{
+  "date": "2026-10-03",
+  "environment": {
+    "saved": "127.0.0.1:3009, output/acceptance-20261003/f13-data",
+    "empty": "127.0.0.1:3010, output/acceptance-20261003/f14-empty-data"
+  },
+  "pageActions": [
+    "In the asset manager Prompt Library tab on 3009, clicked Add and saved 'F14隔离预设' with synthetic Chinese prompt text.",
+    "The page showed '提示词已新增' and system prompt count rose from 10 to 11.",
+    "Reloaded the same 3009 page, returned to the Prompt Library tab, and found the sample and 11-item count again.",
+    "Opened the same asset manager on port 3010 in the same browser; it showed 10 system templates and no F14 sample."
+  ],
+  "diskReadback": "Exactly one F14 sample with the same prompt text exists in f13-data/data/prompt_libraries.json; the real data/prompt_libraries.json modification time remained 2026-09-30 12:42:54.",
+  "codeBoundary": "Both canvas editors fetch /api/prompt-libraries for shared libraries. Smart canvas also stores older personal presets and template groups/overrides under smart_canvas_* localStorage keys. Ordinary canvas stores template groups/overrides in localStorage and temporary viewport state in sessionStorage.",
+  "smartCanvasReadback": "In a new 3009 isolated smart canvas, opened the visible prompt node Template Library. It displayed 11 system-library items, including F14隔离预设 and its exact Chinese prompt. Current visible template creation uses /api/prompt-libraries/items. The older personal-preset panel and localStorage functions remain in source but have no visible creation entry in this canvas flow.",
+  "cleanBrowserAttempt": "An independent Edge browser was listed but its tab could not be opened by the browser tool, so a clean-profile same-origin comparison was not completed.",
+  "result": "Shared prompt-library persistence, smart-canvas readback and isolated-origin boundary verified. The legacy browser-only preset path and clean-browser profile remain unverified, so F14 is partial."
+}

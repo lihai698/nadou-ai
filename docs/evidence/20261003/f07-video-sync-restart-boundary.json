@@ -1,0 +1,70 @@
+{
+  "date": "2026-10-03",
+  "status": "partial_mitigation_verified",
+  "environment": {
+    "origin": "http://127.0.0.1:3017",
+    "server": "output/acceptance-20261003/f07_video_restart_server.py",
+    "dataRoot": "output/acceptance-20261003/f07-video-restart-data",
+    "provider": "test-only-video / runninghub protocol / mock-video",
+    "realProviderCalls": 0,
+    "method": "Actual POST /api/canvas-video route plus HTTP, canvas-disk readback, and a real-page button check against the same disposable service"
+  },
+  "canvas": {
+    "id": "f07-video-restart-20261003",
+    "kind": "smart",
+    "source": "Self-made prompt and video target; no private assets or credentials",
+    "nodes": 2,
+    "connections": 1,
+    "sha256BeforeAndAfter": "B9C1D9D48D5BD4070C061E87FB2407EE2A3A06D8EB3E23603F3DC8C1CB1BE633"
+  },
+  "beforeRestart": {
+    "pid": 4056,
+    "postCount": 1,
+    "acceptedCount": 1,
+    "syntheticRemoteId": "mock-video-1791013802054077500",
+    "clientTimeoutSeconds": 3,
+    "clientResult": "TaskCanceledException after HTTP timeout; no response body or local task ID",
+    "knownCanvasTasks": [],
+    "diskPendingCount": 0,
+    "diskOutputCount": 0
+  },
+  "afterRestart": {
+    "pid": 17644,
+    "postCountInNewProcess": 0,
+    "acceptedLogCount": 1,
+    "knownCanvasTasks": [],
+    "canvasNodes": 2,
+    "canvasConnections": 1,
+    "diskPendingCount": 0,
+    "diskOutputCount": 0,
+    "getVideoBySyntheticRemoteIdHttpStatus": 404
+  },
+  "beforeFixFinding": "The video endpoint waits synchronously for completion. A simulated upstream acceptance followed by lost HTTP response left no local task ID, durable pending record, or video query route for recovery after restart.",
+  "mitigation": {
+    "code": "static/js/smart-canvas.js saves the existing submissionUnknown/submissionWarning fields before POST /api/canvas-video. A failed save prevents the POST. Network loss, HTTP 408 or 5xx, and empty success keep the warning; an explicit 4xx rejection other than 408 or completed video clears the new warning. Cascade runState becomes unknown and stops claiming later rounds.",
+    "browserFunctionProbe": "output/acceptance-20261003/f07_video_preflight_probe.cjs",
+    "canvasId": "f07-video-preflight-20261003",
+    "beforeProcessPid": 15796,
+    "afterProcessPid": 12596,
+    "acceptedCountBeforeAndAfter": [1, 2],
+    "saveRequestsBeforeVideoPost": 1,
+    "videoPostRequests": 1,
+    "clientResult": "TimeoutError after 2 seconds",
+    "warningReadBackAfterRestart": "视频请求可能已被受理；若页面或服务中断，远端状态未知。再次提交可能重复计费。",
+    "submissionUnknownAfterRestart": true,
+    "nodeCountAfterRestart": 2,
+    "connectionCountAfterRestart": 1,
+    "outputCountAfterRestart": 0,
+    "newProcessVideoPostCount": 0,
+    "canvasSha256AfterRestart": "060E8EF715291B6BEDF33BA2FE2B738DE564593A72CE75FE6FE790483E4DEDEC"
+  },
+  "validation": [
+    "tests/smart_canvas_video_unknown.test.cjs: 7/7 passed, including durable save gate, 503/408/network/empty result, definite rejection, reload warning, earlier warning retention, and parallel cascade stop.",
+    "All tests/*.test.cjs: 101/101 passed.",
+    "node --check for changed JavaScript and git diff --check for tracked JavaScript passed.",
+    "The local integration probe used the actual FastAPI canvas PUT and video POST routes; a fresh server process read the saved warning back from disk.",
+    "Real page URL http://127.0.0.1:3017/static/smart-canvas.html?id=f07-video-browser-20261003&project=default: simulated 503 left a visible 提交状态未知 warning, refresh preserved it, and a second Run click showed the duplicate-billing confirmation. Dismissing it left posts_this_process unchanged at 2."
+  ],
+  "remaining": "The saved warning is used by the existing manual resubmission guard, but it cannot recover an upstream video task without a queryable provider ID. The HTTP endpoint still has no local video task ID or durable task queue.",
+  "limits": "The controlled generator records synthetic acceptance and then waits forever. It does not model a real provider's final result or billing. The page check used only the local disposable service; real-provider acceptance, remote query IDs, and other task types remain unverified."
+}

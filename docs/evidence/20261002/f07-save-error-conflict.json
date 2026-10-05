@@ -1,0 +1,16 @@
+{
+  "date": "2026-10-02",
+  "environment": "127.0.0.1:3003，当前静态源码，独立画布数据目录 output/acceptance-20261002/f07-save-data",
+  "fixture": "f07-save-smart-20261002",
+  "save_failure": {
+    "method": "浏览器拦截一次 PUT /api/canvases/f07-save-smart-20261002，返回 HTTP 503",
+    "result": "中文未保存提示和重试保存按钮显示；点击重试后提示消失，HTTP、磁盘和刷新页面均保留新文本",
+    "screenshot": "f07-smart-save-failed.jpg"
+  },
+  "conflict": {
+    "method": "暂停本地新增节点的旧版本 PUT，另一客户端先新增并保存 f07_remote_prompt，再放行旧版本请求",
+    "result": "旧请求收到 409；自动合并重存请求以远端新时间戳为基底，包含原节点、本地新增 prompt_pm8c7imcs13j 和远端新增 f07_remote_prompt；服务端及刷新页面均保留 3 个节点"
+  },
+  "validation": "智能画布保存相关 15 项 JavaScript 测试通过；后端画布基线 6 项通过；无生成操作",
+  "limits": "同一节点的同时编辑、后台重启与批量部分受理尚未完成页面验收"
+}

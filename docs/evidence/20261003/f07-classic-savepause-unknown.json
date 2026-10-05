@@ -1,0 +1,64 @@
+{
+  "date": "2026-10-03",
+  "status": "automated_and_save_failure_browser_verified",
+  "scope": "普通画布在线图片与 RunningHub 模型节点的本机模拟请求；未访问真实供应商",
+  "changed": [
+    "保存画布失败或返回无效节点列表时，已取得编号的任务暂停查询并显示“保存并查询”恢复卡片",
+    "恢复按钮先重试保存，再按原任务编号查询；保存前再次生成会被阻止",
+    "按画布 ID 在同一浏览器备份最少量任务编号和受理状态未知提示；刷新只重建暂停卡片，不自动查询或重提",
+    "后端回包确认相关任务或未知提示已保存后，才清除对应浏览器备份",
+    "一键运行出现部分受理后阻止后续新轮次及下游节点提交"
+  ],
+  "verification": {
+    "targetedNodeTests": 25,
+    "existingPollingTests": 17,
+    "targetedResult": "42/42 passed",
+    "fullFrontendTests": 94,
+    "fullFrontendResult": "94/94 passed",
+    "javascriptSyntax": "passed",
+    "diffCheck": "passed",
+    "localHttpCases": ["HTTP 408", "成功回包缺少任务编号"],
+    "assertions": [
+      "已取得的任务编号在保存失败后仍保留于暂停卡片，查询调用为 0",
+      "保存失败时重复点击生成不产生第二次提交",
+      "手动恢复先保存，保存仍失败时不查询，保存成功后只查询原编号",
+      "没有输出节点的直接生成分支也创建可见恢复卡片",
+      "同浏览器刷新恢复备份并保持暂停，恢复过程不自动查询",
+      "旧在途保存成功不会清除更新的任务备份",
+      "无编号且受理未知的提示刷新后恢复，原节点未保存时再次提交需确认",
+      "并行一键运行发现部分受理后，新轮次不会继续提交"
+    ]
+  },
+  "browserSmoke": {
+    "environment": "3012 本机隔离服务、独立复制画布 f07-browser-button-20261003、本机模拟平台 mock-image",
+    "action": "在真实普通画布页面点击一次 API生成，随后刷新页面",
+    "result": "页面出现 OUTPUT 与生成中状态；隔离 JSON 保存一个含 canvasTaskId 的 _pending 任务；本机假服务只有 1 次 POST，刷新后仍显示该 OUTPUT 并按原编号查询，POST 仍为 1 次",
+    "cacheVersion": "2026.10.03.f07-save-recovery",
+    "cost": "本机模拟服务未调用供应商"
+  },
+  "saveFailureBrowser": {
+    "environment": "3016 本机隔离服务，output/acceptance-20261003/f07_browser_savepause_server.py，独立自制普通画布 f07-browser-savepause-20261003",
+    "method": "真实点击 API生成；服务对画布 PUT 返回 HTTP 503；点击保存并查询时仍返回 503；刷新；解除模拟故障后再次点击保存并查询；再次刷新",
+    "beforeRecovery": {
+      "submissions": 1,
+      "successfulSaves": 0,
+      "queries": 0,
+      "visible": "OUTPUT 显示保存待重试、原任务 ID 和保存并查询按钮；刷新后同一张暂停卡片恢复，未自动查询或重提"
+    },
+    "afterRecovery": {
+      "submissions": 1,
+      "distinctQueriedTaskIds": 1,
+      "queryMatchesAcceptedTask": true,
+      "diskOutputCount": 1,
+      "diskPendingTaskCount": 1,
+      "visible": "恢复按钮保存成功后，原卡片转为生成中；再次刷新仍保留同一任务，没有恢复警告"
+    },
+    "serverStopped": true
+  },
+  "limits": [
+    "页面故障由本机模拟服务注入，未对真实供应商或生产数据运行",
+    "浏览器备份仅在同一浏览器资料中可恢复；清缓存或换浏览器无法保证",
+    "同时已经发出的并行请求无法撤回；真实供应商是否受理无编号请求仍不可从本地确定",
+    "其他任务类型尚未覆盖"
+  ]
+}

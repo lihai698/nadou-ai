@@ -1,0 +1,48 @@
+{
+  "date": "2026-10-02",
+  "environment": {
+    "origin": "http://127.0.0.1:3002",
+    "viewport": "Codex in-app browser default viewport (screenshot 1061x837)",
+    "samples": [
+      "perf-classic-10-20261002",
+      "perf-classic-100-20261002",
+      "perf-smart-10-20261002",
+      "perf-smart-100-20261002"
+    ]
+  },
+  "interactive_readiness": {
+    "method": "After navigation, poll until the expected node count exists, at least half the expected editor controls exist, and all images intersecting the current viewport are complete. readyMs is performance.now() from navigation start; DOMContentLoaded and load are included for comparison.",
+    "runs": [
+      {"sample": "perf-classic-10-20261002", "expectedNodes": 10, "readyMs": 717.0, "domContentLoadedMs": 339.5, "loadMs": 379.0, "interactiveAreas": 5, "visibleIncompleteImages": 0},
+      {"sample": "perf-classic-10-20261002", "expectedNodes": 10, "readyMs": 465.3, "domContentLoadedMs": 271.6, "loadMs": 311.9, "interactiveAreas": 5, "visibleIncompleteImages": 0},
+      {"sample": "perf-classic-10-20261002", "expectedNodes": 10, "readyMs": 435.0, "domContentLoadedMs": 261.5, "loadMs": 295.4, "interactiveAreas": 5, "visibleIncompleteImages": 0},
+      {"sample": "perf-classic-100-20261002", "expectedNodes": 100, "readyMs": 642.7, "domContentLoadedMs": 241.0, "loadMs": 308.1, "interactiveAreas": 50, "visibleIncompleteImages": 0},
+      {"sample": "perf-classic-100-20261002", "expectedNodes": 100, "readyMs": 625.9, "domContentLoadedMs": 245.1, "loadMs": 280.0, "interactiveAreas": 50, "visibleIncompleteImages": 0},
+      {"sample": "perf-classic-100-20261002", "expectedNodes": 100, "readyMs": 603.2, "domContentLoadedMs": 234.1, "loadMs": 272.9, "interactiveAreas": 50, "visibleIncompleteImages": 0},
+      {"sample": "perf-smart-10-20261002", "expectedNodes": 10, "readyMs": 614.8, "domContentLoadedMs": 185.9, "loadMs": 193.8, "interactiveAreas": 7, "visibleIncompleteImages": 0},
+      {"sample": "perf-smart-10-20261002", "expectedNodes": 10, "readyMs": 415.0, "domContentLoadedMs": 152.7, "loadMs": 163.1, "interactiveAreas": 7, "visibleIncompleteImages": 0},
+      {"sample": "perf-smart-10-20261002", "expectedNodes": 10, "readyMs": 537.6, "domContentLoadedMs": 166.2, "loadMs": 177.6, "interactiveAreas": 7, "visibleIncompleteImages": 0},
+      {"sample": "perf-smart-100-20261002", "expectedNodes": 100, "readyMs": 666.1, "domContentLoadedMs": 146.0, "loadMs": 180.3, "interactiveAreas": 52, "visibleIncompleteImages": 0},
+      {"sample": "perf-smart-100-20261002", "expectedNodes": 100, "readyMs": 657.2, "domContentLoadedMs": 189.0, "loadMs": 199.2, "interactiveAreas": 52, "visibleIncompleteImages": 0},
+      {"sample": "perf-smart-100-20261002", "expectedNodes": 100, "readyMs": 692.6, "domContentLoadedMs": 185.5, "loadMs": 196.1, "interactiveAreas": 52, "visibleIncompleteImages": 0}
+    ]
+  },
+  "drag_frame_samples": {
+    "method": "A real pointer drag from (120,74) to (175,108), then back to restore the node. requestAnimationFrame timestamps were collected during an approximately 1.1 second window. The collector was temporary page instrumentation and did not persist.",
+    "runs": [
+      {"sample": "perf-classic-10-20261002", "durationMs": 1104.6, "frames": 67, "meanMs": 16.6622, "p50Ms": 16.7, "p95Ms": 16.8, "maxMs": 16.9, "over20ms": 0, "over33ms": 0},
+      {"sample": "perf-classic-10-20261002", "durationMs": 1111.1, "frames": 67, "meanMs": 16.6606, "p50Ms": 16.7, "p95Ms": 16.9, "maxMs": 17.0, "over20ms": 0, "over33ms": 0},
+      {"sample": "perf-classic-10-20261002", "durationMs": 1100.5, "frames": 67, "meanMs": 16.6606, "p50Ms": 16.7, "p95Ms": 16.9, "maxMs": 17.0, "over20ms": 0, "over33ms": 0},
+      {"sample": "perf-classic-100-20261002", "durationMs": 1103.8, "frames": 62, "meanMs": 18.0279, "p50Ms": 16.7, "p95Ms": 16.8, "maxMs": 83.4, "over20ms": 2, "over33ms": 2},
+      {"sample": "perf-classic-100-20261002", "durationMs": 1102.3, "frames": 65, "meanMs": 17.4417, "p50Ms": 16.7, "p95Ms": 16.8, "maxMs": 33.4, "over20ms": 3, "over33ms": 3},
+      {"sample": "perf-classic-100-20261002", "durationMs": 1110.4, "frames": 66, "meanMs": 17.1723, "p50Ms": 16.7, "p95Ms": 16.8, "maxMs": 33.4, "over20ms": 2, "over33ms": 2},
+      {"sample": "perf-smart-10-20261002", "durationMs": 1116.2, "frames": 68, "meanMs": 16.6602, "p50Ms": 16.7, "p95Ms": 16.8, "maxMs": 16.8, "over20ms": 0, "over33ms": 0},
+      {"sample": "perf-smart-10-20261002", "durationMs": 1103.3, "frames": 68, "meanMs": 16.6607, "p50Ms": 16.6, "p95Ms": 16.8, "maxMs": 16.8, "over20ms": 0, "over33ms": 0},
+      {"sample": "perf-smart-10-20261002", "durationMs": 1107.8, "frames": 67, "meanMs": 16.6642, "p50Ms": 16.7, "p95Ms": 16.8, "maxMs": 16.8, "over20ms": 0, "over33ms": 0},
+      {"sample": "perf-smart-100-20261002", "durationMs": 1112.7, "frames": 69, "meanMs": 16.4179, "p50Ms": 16.7, "p95Ms": 16.8, "maxMs": 16.9, "over20ms": 0, "over33ms": 0},
+      {"sample": "perf-smart-100-20261002", "durationMs": 1108.5, "frames": 67, "meanMs": 16.6573, "p50Ms": 16.7, "p95Ms": 16.8, "maxMs": 17.0, "over20ms": 0, "over33ms": 0},
+      {"sample": "perf-smart-100-20261002", "durationMs": 1113.4, "frames": 68, "meanMs": 16.6644, "p50Ms": 16.6, "p95Ms": 16.9, "maxMs": 17.0, "over20ms": 0, "over33ms": 0}
+    ]
+  },
+  "conclusion": "All 12 readiness runs reached their node and viewport-image criteria. The drag window was near 60Hz in 11 of 12 runs; classic 100-node had three runs with 2, 3, and 2 intervals over 20ms, including one 83.4ms interval. This is a short fixed-viewport observation, not a long-session performance guarantee."
+}

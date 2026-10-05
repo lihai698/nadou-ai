@@ -1,0 +1,402 @@
+{
+  "state": {
+    "mode": "success",
+    "calls": 2,
+    "query_failures": 9,
+    "tasks": [
+      {
+        "id": "canvas_img_7b40e50469ec477389257a09c4d70055",
+        "status": "succeeded"
+      },
+      {
+        "id": "canvas_img_5ed6e056745440159ad2f93b82607e00",
+        "status": "succeeded"
+      }
+    ]
+  },
+  "samples": {
+    "reload": {
+      "id": "classic-direct-reload-20261002",
+      "title": "普通串联恢复验收-reload",
+      "icon": "🧩",
+      "kind": "classic",
+      "owner": "",
+      "color": "",
+      "pinned": false,
+      "project": "default",
+      "created_at": 1790772125005,
+      "updated_at": 1790898875284,
+      "nodes": [
+        {
+          "id": "prompt_794da57e28be28_1790772152330",
+          "type": "prompt",
+          "x": 111,
+          "y": 145,
+          "text": "中文验收：蓝色方块与橙色圆形，保存后重新打开。"
+        },
+        {
+          "id": "img_2ac7c6fb3894e8_1790772231355",
+          "type": "image",
+          "x": 109,
+          "y": 387,
+          "url": "/assets/input/ai_ref_c96861fe0c41.png",
+          "name": "中文参考图.png",
+          "mediaKind": "image",
+          "_naturalSizeLoading": false,
+          "natural_w": 320,
+          "natural_h": 240
+        },
+        {
+          "id": "gen_a837b3525e0118_1790772255456",
+          "type": "generator",
+          "x": 440,
+          "y": 80,
+          "apiProvider": "mock",
+          "model": "mock-image",
+          "ratio": "square",
+          "resolution": "4k",
+          "customRatio": "",
+          "customSize": "",
+          "customRatioWidth": "",
+          "customRatioHeight": "",
+          "customWidth": "",
+          "customHeight": "",
+          "inputs": [
+            "prompt_794da57e28be28_1790772152330",
+            "img_2ac7c6fb3894e8_1790772231355"
+          ],
+          "generatedOutputs": [
+            "/assets/input/ai_ref_c96861fe0c41.png"
+          ]
+        },
+        {
+          "id": "next-generator",
+          "type": "generator",
+          "x": 950,
+          "y": 80,
+          "apiProvider": "mock",
+          "model": "mock-image",
+          "ratio": "square",
+          "resolution": "4k",
+          "customRatio": "",
+          "customSize": "",
+          "customRatioWidth": "",
+          "customRatioHeight": "",
+          "customWidth": "",
+          "customHeight": "",
+          "inputs": []
+        },
+        {
+          "id": "out_cc9fcc167595f_1790898786683",
+          "type": "output",
+          "x": 440,
+          "y": 730,
+          "images": [
+            {
+              "url": "/assets/input/ai_ref_c96861fe0c41.png",
+              "viewed": false,
+              "runMs": 88561,
+              "run": {
+                "nodeType": "generator",
+                "node": {
+                  "id": "gen_a837b3525e0118_1790772255456",
+                  "type": "generator",
+                  "x": 440,
+                  "y": 80,
+                  "apiProvider": "mock",
+                  "model": "mock-image",
+                  "ratio": "square",
+                  "resolution": "4k",
+                  "customRatio": "",
+                  "customSize": "",
+                  "customRatioWidth": "",
+                  "customRatioHeight": "",
+                  "customWidth": "",
+                  "customHeight": ""
+                },
+                "prompt": "中文验收：蓝色方块与橙色圆形，保存后重新打开。",
+                "refs": [
+                  {
+                    "url": "/assets/input/ai_ref_c96861fe0c41.png",
+                    "name": "中文参考图.png"
+                  }
+                ],
+                "request": {
+                  "task_id": "",
+                  "request_id": "",
+                  "provider_id": "",
+                  "backend": "",
+                  "prompt_id": "",
+                  "workflow_json": "",
+                  "seed": ""
+                }
+              }
+            }
+          ],
+          "_pending": [],
+          "imageComparisons": {
+            "/assets/input/ai_ref_c96861fe0c41.png": {
+              "url": "/assets/input/ai_ref_c96861fe0c41.png",
+              "name": "中文参考图.png"
+            }
+          }
+        }
+      ],
+      "connections": [
+        {
+          "id": "c_83333a569b2118_1790772279262",
+          "from": "prompt_794da57e28be28_1790772152330",
+          "to": "gen_a837b3525e0118_1790772255456"
+        },
+        {
+          "id": "c_7f2171ba8d07_1790772307630",
+          "from": "img_2ac7c6fb3894e8_1790772231355",
+          "to": "gen_a837b3525e0118_1790772255456"
+        },
+        {
+          "id": "chain-test",
+          "from": "gen_a837b3525e0118_1790772255456",
+          "to": "next-generator"
+        },
+        {
+          "id": "c_6bbecfc8a28c3_1790898786683",
+          "from": "gen_a837b3525e0118_1790772255456",
+          "to": "out_cc9fcc167595f_1790898786683"
+        }
+      ],
+      "viewport": {
+        "x": 0,
+        "y": 0,
+        "scale": 0.7
+      },
+      "board_x": 642.0,
+      "board_y": 423.0,
+      "logs": [
+        {
+          "id": "log_0555e1232a034_1790898874759",
+          "createdAt": 1790898874759,
+          "status": "success",
+          "platform": "本地模拟",
+          "nodeType": "generator",
+          "model": "mock-image",
+          "request": {
+            "task_id": "",
+            "request_id": "",
+            "provider_id": "",
+            "backend": "",
+            "prompt_id": "",
+            "workflow_json": "",
+            "seed": ""
+          },
+          "prompt": "中文验收：蓝色方块与橙色圆形，保存后重新打开。",
+          "outputs": [
+            "/assets/input/ai_ref_c96861fe0c41.png"
+          ],
+          "refs": [
+            {
+              "url": "/assets/input/ai_ref_c96861fe0c41.png",
+              "name": "中文参考图.png"
+            }
+          ],
+          "runMs": 88561,
+          "error": ""
+        }
+      ],
+      "settings": {}
+    },
+    "manual": {
+      "id": "classic-direct-manual-20261002",
+      "title": "普通串联恢复验收-manual",
+      "icon": "🧩",
+      "kind": "classic",
+      "owner": "",
+      "color": "",
+      "pinned": false,
+      "project": "default",
+      "created_at": 1790772125005,
+      "updated_at": 1790898904636,
+      "nodes": [
+        {
+          "id": "prompt_794da57e28be28_1790772152330",
+          "type": "prompt",
+          "x": 111,
+          "y": 145,
+          "text": "中文验收：蓝色方块与橙色圆形，保存后重新打开。"
+        },
+        {
+          "id": "img_2ac7c6fb3894e8_1790772231355",
+          "type": "image",
+          "x": 109,
+          "y": 387,
+          "url": "/assets/input/ai_ref_c96861fe0c41.png",
+          "name": "中文参考图.png",
+          "mediaKind": "image",
+          "_naturalSizeLoading": false,
+          "natural_w": 320,
+          "natural_h": 240
+        },
+        {
+          "id": "gen_a837b3525e0118_1790772255456",
+          "type": "generator",
+          "x": 440,
+          "y": 80,
+          "apiProvider": "mock",
+          "model": "mock-image",
+          "ratio": "square",
+          "resolution": "4k",
+          "customRatio": "",
+          "customSize": "",
+          "customRatioWidth": "",
+          "customRatioHeight": "",
+          "customWidth": "",
+          "customHeight": "",
+          "inputs": [
+            "prompt_794da57e28be28_1790772152330",
+            "img_2ac7c6fb3894e8_1790772231355"
+          ],
+          "generatedOutputs": [
+            "/assets/input/ai_ref_c96861fe0c41.png"
+          ]
+        },
+        {
+          "id": "next-generator",
+          "type": "generator",
+          "x": 950,
+          "y": 80,
+          "apiProvider": "mock",
+          "model": "mock-image",
+          "ratio": "square",
+          "resolution": "4k",
+          "customRatio": "",
+          "customSize": "",
+          "customRatioWidth": "",
+          "customRatioHeight": "",
+          "customWidth": "",
+          "customHeight": "",
+          "inputs": [],
+          "generatedOutputs": []
+        },
+        {
+          "id": "out_fa9a0c22036e18_1790898777070",
+          "type": "output",
+          "x": 440,
+          "y": 730,
+          "images": [
+            {
+              "url": "/assets/input/ai_ref_c96861fe0c41.png",
+              "viewed": false,
+              "runMs": 103557,
+              "run": {
+                "nodeType": "generator",
+                "node": {
+                  "id": "gen_a837b3525e0118_1790772255456",
+                  "type": "generator",
+                  "x": 440,
+                  "y": 80,
+                  "apiProvider": "mock",
+                  "model": "mock-image",
+                  "ratio": "square",
+                  "resolution": "4k",
+                  "customRatio": "",
+                  "customSize": "",
+                  "customRatioWidth": "",
+                  "customRatioHeight": "",
+                  "customWidth": "",
+                  "customHeight": "",
+                  "generatedOutputs": [],
+                  "_cascadeFailed": false,
+                  "_cascadeIdx": "1/2",
+                  "_activeLoopCtx": null
+                },
+                "prompt": "中文验收：蓝色方块与橙色圆形，保存后重新打开。",
+                "refs": [
+                  {
+                    "url": "/assets/input/ai_ref_c96861fe0c41.png",
+                    "name": "中文参考图.png"
+                  }
+                ],
+                "request": {
+                  "task_id": "",
+                  "request_id": "",
+                  "provider_id": "",
+                  "backend": "",
+                  "prompt_id": "",
+                  "workflow_json": "",
+                  "seed": ""
+                }
+              }
+            }
+          ],
+          "_pending": [],
+          "imageComparisons": {
+            "/assets/input/ai_ref_c96861fe0c41.png": {
+              "url": "/assets/input/ai_ref_c96861fe0c41.png",
+              "name": "中文参考图.png"
+            }
+          }
+        }
+      ],
+      "connections": [
+        {
+          "id": "c_83333a569b2118_1790772279262",
+          "from": "prompt_794da57e28be28_1790772152330",
+          "to": "gen_a837b3525e0118_1790772255456"
+        },
+        {
+          "id": "c_7f2171ba8d07_1790772307630",
+          "from": "img_2ac7c6fb3894e8_1790772231355",
+          "to": "gen_a837b3525e0118_1790772255456"
+        },
+        {
+          "id": "chain-test",
+          "from": "gen_a837b3525e0118_1790772255456",
+          "to": "next-generator"
+        },
+        {
+          "id": "c_7e3bc888e98988_1790898777070",
+          "from": "gen_a837b3525e0118_1790772255456",
+          "to": "out_fa9a0c22036e18_1790898777070"
+        }
+      ],
+      "viewport": {
+        "x": 0,
+        "y": 0,
+        "scale": 0.7
+      },
+      "board_x": 642.0,
+      "board_y": 423.0,
+      "logs": [
+        {
+          "id": "log_e5273ce8fb3128_1790898874109",
+          "createdAt": 1790898874109,
+          "status": "success",
+          "platform": "本地模拟",
+          "nodeType": "generator",
+          "model": "mock-image",
+          "request": {
+            "task_id": "",
+            "request_id": "",
+            "provider_id": "",
+            "backend": "",
+            "prompt_id": "",
+            "workflow_json": "",
+            "seed": ""
+          },
+          "prompt": "中文验收：蓝色方块与橙色圆形，保存后重新打开。",
+          "outputs": [
+            "/assets/input/ai_ref_c96861fe0c41.png"
+          ],
+          "refs": [
+            {
+              "url": "/assets/input/ai_ref_c96861fe0c41.png",
+              "name": "中文参考图.png"
+            }
+          ],
+          "runMs": 103557,
+          "error": ""
+        }
+      ],
+      "settings": {}
+    }
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "date": "2026-10-02",
+  "server": "127.0.0.1:3002",
+  "canvas_id": "classic-native-drop-20261002",
+  "operation": "native_output_image_drag_to_asset_library",
+  "source_urls": [
+    "/assets/input/mixed_acceptance_1.png",
+    "/assets/input/mixed_acceptance_2.png"
+  ],
+  "ui_result": {
+    "asset_panel": "open",
+    "category": "角色",
+    "new_items": [
+      {
+        "id": "asset_d4825b36e8c8",
+        "name": "output",
+        "url": "/assets/library/%E8%A7%92%E8%89%B2/lib_2e0f86de11ff_output.png",
+        "created_at": 1790935295607
+      }
+    ],
+    "visible_output_item_count": 2
+  },
+  "file_integrity": {
+    "source": {
+      "path": "output/acceptance-20260930/assets/input/mixed_acceptance_1.png",
+      "bytes": 1232,
+      "sha256": "293A15B848D04D087481C2E3B555E63DE92DFBCD92905FBCA32231C2B87BDA9E"
+    },
+    "library_copy": {
+      "path": "output/acceptance-20260930/assets/library/角色/lib_2e0f86de11ff_output.png",
+      "bytes": 1232,
+      "sha256": "293A15B848D04D087481C2E3B555E63DE92DFBCD92905FBCA32231C2B87BDA9E"
+    }
+  },
+  "simulation_generation_calls": 0
+}

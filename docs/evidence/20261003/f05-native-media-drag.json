@@ -1,0 +1,51 @@
+{
+  "date": "2026-10-03",
+  "case": "F05 smart canvas native pointer drag of video and audio from asset library",
+  "environment": {
+    "origin": "http://127.0.0.1:3015",
+    "browser": "Codex in-app browser",
+    "canvasId": "f05-native-media-20261003",
+    "canvasUrl": "http://127.0.0.1:3015/static/smart-canvas.html?id=f05-native-media-20261003&project=default",
+    "isolatedDataRoot": "output/acceptance-20261003/f05-media-data",
+    "fixtureServer": "output/acceptance-20261003/f05_media_server.py",
+    "gitHead": "53168d8"
+  },
+  "fixtures": [
+    {
+      "kind": "audio",
+      "name": "验收音频",
+      "file": "output/acceptance-20261003/f05-media-data/assets/library/角色/lib_90b6f2a882bf_验收音频.wav",
+      "bytes": 4044,
+      "sha256": "F9BBE28BC5AF66266961C931E2CD7AE4B6C3F863428EF2B1ADE242690C42D327"
+    },
+    {
+      "kind": "video",
+      "name": "验收短视频",
+      "file": "output/acceptance-20261003/f05-media-data/assets/library/角色/lib_1a1205de36df_验收短视频.webm",
+      "bytes": 741,
+      "sha256": "80E1F29301D366FFAE1B26FF1472E65AED31FC3A4A18C791B58511BCF5D0CBEF"
+    }
+  ],
+  "uiResult": {
+    "assetPanel": "Opened the asset library on an initially empty smart canvas.",
+    "method": "Native pointer drag from the visible audio card onto the canvas, followed by a separate native pointer drag of the video card.",
+    "nodesBefore": 0,
+    "nodesAfter": 2,
+    "afterReload": {
+      "nodes": 2,
+      "audio": {"readyState": 4, "durationSeconds": 0.25, "error": null},
+      "video": {"readyState": 4, "durationSeconds": 0.33004, "videoWidth": 64, "videoHeight": 48, "error": null}
+    }
+  },
+  "diskReadback": {
+    "file": "output/acceptance-20261003/f05-media-data/data/canvases/f05-native-media-20261003.json",
+    "nodeCount": 2,
+    "nodes": [
+      {"id": "smart_72w5d1f3913o", "type": "smart-image", "kind": "audio", "name": "验收音频"},
+      {"id": "smart_boqe5vby9wez", "type": "smart-image", "kind": "video", "name": "验收短视频"}
+    ],
+    "libraryUrlsMatchCanvas": true
+  },
+  "validation": "Re-read the isolated canvas and asset-library JSON; verified both isolated media file sizes and SHA-256 hashes. The browser rendered and decoded both media elements after refresh.",
+  "limits": "This covers self-made short WAV/WebM files and the smart canvas asset-library drag path in the in-app browser. No generation button, paid provider, production data, or independent browser profile was exercised. The ordinary-canvas image output drag was verified separately; this case does not test ordinary-canvas audio/video. Stage 3 remains in progress."
+}

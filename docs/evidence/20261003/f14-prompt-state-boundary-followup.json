@@ -1,0 +1,55 @@
+{
+  "date": "2026-10-03",
+  "scope": "F14 浏览器专属提示词状态与分组同步边界",
+  "environment": {
+    "saved": "127.0.0.1:3009, output/acceptance-20261003/f13-data",
+    "browser": "Codex In-app Browser, same origin session for isolated comparison",
+    "empty": "127.0.0.1:3010 was not modified in this round"
+  },
+  "reproduction": [
+    "在 3009 普通画布 F15 工作流映射样例打开模板库；管理分组 -> 新增，隔离弹窗返回 F14浏览器分组。",
+    "旧实现将该分组写入 localStorage key canvas_prompt_template_groups_v1；刷新普通画布仍显示，3009 同浏览器智能画布不显示。",
+    "新增共享分组 F14共享分组后，普通画布 POST /api/prompt-libraries/categories 返回 200；重命名为 F14共享改名后 PATCH /api/prompt-libraries/categories/pcat_252861f136 返回 200。",
+    "刷新智能画布 F14 样例，模板库显示 F14共享改名；证明普通/智能画布读取同一后端 categories。"
+  ],
+  "boundary": {
+    "legacyLocalStorage": "隔离普通画布旧 localStorage 分组刷新仍显示为“F14浏览器分组（旧本地）”；管理界面无编辑/删除操作，选择后存当前/新模板禁用。测试临时创建的旧分组已从隔离浏览器清理；业务代码不自动清除或上传用户原有旧数据。",
+    "sharedStorage": "新增与重命名统一走后端 categories；普通与智能画布刷新后均可读取。",
+    "overrides": "旧覆盖在隔离浏览器临时写入后已清理；业务代码保留用户原始旧覆盖，不自动删除。",
+    "legacyOverride": "隔离普通画布临时设置 canvas_prompt_template_overrides，将 F14 条目改为“F14本地覆盖/本地覆盖提示”，刷新后普通画布显示覆盖；同源智能画布刷新仍显示后端原值“F14隔离预设/一只蓝色纸鹤…”，证明覆盖只在浏览器本地。验证后删除临时覆盖，恢复原始空 key。"
+  },
+  "disk": {
+    "localGroupOnlyHashBeforeShared": "A8C0EA2736903DCA5AAAE613519290317C052E6FB70CE6C22A91E1FE8EC012AB",
+    "currentHashAfterIntentionalSharedMutation": "EF3741731E9F8C69A00D29C44CF6DFA0CA75BF3CF777F9141A1754B4225B4CBE",
+    "systemCategories": [
+      "视角",
+      "分镜",
+      "角色",
+      "产品",
+      "光影",
+      "我的",
+      "F14共享改名"
+    ],
+    "itemCount": 11,
+    "currentHashAfterCleanup": "96754CB51B2BA5D54B1B8EE4C01BCFC00FD55F8C121BACF314107FEB270F473A"
+  },
+  "code": {
+    "file": "static/js/canvas.js",
+    "changes": [
+      "系统库分组以 API categories 为主，旧本地自定义分组仅可见只读并加“旧本地”标识。",
+      "新增、重命名、删除分组统一调用 /api/prompt-libraries/categories；不再写入旧分组 localStorage。",
+      "旧本地分组下存当前/新模板入口禁用；旧 localStorage 原值保留。"
+    ]
+  },
+  "validation": [
+    "node --check static/js/canvas.js 通过",
+    "git diff --check -- static/js/canvas.js 通过",
+    "6 项 F14 静态断言通过",
+    "页面：旧本地分组刷新保留且只读；共享分组 POST/PATCH 200；智能画布刷新显示共享重命名分组",
+    "旧覆盖隔离：普通画布显示本地覆盖，智能画布保持后端原值；临时 override 已清理",
+    "旧覆盖迁入旧本地分组后，模板仍可读/可应用，但编辑和删除按钮禁用；临时覆盖与分组均已清理"
+  ],
+  "risk": "干净浏览器对照尚未完成；本轮只使用隔离服务，真实 data 和真实配置未改。",
+  "result": "F14 分组状态边界补齐；浏览器旧本地状态保留，共享分组跨普通/智能画布同步。",
+  "cleanup": "已通过隔离服务 DELETE 删除 F14共享改名测试分组，并清理隔离浏览器临时 localStorage 旧组及覆盖；后端保留原 F14 提示词测试条目。"
+}

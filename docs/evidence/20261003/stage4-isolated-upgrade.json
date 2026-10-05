@@ -1,0 +1,18 @@
+{
+  "date": "2026-10-03",
+  "scope": "Online update and rollback file boundaries with disposable sample data",
+  "environment": "Temporary directory; no real config, canvas, media, history, or external update source used",
+  "reproduction": "A staged VERSION value of 'after' was rejected because the validation string contained literal backslashes and treated the letter r as forbidden.",
+  "fix": "The VERSION validation now checks actual carriage-return and newline characters.",
+  "exercise": {
+    "staged_files": ["main.py", "VERSION", "static/index.html", "API/.env", "data/asset_library.json"],
+    "updated_files": ["main.py", "VERSION", "static/index.html"],
+    "private_sample_files": 9,
+    "private_hashes_after_update": "all unchanged",
+    "private_hashes_after_rollback": "all unchanged",
+    "code_after_rollback": "original main.py, VERSION and static/index.html restored",
+    "restore_point": "ready"
+  },
+  "verification": "tests/test_update_private_data.py passed after the fix; the same test failed before the fix.",
+  "remaining": "This verifies the built-in updater with a local staged sample. It does not verify Git upgrades, real private data, external storage paths, remote downloads, or application behavior after loading an updated main.py."
+}

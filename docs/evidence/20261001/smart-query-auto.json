@@ -1,0 +1,43 @@
+{
+  "nodes": [
+    {
+      "id": "result-check",
+      "type": "smart-image",
+      "x": 200,
+      "y": 150,
+      "title": "Image",
+      "images": [
+        {
+          "url": "/assets/input/ai_ref_c96861fe0c41.png",
+          "name": "output-1.png",
+          "kind": "image",
+          "generatedResult": true,
+          "_naturalSizeLoading": false,
+          "natural_w": 320,
+          "natural_h": 240
+        }
+      ],
+      "pending": 0,
+      "scale": 1,
+      "running": false,
+      "outputKind": "image",
+      "runFinishedAt": 1790865973754,
+      "runStartedAt": 1790865973754,
+      "runElapsedMs": 0,
+      "runTimerHidden": false,
+      "w": 260,
+      "h": 195
+    }
+  ],
+  "state": {
+    "mode": "query-unavailable",
+    "calls": 1,
+    "query_failures": 1,
+    "tasks": [
+      {
+        "id": "canvas_img_43f50ab4acb64f3ea76d951af69f3ebf",
+        "status": "succeeded"
+      }
+    ]
+  }
+}

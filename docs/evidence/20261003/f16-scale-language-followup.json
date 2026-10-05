@@ -1,0 +1,43 @@
+{
+  "date": "2026-10-03",
+  "environment": "127.0.0.1:3010 isolated empty-data server, Codex in-app browser; no real provider calls",
+  "changes": {
+    "manualScale": "Added a visible More Settings UI Scale selector with Auto, 75%, 90%, 100% and 125% options. It uses the existing StudioScale.set API and posts the selected mode to active and future embedded pages.",
+    "canvasListLanguage": "Connected the project workspace title, project/trash controls, board header, empty state, refresh/reset controls and new-canvas controls to the existing i18n modules. Default Project is translated while user-created project names remain unchanged.",
+    "onlineRatios": "Added i18n keys to the 3:4 and 4:3 ratio options, English translations in the studio dictionary, and refreshed the online page, i18n module and parent iframe cache versions."
+  },
+  "observations": [
+    {
+      "mode": "75",
+      "root": { "selected": "75", "cssScale": "0.750", "scrollWidth": 1280, "clientWidth": 1280 },
+      "embeddedCanvasList": { "cssScale": "0.750", "scrollWidth": 1194, "clientWidth": 1194 }
+    },
+    {
+      "mode": "125",
+      "root": { "selected": "125", "cssScale": "1.250", "scrollWidth": 1280, "clientWidth": 1280 },
+      "embeddedCanvasList": { "cssScale": "1.250", "scrollWidth": 1138, "clientWidth": 1138 },
+      "embeddedChat": { "cssScale": "1.250", "scrollWidth": 1138, "clientWidth": 1138 }
+    },
+    {
+      "refresh": "After reload, 125% remained selected and applied to the embedded canvas list; after switching to Auto and reloading, the selector showed Auto and the embedded page returned to the responsive 0.766 scale."
+    },
+    {
+      "englishDark": "With English and dark theme enabled, the main page and canvas-list iframe reported lang=en, studio-theme-dark and 125% scale. Canvas list visibly showed Projects, Default Project, Trash, No canvases yet, Create the first canvas for this project and New canvas."
+    },
+    {
+      "chineseRestore": "Switching back to Chinese changed the canvas-list labels back to 项目、默认项目、回收站、暂无画布 and 新建画布 without a reload."
+    },
+    {
+      "onlineRatios": "Before the fix, the isolated 3010 online-image iframe showed 3:4 竖图 and 4:3 横图 while English was selected. After reloading the parent page with its updated online iframe URL, the root task verified that English showed 3:4 Portrait and 4:3 Landscape, and switching back to Chinese immediately restored 3:4 竖图 and 4:3 横图."
+    }
+  ],
+  "validation": [
+    "node --check static/js/canvas-list.js",
+    "node --check static/js/i18n/common.js",
+    "node --check static/js/i18n.js",
+    "node --check static/js/i18n/studio.js",
+    "git diff --check -- static/index.html static/canvas-list.html static/online.html static/js/canvas-list.js static/js/i18n.js static/js/i18n/common.js static/js/i18n/studio.js",
+    "3010 HTTP response contained the new online.html option keys, their English dictionary entries, the online page script cache version and the parent iframe cache version"
+  ],
+  "result": "The visible manual scale path and the verified canvas-list and online-image embedded page language gaps are covered in the isolated run."
+}

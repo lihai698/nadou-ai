@@ -1,0 +1,25 @@
+{
+  "date": "2026-10-02",
+  "environment": {
+    "base_url": "http://127.0.0.1:3002/",
+    "browser": "Codex In-app Browser",
+    "viewport": "1061x851",
+    "zoom": 1,
+    "isolated": true
+  },
+  "steps": [
+    {"label":"文生图","expected_frame":"frame-zimage","active_frame":"frame-zimage","active_nav":"文生图","local_nav_collapsed":false,"passed":true},
+    {"label":"细节增强","expected_frame":"frame-enhance","active_frame":"frame-enhance","active_nav":"细节增强","local_nav_collapsed":false,"passed":true},
+    {"label":"图片编辑","expected_frame":"frame-klein","active_frame":"frame-klein","active_nav":"图片编辑","local_nav_collapsed":false,"passed":true},
+    {"label":"角度控制","expected_frame":"frame-angle","active_frame":"frame-angle","active_nav":"角度控制","local_nav_collapsed":false,"passed":true},
+    {"label":"在线生图","expected_frame":"frame-online","active_frame":"frame-online","active_nav":"在线生图","local_nav_collapsed":false,"passed":true},
+    {"label":"GPT 对话","expected_frame":"frame-gpt-chat","active_frame":"frame-gpt-chat","active_nav":"GPT 对话","local_nav_collapsed":false,"passed":true},
+    {"label":"无限画布","expected_frame":"frame-canvas","active_frame":"frame-canvas","active_nav":"无限画布","local_nav_collapsed":false,"passed":true},
+    {"label":"素材库","expected_frame":"frame-asset-manager","active_frame":"frame-asset-manager","active_nav":"素材库","local_nav_collapsed":false,"passed":true},
+    {"label":"API 设置","expected_frame":"frame-api-settings","active_frame":"frame-api-settings","active_nav":"API 设置","local_nav_collapsed":false,"passed":true},
+    {"label":"工作流设置","expected_frame":"frame-comfyui-settings","active_frame":"frame-comfyui-settings","active_nav":"工作流设置","local_nav_collapsed":false,"settings_expanded":true,"passed":true}
+  ],
+  "return_to_canvas": {"active_frame":"frame-canvas","active_nav":"无限画布","canvas_display":"block","sidebar_width_css_px":79.9814,"passed":true},
+  "narrow_hover": {"target":"无限画布","tooltip_text":"无限画布","tooltip_aria_hidden":"false","sidebar_width_css_px":79.9814,"passed":true},
+  "result": "通过"
+}

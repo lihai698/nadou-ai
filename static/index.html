@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="icon" href="/static/images/logo.png" type="image/png">
-    <title>AI Studio</title>
+    <title>nadou ai</title>
     <style>
         html.studio-route-booting body {
             visibility: hidden !important;
@@ -23,11 +23,11 @@
             } catch(e) {}
         })();
     </script>
-    <script src="/static/vendor/js/tailwindcss-cdn.js?v=2026.08.28.1790740572"></script>
-    <script src="/static/js/theme.js?v=2026.08.28.1790740572"></script>
-    <script src="/static/js/i18n.js?v=2026.08.28.1790740572"></script>
+    <script src="/static/vendor/js/tailwindcss-cdn.js?v=2026.10.05.1790740572"></script>
+    <script src="/static/js/theme.js?v=2026.10.05.1790740572"></script>
+    <script src="/static/js/i18n.js?v=2026.10.05.1791022416"></script>
     <style>
-        @import url('/static/vendor/css/fonts.css?v=2026.08.28.1790740572');
+        @import url('/static/vendor/css/fonts.css?v=2026.10.05.1790740572');
 
         /* 本地 Tailwind 工具类兜底：CDN 慢/未就绪时也能立刻给图标尺寸，避免首屏左侧栏空白 */
         .w-1\.5 { width: 0.375rem; }
@@ -612,9 +612,19 @@
             transition: max-height .28s var(--fluid-ease), opacity .18s ease;
         }
         .settings-fold-group:not(.is-collapsed) {
-            max-height: 132px;
+            max-height: 176px;
             opacity: 1;
             pointer-events: auto;
+        }
+        .studio-scale-picker { overflow: visible; }
+        .studio-scale-picker:focus-within { outline: 2px solid var(--text); outline-offset: 2px; }
+        .studio-scale-picker select {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0;
+            cursor: pointer;
         }
         .side-pill-text {
             opacity:0;
@@ -685,11 +695,13 @@
             transition:width 0.3s var(--fluid-ease) 0.5s, background-color .2s, color .2s, border-color .2s;
         }
         .update-now-btn.show { display:flex; }
+        .update-now-btn.full-install { width:76px; }
         .sidebar:hover .update-now-btn { width:170px; transition-delay:0s; }
         .update-now-btn:hover { background:#16a34a; color:#fff; border-color:#16a34a; }
         .update-now-btn[disabled] { opacity:.7; cursor:wait; }
         .update-now-btn svg { display:none; width:14px; height:14px; flex:0 0 auto; }
         .sidebar:hover .update-now-btn svg { display:block; }
+        .update-now-btn.full-install .update-now-text { max-width:68px; }
         .update-now-text {
             opacity:1;
             max-width:42px;
@@ -759,7 +771,7 @@
                 gap: 5px;
             }
             .settings-fold-group:not(.is-collapsed) {
-                max-height: 105px;
+                max-height: 140px;
             }
             .side-pill {
                 height:30px;
@@ -803,7 +815,7 @@
                 gap: 4px;
             }
             .settings-fold-group:not(.is-collapsed) {
-                max-height: 102px;
+                max-height: 132px;
             }
             .side-pill {
                 height:30px;
@@ -944,10 +956,9 @@
         .update-notes-version { color:#64748b; font-size:11px; font-weight:800; white-space:nowrap; }
         .update-notes-list { margin:0; padding:0 0 0 16px; display:grid; gap:6px; color:#334155; font-size:12px; line-height:1.55; }
         .update-notes-empty { margin:0; color:#94a3b8; font-size:12px; line-height:1.55; }
-        .update-source-list { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:14px; align-items:stretch; }
+        .update-source-list { display:grid; grid-template-columns:1fr; gap:12px; margin-top:14px; align-items:stretch; }
         @media (max-width: 720px) { .update-source-list { grid-template-columns:1fr; } }
-        .update-source-card { width:100%; min-width:0; border:1px solid #e5e7eb; border-radius:10px; background:#fff; color:#111827; text-align:left; padding:12px; display:flex; flex-direction:column; gap:10px; cursor:pointer; transition:border-color .16s ease, box-shadow .16s ease, transform .16s ease, background .16s ease; }
-        .update-source-card:hover { transform:translateY(-1px); border-color:#cbd5e1; box-shadow:0 12px 28px rgba(15,23,42,.08); }
+        .update-source-card { width:100%; min-width:0; border:1px solid #e5e7eb; border-radius:10px; background:#fff; color:#111827; text-align:left; padding:12px; display:flex; flex-direction:column; gap:10px; }
         .update-source-card.active { border-color:#16a34a; box-shadow:0 0 0 2px rgba(22,163,74,.20); background:#f0fdf4; }
         .update-source-head { display:flex; align-items:center; justify-content:space-between; gap:10px; }
         .update-source-title { min-width:0; display:flex; flex-direction:column; gap:4px; }
@@ -1595,6 +1606,20 @@
                         </svg>
                         <span class="side-pill-text" data-i18n="common.language">中文</span>
                     </button>
+                    <label class="side-pill studio-scale-picker" id="studio-scale-picker" data-i18n-title="common.uiScale" title="界面缩放">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M4 8V4h4M20 8V4h-4M4 16v4h4M20 16v4h-4"></path>
+                            <path d="m8 4 3 3M16 4l-3 3M8 20l3-3M16 20l-3-3"></path>
+                        </svg>
+                        <span class="side-pill-text"><span data-i18n="common.uiScale">界面缩放</span> · <span id="studio-scale-value">自动</span></span>
+                        <select id="studio-scale-select" aria-label="界面缩放" onchange="changeStudioScale(this.value)">
+                            <option value="auto" data-i18n="common.scaleAuto">自动</option>
+                            <option value="75">75%</option>
+                            <option value="90">90%</option>
+                            <option value="100">100%</option>
+                            <option value="125">125%</option>
+                        </select>
+                    </label>
                     <button class="side-pill" onclick="switchUI(this, 'comfyui-settings')" type="button" title="工作流设置">
                         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <rect x="3" y="3" width="7" height="7" rx="1"></rect>
@@ -1607,11 +1632,11 @@
                         <span class="side-pill-text" data-i18n="common.comfyuiSettings">工作流设置</span>
                     </button>
                 </div>
-                <button id="github-entry-btn" class="side-pill" onclick="openProjectPage()" type="button" title="GitHub">
+                <button id="github-entry-btn" class="side-pill" onclick="openProjectPage()" type="button" title="nadou ai GitHub">
                     <svg fill="currentColor" stroke="none" viewBox="0 0 24 24" aria-hidden="true">
                         <path d="M12 .5a12 12 0 0 0-3.79 23.39c.6.11.82-.26.82-.58v-2.05c-3.34.73-4.04-1.42-4.04-1.42-.55-1.39-1.34-1.76-1.34-1.76-1.09-.75.08-.74.08-.74 1.21.09 1.85 1.25 1.85 1.25 1.07 1.83 2.81 1.3 3.5.99.11-.78.42-1.3.76-1.6-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.12-.3-.54-1.53.12-3.18 0 0 1.01-.32 3.3 1.23a11.45 11.45 0 0 1 6.01 0c2.29-1.55 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.77.84 1.24 1.91 1.24 3.22 0 4.61-2.81 5.63-5.49 5.93.43.37.81 1.1.81 2.22v3.29c0 .32.22.69.83.57A12 12 0 0 0 12 .5Z"></path>
                     </svg>
-                    <span class="side-pill-text" data-i18n="common.project">项目主页</span>
+                    <span class="side-pill-text">nadou ai</span>
                 </button>
                 <button id="update-now-btn" class="update-now-btn" onclick="runProjectUpdate()" type="button" title="一键更新">
                     <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -1642,16 +1667,16 @@
         </script>
 
         <main class="stage">
-            <iframe id="frame-zimage" data-src="/static/zimage.html?v=2026.08.28.1790740725" class="active" scrolling="yes"></iframe>
-            <iframe id="frame-enhance" data-src="/static/enhance.html?v=2026.08.28.1790740725" scrolling="yes"></iframe>
-            <iframe id="frame-klein" data-src="/static/klein.html?v=2026.08.28.1790740725" scrolling="yes"></iframe>
-            <iframe id="frame-angle" data-src="/static/angle.html?v=2026.08.28.1790740725" scrolling="yes"></iframe>
-            <iframe id="frame-online" data-src="/static/online.html?v=2026.08.28.1790740725" scrolling="yes"></iframe>
-            <iframe id="frame-gpt-chat" data-src="/static/gpt-chat.html?v=2026.08.28.1790740725" scrolling="yes"></iframe>
-            <iframe id="frame-asset-manager" data-src="/static/asset-manager.html?v=2026.08.28.1790740725" scrolling="yes"></iframe>
-            <iframe id="frame-api-settings" data-src="/static/api-settings.html?v=2026.08.28.1790740725" scrolling="yes"></iframe>
-            <iframe id="frame-comfyui-settings" data-src="/static/comfyui-settings.html?v=2026.08.28.1790740725" scrolling="yes"></iframe>
-            <iframe id="frame-canvas" data-src="/static/canvas-list.html?v=2026.08.28.1790740725" scrolling="yes"></iframe>
+            <iframe id="frame-zimage" data-src="/static/zimage.html?v=2026.10.05.1791102776" class="active" scrolling="yes"></iframe>
+            <iframe id="frame-enhance" data-src="/static/enhance.html?v=2026.10.05.1791215197" scrolling="yes"></iframe>
+            <iframe id="frame-klein" data-src="/static/klein.html?v=2026.10.05.1791102776" scrolling="yes"></iframe>
+            <iframe id="frame-angle" data-src="/static/angle.html?v=2026.10.05.1791215197" scrolling="yes"></iframe>
+            <iframe id="frame-online" data-src="/static/online.html?v=2026.10.05.1791102776" scrolling="yes"></iframe>
+            <iframe id="frame-gpt-chat" data-src="/static/gpt-chat.html?v=2026.10.05.1791215197" scrolling="yes"></iframe>
+            <iframe id="frame-asset-manager" data-src="/static/asset-manager.html?v=2026.10.05.1791215197" scrolling="yes"></iframe>
+            <iframe id="frame-api-settings" data-src="/static/api-settings.html?v=2026.10.05.1791215197" scrolling="yes"></iframe>
+            <iframe id="frame-comfyui-settings" data-src="/static/comfyui-settings.html?v=2026.10.05.1791215197" scrolling="yes"></iframe>
+            <iframe id="frame-canvas" data-src="/static/canvas-list.html?v=2026.10.05.1791215197" scrolling="yes"></iframe>
 
         </main>
     </div>
@@ -1681,11 +1706,11 @@
                     <p id="project-update-notes-empty" class="update-notes-empty" hidden>暂未获取到更新说明。</p>
                 </div>
                 <div id="update-source-list" class="update-source-list">
-                    <button id="update-source-github" class="update-source-card" type="button" data-update-source="github" onclick="setUpdateSource('github')">
+                    <div id="update-source-github" class="update-source-card active" data-update-source="github">
                         <div class="update-source-head">
                             <div class="update-source-title">
                                 <strong>GitHub 下载源</strong>
-                                <span>GitHub API / raw 文件 / GitHub 网页，Google 仅作外网参考。</span>
+                                <span>从 nadou ai 的 GitHub 仓库下载程序更新。</span>
                             </div>
                             <div class="update-source-head-right">
                                 <span class="update-source-check" aria-hidden="true">
@@ -1695,22 +1720,7 @@
                             </div>
                         </div>
                         <div class="connectivity-list" data-connectivity-source="github"></div>
-                    </button>
-                    <button id="update-source-modelscope" class="update-source-card" type="button" data-update-source="modelscope" onclick="setUpdateSource('modelscope')">
-                        <div class="update-source-head">
-                            <div class="update-source-title">
-                                <strong>ModelScope 下载源</strong>
-                                <span>ModelScope 空间与版本文件，适合国内网络。</span>
-                            </div>
-                            <div class="update-source-head-right">
-                                <span class="update-source-check" aria-hidden="true">
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                                </span>
-                                <span class="update-source-badge">待测试</span>
-                            </div>
-                        </div>
-                        <div class="connectivity-list" data-connectivity-source="modelscope"></div>
-                    </button>
+                    </div>
                 </div>
                 <div id="project-update-summary" class="update-modal-summary warn">
                     <span class="update-modal-dot" aria-hidden="true"></span>
@@ -1764,12 +1774,11 @@
         const DEFAULT_PAGE_ID = 'zimage';
         const PAGE_IDS = ['zimage','enhance','klein','angle','online','gpt-chat','canvas','asset-manager','api-settings','comfyui-settings'];
         const LOCAL_PAGE_IDS = ['zimage','enhance','klein','angle'];
-        const PROJECT_URL = 'https://github.com/hero8152/Infinite-Canvas';
-        let appInfo = { version:'', repo_url:PROJECT_URL, version_url:'https://raw.githubusercontent.com/hero8152/Infinite-Canvas/main/VERSION' };
+        const PROJECT_URL = 'https://github.com/lihai698/nadou-ai';
+        let appInfo = { version:'', repo_url:PROJECT_URL, version_url:'https://raw.githubusercontent.com/lihai698/nadou-ai/main/VERSION' };
         let updateConnectivityResult = null;
         let projectUpdateRunning = false;
-        let projectUpdateAbort = null;  // 当前更新请求的 AbortController，便于用户中途取消
-        let updateSource = localStorage.getItem('studio_update_source') || 'github';
+        const updateSource = 'github';
         let projectUpdateNotes = null;
 
         function setSidebarPinned(pinned, options = {}) {
@@ -1996,6 +2005,22 @@
             document.querySelectorAll('iframe').forEach(frame => syncScaleToFrame(frame));
         }
 
+        function syncStudioScaleControl() {
+            const select = document.getElementById('studio-scale-select');
+            if(!select) return;
+            const mode = window.StudioScale?.getMode() || 'auto';
+            select.value = Array.from(select.options).some(option => option.value === mode) ? mode : 'auto';
+            const label = window.StudioI18n?.t('common.uiScale') || '界面缩放';
+            select.setAttribute('aria-label', label);
+            const value = document.getElementById('studio-scale-value');
+            if(value) value.textContent = select.selectedOptions[0]?.textContent || mode;
+        }
+
+        function changeStudioScale(mode) {
+            window.StudioScale?.set(mode);
+            syncStudioScaleControl();
+        }
+
         function broadcastTheme(theme) {
             if (window.StudioTheme) {
                 window.StudioTheme.set(theme);
@@ -2059,8 +2084,10 @@
         });
 
         window.addEventListener('studio-ui-scale-change', () => {
+            syncStudioScaleControl();
             broadcastScaleToFrames();
         });
+        window.addEventListener('studio-lang-change', syncStudioScaleControl);
 
         function setupSidebarTooltips() {
             const sidebar = document.getElementById('studioSidebar');
@@ -2099,6 +2126,7 @@
             const theme = window.StudioTheme ? window.StudioTheme.get() : 'light';
             updateThemeIcon(theme);
             if(window.StudioI18n) window.StudioI18n.apply();
+            syncStudioScaleControl();
             broadcastLanguage();
             setupSidebarTooltips();
             const sidebar = document.getElementById('studioSidebar');
@@ -2119,7 +2147,7 @@
         });
 
         function openProjectPage() {
-            window.open(appInfo.repo_url || PROJECT_URL, '_blank', 'noopener');
+            window.open(PROJECT_URL, '_blank', 'noopener');
         }
 
         function versionParts(value) {
@@ -2134,7 +2162,7 @@
                 const diff = (aa[i] || 0) - (bb[i] || 0);
                 if(diff) return diff;
             }
-            return String(a || '').trim() === String(b || '').trim() ? 0 : 1;
+            return 0;
         }
 
         function compactVersion(value) {
@@ -2176,8 +2204,16 @@
             const text = document.getElementById('update-now-text');
             if(!btn || !text || !btn.classList.contains('show')) return;
             const remoteVersion = document.getElementById('github-entry-btn')?.dataset.remoteVersion || '';
+            const updateMode = document.getElementById('github-entry-btn')?.dataset.updateMode || 'full_install';
             const isEn = window.StudioI18n?.lang?.() === 'en';
             text.removeAttribute('data-i18n');
+            if(updateMode === 'full_install') {
+                btn.classList.add('full-install');
+                text.textContent = isEn ? 'Get full installer' : '下载完整安装包';
+                btn.setAttribute('aria-label', text.textContent);
+                return;
+            }
+            btn.classList.remove('full-install');
             if(remoteVersion) {
                 const prefix = isEn ? 'Update to' : '更新到';
                 text.replaceChildren();
@@ -2208,18 +2244,19 @@
                 ? `Current ${versionLabel(gitBtn.dataset.localVersion || appInfo.version)} · latest ${versionLabel(remoteVersion)}`
                 : `当前 ${versionLabel(gitBtn.dataset.localVersion || appInfo.version)} · 最新 ${versionLabel(remoteVersion)}`;
             const updateBtn = document.getElementById('update-now-btn');
-            if(updateBtn) updateBtn.title = remoteVersion
-                ? (isEn ? `Update to ${versionLabel(remoteVersion)}` : `更新到 ${versionLabel(remoteVersion)}`)
-                : (isEn ? 'Update main.py and static files from GitHub' : '从 GitHub 更新 main.py 和 static 文件');
+            if(updateBtn) updateBtn.title = gitBtn.dataset.updateMode === 'in_app'
+                ? (isEn ? `Update to ${versionLabel(remoteVersion)} and restart` : `更新到 ${versionLabel(remoteVersion)} 并自动重启`)
+                : (isEn ? 'Open the full installer download page' : '打开完整安装包下载页');
             refreshUpdateButtonText();
         }
 
-        function showUpdateNotice(localVersion, remoteVersion) {
+        function showUpdateNotice(localVersion, remoteVersion, updateMode) {
             const gitBtn = document.getElementById('github-entry-btn');
             if(!gitBtn) return;
             gitBtn.classList.add('update-available');
             gitBtn.dataset.localVersion = localVersion || '';
             gitBtn.dataset.remoteVersion = remoteVersion || '';
+            gitBtn.dataset.updateMode = updateMode === 'in_app' ? 'in_app' : 'full_install';
             document.getElementById('update-now-btn')?.classList.add('show');
             updateProjectUpdateTitle();
         }
@@ -2274,15 +2311,7 @@
             return window.StudioI18n?.lang?.() === 'en' ? en : zh;
         }
 
-        function updateSourceLabel(source = updateSource) {
-            return source === 'modelscope' ? 'ModelScope' : 'GitHub';
-        }
-
-        function setUpdateSource(source) {
-            updateSource = source === 'modelscope' ? 'modelscope' : 'github';
-            localStorage.setItem('studio_update_source', updateSource);
-            refreshProjectUpdateModalText();
-        }
+        function updateSourceLabel() { return 'GitHub'; }
 
         function sourceConnectivityStats(source, results = []) {
             const sourceItems = (results || []).filter(item => item.source === source);
@@ -2295,26 +2324,11 @@
             return {source, ok:okRequired, avg, okItems:okItems.length, total:sourceItems.length};
         }
 
-        function bestUpdateSourceFromConnectivity(data) {
-            const results = data?.results || [];
-            const github = sourceConnectivityStats('github', results);
-            const ms = sourceConnectivityStats('modelscope', results);
-            if(github.ok && ms.ok) return ms.avg < github.avg ? 'modelscope' : 'github';
-            if(ms.ok) return 'modelscope';
-            if(github.ok) return 'github';
-            return updateSource;
-        }
-
         function updateTargetLabel(name) {
             const labels = {
                 'GitHub 更新列表': ['GitHub 更新列表', 'GitHub update API'],
                 'GitHub 版本文件': ['GitHub 版本文件', 'GitHub version file'],
                 'GitHub 主页': ['GitHub 主页', 'GitHub home page'],
-                'ModelScope 更新列表': ['ModelScope 更新列表', 'ModelScope update list'],
-                'ModelScope 版本文件': ['ModelScope 版本文件', 'ModelScope version file'],
-                'ModelScope 空间页面': ['ModelScope 空间页面', 'ModelScope space page'],
-                'ModelScope 主页': ['ModelScope 主页', 'ModelScope home page'],
-                'Google 连通性': ['Google 连通性', 'Google connectivity'],
             };
             const item = labels[name] || [name, name];
             return window.StudioI18n?.lang?.() === 'en' ? item[1] : item[0];
@@ -2343,15 +2357,10 @@
         function updateConnectivityTargets() {
             const sources = appInfo.sources || {};
             const github = sources.github || {};
-            const ms = sources.modelscope || {};
             return [
-                { name:'GitHub 更新列表', url:github.tree_url || appInfo.tree_url || 'https://api.github.com/repos/hero8152/Infinite-Canvas/git/trees/main?recursive=1', source:'github', required:true },
-                { name:'GitHub 版本文件', url:github.version_url || appInfo.version_url || 'https://raw.githubusercontent.com/hero8152/Infinite-Canvas/main/VERSION', source:'github', required:true },
+                { name:'GitHub 更新列表', url:github.tree_url || appInfo.tree_url || 'https://api.github.com/repos/lihai698/nadou-ai/git/trees/main?recursive=1', source:'github', required:true },
+                { name:'GitHub 版本文件', url:github.version_url || appInfo.version_url || 'https://raw.githubusercontent.com/lihai698/nadou-ai/main/VERSION', source:'github', required:true },
                 { name:'GitHub 主页', url:'https://github.com/', source:'github' },
-                { name:'ModelScope 版本文件', url:ms.version_url || 'https://www.modelscope.cn/api/v1/studio/Daniel8152/Infinite-Canvas/repo?Revision=master&FilePath=VERSION', source:'modelscope', required:true },
-                { name:'ModelScope 空间页面', url:ms.repo_url || 'https://modelscope.cn/studios/Daniel8152/Infinite-Canvas', source:'modelscope' },
-                { name:'ModelScope 主页', url:'https://modelscope.cn/', source:'modelscope' },
-                { name:'Google 连通性', url:'https://www.google.com/generate_204', source:'reference' },
             ];
         }
 
@@ -2360,7 +2369,7 @@
             const renderInto = (list, source) => {
                 if(!list) return;
                 list.replaceChildren();
-                const items = allItems.filter(item => item.source === source || (source === 'github' && item.source === 'reference'));
+                const items = allItems.filter(item => item.source === source);
                 items.forEach(item => {
                 const row = document.createElement('div');
                 row.className = `connectivity-row ${item.pending ? 'pending' : item.untouched ? '' : item.ok ? 'ok' : 'fail'}`;
@@ -2388,7 +2397,6 @@
             });
             };
             renderInto(document.querySelector('[data-connectivity-source="github"]'), 'github');
-            renderInto(document.querySelector('[data-connectivity-source="modelscope"]'), 'modelscope');
         }
 
         function refreshProjectUpdateModalText() {
@@ -2437,10 +2445,10 @@
             if(!updateConnectivityResult) {
                 setUpdateSummary(
                     'warn',
-                    updateUiText('建议先测试连通性', 'Connectivity test recommended'),
+                    updateUiText('可先测试连通性', 'Connectivity test available'),
                     updateUiText(
-                        '测试会同时测速 GitHub 和 ModelScope。你可以根据结果切换下载源。',
-                        'The test checks both GitHub and ModelScope. Choose the faster reachable source before updating.'
+                        '更新将从 nadou ai 的 GitHub 仓库下载。',
+                        'Updates are downloaded from the nadou ai GitHub repository.'
                     )
                 );
             } else if(updateConnectivityResult.backend_missing) {
@@ -2453,11 +2461,10 @@
                     )
                 );
             } else if((updateConnectivityResult.sources || {})[updateSource]?.ok || (updateSource === 'github' && updateConnectivityResult.ok)) {
-                const google = (updateConnectivityResult.results || []).find(item => item.name === 'Google 连通性');
                 const sourceResults = (updateConnectivityResult.results || []).filter(item => item.source === updateSource);
                 const fastest = sourceResults.filter(item => item.ok).sort((a, b) => (a.elapsed_ms || 999999) - (b.elapsed_ms || 999999))[0];
                 setUpdateSummary(
-                    google?.ok ? 'ok' : 'warn',
+                    'ok',
                     updateUiText(`${sourceName} 下载源可用`, `${sourceName} source reachable`),
                     fastest
                         ? updateUiText(`${sourceName} 可访问，最快节点约 ${fastest.elapsed_ms || 0}ms，可以开始更新。`, `${sourceName} is reachable; fastest endpoint is about ${fastest.elapsed_ms || 0}ms.`)
@@ -2468,8 +2475,8 @@
                     'fail',
                     updateUiText(`${sourceName} 下载源不可用`, `${sourceName} source unreachable`),
                     updateUiText(
-                        `当前网络无法访问 ${sourceName} 必需节点。请切换下载源，或检查代理、DNS 后重试。`,
-                        `This network cannot reach required ${sourceName} endpoints. Switch source, or check proxy/DNS and try again.`
+                        `当前网络无法访问 ${sourceName} 必需节点。请检查网络、代理或 DNS 后重试。`,
+                        `This network cannot reach required ${sourceName} endpoints. Check your network, proxy, or DNS and try again.`
                     )
                 );
             }
@@ -2486,10 +2493,6 @@
         }
 
         function closeProjectUpdateModal() {
-            // 更新进行中允许关闭：中止在途请求并恢复 UI，避免「卡在更新中、无法关闭」
-            if(projectUpdateRunning) {
-                try { projectUpdateAbort?.abort(); } catch(e) {}
-            }
             const modal = document.getElementById('project-update-modal');
             if(modal) modal.hidden = true;
         }
@@ -2503,12 +2506,16 @@
         });
 
         async function runProjectUpdate() {
-            openProjectUpdateModal();
+            if(document.getElementById('github-entry-btn')?.dataset.updateMode !== 'in_app') {
+                window.open(`${PROJECT_URL}/releases`, '_blank', 'noopener');
+                return;
+            }
+            await confirmProjectUpdate();
         }
 
         function computeConnectivitySources(results) {
             const out = {};
-            for(const source of ['github', 'modelscope']) {
+            for(const source of ['github']) {
                 const reqAll = (results || []).filter(it => it.source === source && it.required);
                 out[source] = {
                     ok: reqAll.length > 0 && reqAll.every(it => it.ok),
@@ -2607,7 +2614,6 @@
                         const data = await res.json().catch(() => ({}));
                         if(res.ok && Array.isArray(data.results)) {
                             updateConnectivityResult = data;
-                            setUpdateSource(bestUpdateSourceFromConnectivity(data));
                             return;
                         }
                     } catch(e) {}
@@ -2625,7 +2631,6 @@
                 const results = live.map(({pending, untouched, ...rest}) => rest);
                 const sources = computeConnectivitySources(results);
                 updateConnectivityResult = { results, sources, ok:sources.github.ok };
-                setUpdateSource(bestUpdateSourceFromConnectivity(updateConnectivityResult));
             } finally {
                 connectivityTesting = false;
                 if(btn) btn.disabled = false;
@@ -2634,7 +2639,18 @@
         }
 
         async function confirmProjectUpdate() {
+            if(projectUpdateRunning) return;
             const isEn = window.StudioI18n?.lang?.() === 'en';
+            try {
+                const info = await fetch('/api/app-info', {cache:'no-store'}).then(response => response.json());
+                if(info.repo_url !== PROJECT_URL) {
+                    alert(isEn ? 'Restart the backend to activate the nadou ai update source.' : '请先重启服务，启用 nadou ai 的更新源。');
+                    return;
+                }
+            } catch {
+                alert(isEn ? 'Could not verify the update source.' : '无法核对更新源，请检查服务后重试。');
+                return;
+            }
             const btn = document.getElementById('update-now-btn');
             const text = document.getElementById('update-now-text');
             const confirmBtn = document.getElementById('project-update-confirm-btn');
@@ -2656,19 +2672,13 @@
                 const res = await fetch('/api/update-from-github', {
                     method:'POST',
                     headers:{'Content-Type':'application/json'},
-                    body:JSON.stringify({ auto_restart:true, restart_delay:3, source:updateSource, fallback:true }),
+                    body:JSON.stringify({ auto_restart:true, restart_delay:3 }),
                     signal:ac.signal
                 });
                 const data = await res.json().catch(() => ({}));
                 if(!res.ok) throw new Error(data.detail || (isEn ? 'Update failed' : '更新失败'));
                 if(data.update_notes) setProjectUpdateNotes(data.update_notes);
                 const restarting = data.restart_scheduled;
-                const usedLabel = data.source_label || (data.source === 'modelscope' ? 'ModelScope' : 'GitHub');
-                const fallbackNote = data.fallback_used
-                    ? (isEn
-                        ? ` (${sourceName} was unreachable, so it fell back to ${usedLabel})`
-                        : `（${sourceName} 不可用，已自动兜底切换到 ${usedLabel}）`)
-                    : '';
                 setUpdateSummary(
                     'ok',
                     isEn ? 'Update complete' : '更新完成',
@@ -2678,17 +2688,19 @@
                             : `已更新 ${data.count || 0} 个文件。后端将在约 3 秒后自动重启，本页面会在恢复后自动刷新。`)
                         : (isEn
                             ? `Updated ${data.count || 0} files. Please restart the backend, then refresh this page.`
-                            : `已更新 ${data.count || 0} 个文件。请重启后端，然后刷新页面。`)) + fallbackNote
+                            : `已更新 ${data.count || 0} 个文件。请重启后端，然后刷新页面。`))
                 );
                 document.getElementById('github-entry-btn')?.classList.remove('update-available');
                 btn?.classList.remove('show');
                 setProjectVersionBadge(data.version || document.getElementById('github-entry-btn')?.dataset.remoteVersion || appInfo.version);
                 if(restarting) waitForBackendAndReload();
+                else if(document.getElementById('project-update-modal')?.hidden) alert(isEn ? 'Update completed. Please restart the backend.' : '更新完成，请手动重启服务。');
             } catch(e) {
                 const msg = (e && e.name === 'AbortError')
-                    ? (isEn ? 'Update timed out. Switch source or check your network, then retry.' : '更新超时。请切换下载源或检查网络后重试。')
+                    ? (isEn ? 'Update timed out. Check your network, then retry.' : '更新超时。请检查网络后重试。')
                     : describeNetworkError(e, isEn);
                 setUpdateSummary('fail', isEn ? 'Update failed' : '更新失败', msg);
+                if(document.getElementById('project-update-modal')?.hidden) alert((isEn ? 'Update failed: ' : '更新失败：') + msg);
             } finally {
                 clearTimeout(killer);
                 projectUpdateRunning = false;
@@ -2763,12 +2775,16 @@
             try {
                 const info = await fetch('/api/app-info', { cache:'no-store' }).then(r => r.json()).catch(() => ({}));
                 appInfo = {...appInfo, ...info};
+                if(info.repo_url !== PROJECT_URL) {
+                    if(manual) alert(isEn ? 'Restart the backend to activate the nadou ai update source.' : '请先重启服务，启用 nadou ai 的更新源。');
+                    return;
+                }
                 let current = String(appInfo.version || '').trim();
                 setProjectVersionBadge(current);
                 let best = null;
                 let reachable = false;
                 let serverChecked = false;
-                // 优先走后端检测：服务端用系统代理同时检测 GitHub 和 ModelScope，避免浏览器跨域/被墙
+                // 优先由后端通过系统代理检测 GitHub，避免浏览器跨域限制。
                 try {
                     const r = await fetch('/api/check-update', { cache:'no-store' });
                     if(r.ok) {
@@ -2779,12 +2795,11 @@
                         if(d.latest?.version) best = {source:d.latest.source, version:d.latest.version, update_notes:d.latest.update_notes || d.update_notes || null};
                     }
                 } catch(e) {}
-                // 兜底：旧后端无 /api/check-update 时，浏览器直接拉取双源 VERSION
+                // 兼容旧后端：浏览器直接读取维护者仓库的 VERSION。
                 if(!serverChecked) {
                     const sources = appInfo.sources || {};
                     const candidates = [
                         {source:'github', url:sources.github?.version_url || appInfo.version_url || ''},
-                        {source:'modelscope', url:sources.modelscope?.version_url || ''},
                     ].filter(item => item.url);
                     for(const item of candidates) {
                         try {
@@ -2796,17 +2811,17 @@
                 }
                 const hasUpdate = !!(current && best?.version && compareVersions(best.version, current) > 0);
                 if(hasUpdate) {
-                    if(best.source === 'modelscope') setUpdateSource('modelscope');
                     setProjectUpdateNotes(best.update_notes || null);
-                    showUpdateNotice(current, best.version);
+                    showUpdateNotice(current, best.version, best.update_notes?.update_mode);
                 }
                 if(manual) {
                     if(hasUpdate) {
-                        openProjectUpdateModal();
+                        if(best.update_notes?.update_mode === 'in_app') openProjectUpdateModal();
+                        else window.open(`${PROJECT_URL}/releases`, '_blank', 'noopener');
                     } else if(reachable) {
                         alert(isEn ? `You are on the latest version (${versionLabel(current)}).` : `已是最新版本（${versionLabel(current)}）。`);
                     } else {
-                        alert(isEn ? 'Could not reach GitHub or ModelScope. Check your network/proxy and try again.' : '无法连接 GitHub 或 ModelScope 更新源，请检查网络或代理后重试。');
+                        alert(isEn ? 'Could not reach the nadou ai GitHub repository. Check your network or proxy and try again.' : '无法连接 nadou ai 的 GitHub 更新源，请检查网络或代理后重试。');
                     }
                 }
             } catch(e) {

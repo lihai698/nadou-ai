@@ -351,6 +351,7 @@ const errorMessage = document.getElementById('errorMessage');
 let canvases = [];
 let deletedCanvases = [];
 let canvas = null;
+let canvasOrphanUnknownSubmissionCount = 0;
 let nodes = [];
 let connections = [];
 let viewport = {x: -1800, y: -1000, scale: 1};
@@ -443,6 +444,8 @@ let canvasPromptLibraries = [];
 let activePromptLibraryId = 'system';
 const CANVAS_PROMPT_TEMPLATE_GROUPS_KEY = 'canvas_prompt_template_groups_v1';
 const CANVAS_PROMPT_TEMPLATE_OVERRIDES_KEY = 'canvas_prompt_template_overrides';
+const CANVAS_UNSAVED_ACCEPTED_TASKS_PREFIX = 'canvas_unsaved_accepted_tasks_v1:';
+const CANVAS_UNKNOWN_SUBMISSION_PREFIX = 'canvas_unknown_submission_v1:';
 let promptTemplateGroups = [];
 let promptTemplateGroupEditMode = false;
 let canvasPromptTemplateOverrides = {hiddenBuiltinIds:[], editedBuiltins:{}};
@@ -458,6 +461,7 @@ let managerSelectedWorkflowIds = new Set();
 let managerSelectedPromptIds = new Set();
 let activeCanvasWorkflowCategoryId = '';
 const activeCanvasTaskPolls = new Set();
+const activeCanvasComfyTaskPolls = new Set();
 let hoveredConnectionId = '';
 let lastMouseBoard = {x: 0, y: 0};
 let undoStack = [];
@@ -560,8 +564,6 @@ const DEFAULT_VIDEO_MODELS = [
     'doubao-seedance-1-0-pro-250528',
     'doubao-seedance-1-0-lite-t2v-250428',
     'doubao-seedance-1-0-lite-i2v-250428',
-    // Agnes
-    'agnes-video-v2.0'
 ];
 
 function uid(prefix='n'){ return `${prefix}_${Math.random().toString(16).slice(2)}_${Date.now()}`; }
@@ -1452,12 +1454,14 @@ function serializableCanvasNodes(list=nodes){
     return (list || []).map(serializableCanvasNode);
 }
 async function saveCanvas(){
-    if(!canvas || applyingRemoteCanvas) return;
+    if(!canvas || applyingRemoteCanvas) return false;
     if(savingCanvasNow){
         saveCanvasAgain = true;
-        return;
+        return false;
     }
     sanitizeConnections();
+    const savingCanvasId = canvas.id;
+    const sentNodes = serializableCanvasNodes();
     savingCanvasNow = true;
     saveCanvasAgain = false;
     try {
@@ -1467,41 +1471,59 @@ async function saveCanvas(){
             body:JSON.stringify({
                 title:canvas.title,
                 icon:canvas.icon || '🧩',
-                nodes:serializableCanvasNodes(),
+                nodes:sentNodes,
                 connections,
                 viewport,
                 logs:canvas.logs || [],
                 client_id:CLIENT_ID,
-                base_updated_at:Number(lastCanvasUpdatedAt || canvas.updated_at || 0)
+                base_updated_at:Number(lastCanvasUpdatedAt || canvas.updated_at || 0),
+                base_meta_revision:Number(canvas.meta_revision || 0)
             })
         });
         if(res.status === 409){
             const data = await res.json().catch(() => ({}));
             const remote = data.detail?.canvas || data.canvas;
+            if(data.detail?.reason === 'meta_conflict'){
+                if(!remote || !Array.isArray(remote.nodes)) throw new Error('meta conflict response missing canvas');
+                canvas.title = remote.title;
+                canvas.icon = remote.icon || 'layers';
+                canvas.meta_revision = Number(remote.meta_revision || 0);
+                lastCanvasUpdatedAt = Number(remote.updated_at || lastCanvasUpdatedAt || 0);
+                if(currentCanvasTitle) currentCanvasTitle.textContent = canvas.title || tr('canvas.untitled');
+                saveCanvasAgain = true;
+                setStatus('Saving...');
+                return false;
+            }
             if(localCanvasDirty || saveCanvasAgain){
                 lastCanvasUpdatedAt = Number(data.detail?.updated_at || data.updated_at || remote?.updated_at || lastCanvasUpdatedAt || 0);
                 saveCanvasAgain = true;
                 setStatus('Saving...');
-                return;
+                return false;
             }
             if(remote) applyRemoteCanvasData(remote);
             setStatus('Synced');
-            return;
+            return false;
         }
         if(!res.ok) throw new Error('save failed');
         const data = await res.json().catch(() => ({}));
+        if(!Array.isArray(data.canvas?.nodes)) throw new Error('save response missing nodes');
         const localViewport = {...viewport};
         if(data.canvas) canvas = {...canvas, ...data.canvas, viewport:localViewport};
         viewport = localViewport;
         canvas.updated_at = Number(canvas.updated_at || Date.now());
         lastCanvasUpdatedAt = canvas.updated_at;
+        if(currentCanvasTitle) currentCanvasTitle.textContent = canvas.title || tr('canvas.untitled');
         localCanvasDirty = Boolean(saveCanvasAgain);
         if(currentCanvasTime) currentCanvasTime.textContent = formatCanvasTime(canvas.updated_at);
         setStatus('Saved');
+        clearUnsavedCanvasAcceptedTasks(savingCanvasId, data.canvas.nodes);
+        clearUnsavedCanvasUnknownWarnings(savingCanvasId, data.canvas.nodes);
         loadCanvasList(false);
+        return true;
     } catch(e) {
         setStatus('Save failed');
         console.error(e);
+        return false;
     } finally {
         savingCanvasNow = false;
         if(saveCanvasAgain && canvas && !applyingRemoteCanvas){
@@ -1647,6 +1669,7 @@ async function patchCanvasMeta(id, patch){
     const item = canvases.find(c => c.id === id);
     if(item) Object.assign(item, patch);
     if(canvas?.id === id) Object.assign(canvas, patch);
+    if(canvas?.id === id && currentCanvasTitle) currentCanvasTitle.textContent = canvas.title || tr('canvas.untitled');
     sortCanvasListByUpdated();
     renderCanvasList();
     try {
@@ -1657,7 +1680,15 @@ async function patchCanvasMeta(id, patch){
         });
         if(!res.ok) throw new Error('meta save failed');
         const data = await res.json();
-        if(data.canvas) updateCanvasListRecord(data.canvas);
+        if(data.canvas){
+            if(canvas?.id === id){
+                canvas.title = data.canvas.title;
+                canvas.icon = data.canvas.icon;
+                canvas.meta_revision = Number(data.canvas.meta_revision || 0);
+                if(currentCanvasTitle) currentCanvasTitle.textContent = canvas.title || tr('canvas.untitled');
+            }
+            updateCanvasListRecord(data.canvas);
+        }
     } catch(e){
         setStatus(tr('canvas.metaSaveFailed') || '保存失败');
         console.error(e);
@@ -1922,6 +1953,7 @@ async function createCanvas(){
         resetCascadeRuntimeState();
         canvas = data.canvas;
         canvas.logs = canvas.logs || [];
+        canvasOrphanUnknownSubmissionCount = 0;
         nodes = canvas.nodes || [];
         connections = canvas.connections || [];
         viewport = localViewportForCanvas(canvas.id, canvas.viewport || {x:0, y:0, scale:1});
@@ -1959,35 +1991,8 @@ function toggleEmojiPicker(id, event){
 async function setCanvasIcon(id, icon, event){
     event?.preventDefault();
     event?.stopPropagation();
-    const item = canvases.find(c => c.id === id);
-    if(item) item.icon = icon || 'layers';
     closeCanvasMetaPopover();
-    renderCanvasList();
-    try {
-        let target = canvas?.id === id ? canvas : null;
-        if(!target) {
-            const data = await fetch(`/api/canvases/${id}`).then(r => r.json());
-            target = data.canvas;
-        }
-        target.icon = icon || 'layers';
-        const res = await fetch(`/api/canvases/${id}`, {
-            method:'PUT',
-            headers:{'Content-Type':'application/json'},
-            body:JSON.stringify({
-                title:target.title,
-                icon:target.icon,
-                nodes:target.nodes || [],
-                connections:target.connections || [],
-                viewport:target.viewport || {x:0, y:0, scale:1}
-            })
-        });
-        if(!res.ok) throw new Error('图标保存失败');
-        if(canvas?.id === id) canvas.icon = target.icon;
-        await loadCanvasList(false);
-    } catch(e) {
-        setStatus('图标保存失败');
-        console.error(e);
-    }
+    await patchCanvasMeta(id, {icon:icon || 'layers'});
 }
 function startTitleEdit(id, titleEl){
     if(!titleEl || titleEl.querySelector('input')) return;
@@ -2023,35 +2028,7 @@ function startTitleEdit(id, titleEl){
     };
 }
 async function setCanvasTitle(id, title){
-    const item = canvases.find(c => c.id === id);
-    if(item) item.title = title;
-    if(canvas?.id === id) canvas.title = title;
-    renderCanvasList();
-    try {
-        let target = canvas?.id === id ? canvas : null;
-        if(!target){
-            const data = await fetch(`/api/canvases/${id}`).then(r => r.json());
-            target = data.canvas;
-        }
-        target.title = title;
-        const res = await fetch(`/api/canvases/${id}`, {
-            method:'PUT',
-            headers:{'Content-Type':'application/json'},
-            body:JSON.stringify({
-                title:target.title,
-                icon:target.icon,
-                nodes:target.nodes || [],
-                connections:target.connections || [],
-                viewport:target.viewport || {x:0, y:0, scale:1}
-            })
-        });
-        if(!res.ok) throw new Error('重命名失败');
-        if(currentCanvasTitle && canvas?.id === id) currentCanvasTitle.textContent = title;
-        await loadCanvasList(false);
-    } catch(e){
-        setStatus('重命名失败');
-        console.error(e);
-    }
+    await patchCanvasMeta(id, {title});
 }
 async function openCanvas(id){
     setStatus('Opening...');
@@ -2077,6 +2054,8 @@ async function openCanvas(id){
         localCanvasDirty = false;
         resetTransientRunState(nodes);
         sanitizeConnections();
+        const recoveredUnsavedTasks = restoreUnsavedCanvasAcceptedTasks();
+        const recoveredUnknownSubmissions = restoreUnsavedCanvasUnknownWarnings();
         pruneMissingComfyWorkflows();
         await refreshMissingCanvasAssets();
         selected.clear();
@@ -2084,6 +2063,8 @@ async function openCanvas(id){
         renderCanvasList();
         render();
         resumeCanvasImageTasks();
+        if(recoveredUnsavedTasks) showErrorModal(`已恢复 ${recoveredUnsavedTasks} 个尚未保存的任务编号。请在结果卡片点击“保存并查询”，不要重新提交。`, tr('canvas.apiFailed'));
+        else if(recoveredUnknownSubmissions) showErrorModal(`已恢复 ${recoveredUnknownSubmissions} 条受理状态未知的提示。再次提交前请核对原任务，避免重复计费。`, tr('canvas.apiFailed'));
         startCanvasRemotePolling();
         setStatus('Ready');
     } catch(e) {
@@ -2138,13 +2119,13 @@ function resetTransientRunState(list=nodes){
         if(node._cascadeFailed) node._cascadeFailed = false;
     });
 }
-function canvasLocalAssetUrls(){
+function canvasLocalAssetUrls(nodeList=nodes, logList=canvas?.logs || []){
     const urls = new Set();
     const add = value => {
         const url = outputUrlValue(value);
         if(url && (url.startsWith('/output/') || url.startsWith('/assets/'))) urls.add(url);
     };
-    nodes.forEach(node => {
+    nodeList.forEach(node => {
         if(node.url) add(node.url);
         (node.images || []).forEach(add);
         (node.generatedOutputs || []).forEach(add);
@@ -2153,7 +2134,7 @@ function canvasLocalAssetUrls(){
             add(value);
         });
     });
-    (canvas?.logs || []).forEach(log => {
+    logList.forEach(log => {
         (log.outputs || []).forEach(add);
         (log.refs || []).forEach(add);
         (log.run?.refs || []).forEach(add);
@@ -2200,7 +2181,9 @@ async function checkRemoteCanvasVersion(){
         if(!res.ok) throw new Error('meta failed');
         const meta = await res.json();
         const remoteUpdatedAt = Number(meta.updated_at || 0);
-        if(remoteUpdatedAt > Number(lastCanvasUpdatedAt || 0)){
+        const remoteMetaRevision = Number(meta.meta_revision || 0);
+        if(remoteUpdatedAt > Number(lastCanvasUpdatedAt || 0)
+            || remoteMetaRevision !== Number(canvas.meta_revision || 0)){
             await syncRemoteCanvasNow();
         }
     } catch(e) {
@@ -6062,18 +6045,19 @@ function pendingOutputStyle(pending){
     return ` style="aspect-ratio:${Math.max(1, size.w)}/${Math.max(1, size.h)}"`;
 }
 function renderPendingOutput(pending){
-    if(pending?.failed){
-        const taskId = pending.recoverTaskId || '';
+    if(pending?.failed || pending?.queryPaused){
+        const taskId = pending.taskLost ? pending.canvasTaskId : pending.queryPaused ? pending.canvasTaskId : pending.recoverTaskId || '';
         const querying = Boolean(pending.querying);
+        const remoteRefreshable = Boolean(pending.remoteRefreshable && pending.canvasTaskType === 'video' && pending.canvasTaskId);
         const msg = pending.error || tr('canvas.generationFailed');
         const sub = taskId ? `任务 ID：${escapeHtml(taskId)}` : '没有任务 ID，无法查询';
         return `<div class="output-img-wrap loading-wrap recoverable" data-pending-id="${escapeAttr(pending.id)}"${pendingOutputStyle(pending)}>
-            <span class="output-time-pill failed">失败</span>
+            <span class="output-time-pill failed">${pending.savePending ? '保存待重试' : pending.queryPaused ? '查询暂停' : '失败'}</span>
             <div class="output-recover-state">
                 <i data-lucide="refresh-cw" class="${querying ? 'spinning' : ''}"></i>
-                <div class="output-recover-title">${querying ? '查询中' : '任务未丢失'}</div>
-                <div class="output-recover-sub" title="${escapeAttr(msg)}">${sub}</div>
-                <button class="output-recover-query" type="button" ${taskId && !querying ? '' : 'disabled'}>${querying ? '查询中...' : '查询结果'}</button>
+                <div class="output-recover-title">${querying ? '查询中' : remoteRefreshable ? '远端状态未知' : pending.taskLost ? '本地任务记录已失效' : pending.savePending ? '编号未保存，未重新生成' : pending.queryPaused ? '暂时无法查询，未重新生成' : '任务未丢失'}</div>
+                <div class="output-recover-sub" title="${escapeAttr(msg)}">${pending.taskLost ? escapeHtml(msg) : sub}</div>
+                <button class="output-recover-query" type="button" ${taskId && !querying && (!pending.taskLost || remoteRefreshable) ? '' : 'disabled'}>${querying ? '查询中...' : remoteRefreshable ? '刷新远端结果' : pending.savePending ? '保存并查询' : '查询结果'}</button>
             </div>
             <button class="output-del" title="${tr('common.delete')}">×</button>
         </div>`;
@@ -6160,7 +6144,13 @@ function renderNode(node){
         const label = { queued:'排队中', running:'运行中', done:'完成', failed:'失败' }[node.runStatus] || '';
         return `<span class="node-run-status ${node.runStatus}"><span class="dot"></span>${escapeHtml(label)}${node._cascadeIdx?' '+node._cascadeIdx:''}</span>`;
     })() : '';
-    el.innerHTML = `<div class="node-head"><span class="node-title">${displayTitle}</span><div style="display:flex;align-items:center;gap:8px">${statusHtml}<button onclick="deleteNodeFromButton('${node.id}', event)" class="text-gray-300 hover:text-red-500"><i data-lucide="x" class="w-4 h-4"></i></button></div></div>`;
+    const submissionWarningHtml = node.submissionWarning
+        ? `<button type="button" class="node-run-status failed node-submission-warning" style="border:0;cursor:pointer;font-family:inherit" title="${escapeAttr(node.submissionWarning)}"><span class="dot"></span>${node.submissionUnknown ? '提交状态未知' : '部分受理'}</button>` : '';
+    el.innerHTML = `<div class="node-head"><span class="node-title">${displayTitle}</span><div style="display:flex;align-items:center;gap:8px">${statusHtml}${submissionWarningHtml}<button onclick="deleteNodeFromButton('${node.id}', event)" class="text-gray-300 hover:text-red-500"><i data-lucide="x" class="w-4 h-4"></i></button></div></div>`;
+    el.querySelector('.node-submission-warning')?.addEventListener('click', e => {
+        e.stopPropagation();
+        showErrorModal(node.submissionWarning, tr('canvas.apiFailed'));
+    });
     const body = document.createElement('div');
     body.className = 'node-body';
     if(node.type === 'image') {
@@ -6448,7 +6438,10 @@ function bindOutputWrap(wrap, node){
             e.preventDefault();
             e.stopPropagation();
             const pid = wrap.dataset.pendingId;
-            if(pid) queryRecoverPendingOutput(pid);
+            const pending = pendingById(node, pid);
+            if(pending?.canvasTaskType === 'video' && pending.canvasTaskId && (pending.queryPaused || pending.remoteRefreshable)){
+                saveAndQueryCanvasPendingTask(pending);
+            } else if(pid) queryRecoverPendingOutput(pid);
         };
     }
 }
@@ -7247,9 +7240,6 @@ function loadCanvasPromptTemplateGroups(){
         promptTemplateGroups = defaultCanvasPromptTemplateGroups();
     }
 }
-function saveCanvasPromptTemplateGroups(){
-    localStorage.setItem(CANVAS_PROMPT_TEMPLATE_GROUPS_KEY, JSON.stringify(promptTemplateGroups));
-}
 function loadCanvasPromptTemplateOverrides(){
     try {
         const data = JSON.parse(localStorage.getItem(CANVAS_PROMPT_TEMPLATE_OVERRIDES_KEY) || '{}');
@@ -7316,15 +7306,20 @@ function renderCanvasPromptLibrarySelect(){
 }
 function activeCanvasPromptTemplateGroups(){
     const lib = activeCanvasPromptLibrary();
-    if(!lib || lib.id === 'system') return promptTemplateGroups;
-    return Array.isArray(lib.categories) ? lib.categories.filter(c => c?.id && c?.name) : [];
+    const shared = Array.isArray(lib?.categories) ? lib.categories.filter(c => c?.id && c?.name) : [];
+    if(lib?.id !== 'system') return shared;
+    // Keep older browser-only groups visible without silently publishing them to the shared library.
+    const sharedIds = new Set(shared.map(group => group.id));
+    const builtinIds = new Set(defaultCanvasPromptTemplateGroups().map(group => group.id));
+    const legacy = promptTemplateGroups
+        .filter(group => !sharedIds.has(group.id) && !builtinIds.has(group.id))
+        .map(group => ({...group, legacyLocal:true}));
+    return [...shared, ...legacy];
 }
 function canvasPromptTemplateCategoryLabel(category){
     if(category === 'all') return tr('smart.tplAll');
-    const lib = activeCanvasPromptLibrary();
-    if(lib && lib.id !== 'system'){
-        return activeCanvasPromptTemplateGroups().find(g => g.id === category)?.name || category || '';
-    }
+    const group = activeCanvasPromptTemplateGroups().find(g => g.id === category);
+    if(group) return group.legacyLocal ? `${group.name}${langIsEn() ? ' (local legacy)' : '（旧本地）'}` : group.name;
     const builtin = {
         view:tr('smart.tplCatView'),
         storyboard:tr('smart.tplCatStoryboard'),
@@ -7334,7 +7329,13 @@ function canvasPromptTemplateCategoryLabel(category){
         custom:tr('smart.tplCatMine'),
         mine:tr('smart.tplCatMine')
     };
-    return builtin[category] || promptTemplateGroups.find(g => g.id === category)?.name || category || '';
+    return builtin[category] || category || '';
+}
+function selectedCanvasPromptTemplateGroupIsLegacy(){
+    return activeCanvasPromptTemplateGroups().some(group => group.id === promptTemplateCategory && group.legacyLocal);
+}
+function canvasPromptTemplateIsLegacy(item){
+    return activeCanvasPromptTemplateGroups().some(group => group.id === item?.category && group.legacyLocal);
 }
 function canvasPromptTemplateName(template){
     if(langIsEn() && template?.name_en) return template.name_en;
@@ -7405,6 +7406,7 @@ function syncCanvasPromptTemplateMutation(data, fallbackSelectedId=''){
 async function saveCurrentCanvasPromptAsTemplate(){
     const lib = activeCanvasPromptLibrary();
     if(!currentCanvasPromptTemplateLibraryEditable()){ setStatus('请选择可编辑的提示词库'); return; }
+    if(selectedCanvasPromptTemplateGroupIsLegacy()){ setStatus('旧本地分组只读，请选择共享分组后保存'); return; }
     const text = currentCanvasPromptTemplateNodeText();
     if(!text){ setStatus('当前提示词为空'); return; }
     try {
@@ -7433,6 +7435,7 @@ async function saveCurrentCanvasPromptAsTemplate(){
 async function createBlankCanvasPromptTemplate(){
     const lib = activeCanvasPromptLibrary();
     if(!currentCanvasPromptTemplateLibraryEditable()){ setStatus('请选择可编辑的提示词库'); return; }
+    if(selectedCanvasPromptTemplateGroupIsLegacy()){ setStatus('旧本地分组只读，请选择共享分组后新建'); return; }
     const category = promptTemplateCategory && promptTemplateCategory !== 'all' ? promptTemplateCategory : 'custom';
     try {
         const data = await fetch('/api/prompt-libraries/items', {
@@ -7456,6 +7459,7 @@ async function saveCanvasPromptTemplateEdit(){
     const lib = activeCanvasPromptLibrary();
     const item = selectedCanvasPromptTemplate();
     if(!item) return;
+    if(canvasPromptTemplateIsLegacy(item)){ setStatus('旧本地分组只读，请选择共享分组后编辑'); return; }
     const name = promptTemplatePanel.querySelector('[data-template-edit-name]')?.value?.trim() || '';
     const positive = promptTemplatePanel.querySelector('[data-template-edit-text]')?.value?.trim() || '';
     const category = promptTemplatePanel.querySelector('[data-template-edit-category]')?.value || 'mine';
@@ -7500,6 +7504,7 @@ async function saveCanvasPromptTemplateEdit(){
 async function deleteCanvasPromptTemplate(){
     const item = selectedCanvasPromptTemplate();
     if(!item) return;
+    if(canvasPromptTemplateIsLegacy(item)){ setStatus('旧本地分组只读，请选择共享分组后删除'); return; }
     if(!window.confirm(`删除提示词「${canvasPromptTemplateName(item) || '提示词'}」？`)) return;
     try {
         // 系统库现在是 remote，删除走后端 DELETE 并同步；仅非 remote 的内置项才退回本地隐藏。
@@ -7550,79 +7555,44 @@ async function createCanvasPromptTemplateGroup(){
     const name = window.prompt(tr('smart.tplNewGroupPrompt'), tr('smart.tplNewGroupDefault'));
     if(!String(name || '').trim()) return;
     const lib = activeCanvasPromptLibrary();
-    if(lib && lib.id !== 'system'){
-        try {
-            const data = await fetch('/api/prompt-libraries/categories', {
-                method:'POST', headers:{'Content-Type':'application/json'},
-                body:JSON.stringify({name:String(name).trim().slice(0, 24), library_id:lib.id})
-            }).then(async r => { if(!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || '新增分组失败'); return r.json(); });
-            canvasPromptLibraries = data.library?.libraries || canvasPromptLibraries;
-            promptTemplateCategory = data.category?.id || promptTemplateCategory;
-            refreshCanvasPromptTemplatesFromLibraries();
-            renderPromptTemplateModal();
-        } catch(err){ setStatus(err.message || '新增分组失败'); }
-        return;
-    }
-    const group = {id:uid('tpl_group'), name:String(name).trim().slice(0, 24)};
-    promptTemplateGroups.push(group);
-    saveCanvasPromptTemplateGroups();
-    promptTemplateCategory = group.id;
-    renderPromptTemplateModal();
+    try {
+        const data = await fetch('/api/prompt-libraries/categories', {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({name:String(name).trim().slice(0, 24), library_id:lib.id})
+        }).then(async r => { if(!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || '新增分组失败'); return r.json(); });
+        canvasPromptLibraries = data.library?.libraries || canvasPromptLibraries;
+        promptTemplateCategory = data.category?.id || promptTemplateCategory;
+        refreshCanvasPromptTemplatesFromLibraries();
+        renderPromptTemplateModal();
+    } catch(err){ setStatus(err.message || '新增分组失败'); }
 }
 async function renameCanvasPromptTemplateGroup(groupId){
     const lib = activeCanvasPromptLibrary();
     const group = activeCanvasPromptTemplateGroups().find(g => g.id === groupId);
-    if(!group) return;
+    if(!group || group.legacyLocal) return;
     const name = window.prompt(tr('smart.tplGroupNamePrompt'), group.name || '');
     if(!String(name || '').trim()) return;
-    if(lib && lib.id !== 'system'){
-        try {
-            const data = await fetch(`/api/prompt-libraries/categories/${encodeURIComponent(groupId)}`, {
-                method:'PATCH', headers:{'Content-Type':'application/json'},
-                body:JSON.stringify({name:String(name).trim().slice(0, 24), library_id:lib.id})
-            }).then(async r => { if(!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || '重命名失败'); return r.json(); });
-            canvasPromptLibraries = data.library?.libraries || canvasPromptLibraries;
-            refreshCanvasPromptTemplatesFromLibraries();
-            renderPromptTemplateModal();
-        } catch(err){ setStatus(err.message || '重命名失败'); }
-        return;
-    }
-    group.name = String(name).trim().slice(0, 24);
-    saveCanvasPromptTemplateGroups();
-    renderPromptTemplateModal();
+    try {
+        const data = await fetch(`/api/prompt-libraries/categories/${encodeURIComponent(groupId)}`, {
+            method:'PATCH', headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({name:String(name).trim().slice(0, 24), library_id:lib.id})
+        }).then(async r => { if(!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || '重命名失败'); return r.json(); });
+        canvasPromptLibraries = data.library?.libraries || canvasPromptLibraries;
+        refreshCanvasPromptTemplatesFromLibraries();
+        renderPromptTemplateModal();
+    } catch(err){ setStatus(err.message || '重命名失败'); }
 }
 async function deleteCanvasPromptTemplateGroup(groupId){
-    const lib = activeCanvasPromptLibrary();
-    if(lib && lib.id !== 'system'){
-        if(!window.confirm(tr('smart.tplDeleteGroupConfirm'))) return;
-        try {
-            const data = await fetch(`/api/prompt-libraries/categories/${encodeURIComponent(groupId)}`, {method:'DELETE'})
-                .then(async r => { if(!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || '删除失败'); return r.json(); });
-            canvasPromptLibraries = data.library?.libraries || canvasPromptLibraries;
-            if(promptTemplateCategory === groupId) promptTemplateCategory = 'all';
-            refreshCanvasPromptTemplatesFromLibraries();
-            renderPromptTemplateModal();
-        } catch(err){ setStatus(err.message || '删除失败'); }
-        return;
-    }
-    if(['view','storyboard','character','product','lighting','mine'].includes(groupId)){
-        renameCanvasPromptTemplateGroup(groupId);
-        return;
-    }
+    if(activeCanvasPromptTemplateGroups().find(group => group.id === groupId)?.legacyLocal) return;
     if(!window.confirm(tr('smart.tplDeleteGroupConfirm'))) return;
-    promptTemplateGroups = promptTemplateGroups.filter(g => g.id !== groupId);
-    Object.entries(canvasPromptTemplateOverrides.editedBuiltins || {}).forEach(([id, item]) => {
-        if(item?.category === groupId) canvasPromptTemplateOverrides.editedBuiltins[id] = {...item, category:'mine'};
-    });
-    canvasPromptLibraries = canvasPromptLibraries.map(lib => ({
-        ...lib,
-        items:(lib.items || []).map(item => item.category === groupId ? {...item, category:'mine'} : item)
-    }));
-    if(promptTemplateCategory === groupId) promptTemplateCategory = 'all';
-    saveCanvasPromptTemplateGroups();
-    saveCanvasPromptTemplateOverrides();
-    refreshCanvasPromptTemplatesFromLibraries();
-    renderPromptTemplateModal();
+    try {
+        const data = await fetch(`/api/prompt-libraries/categories/${encodeURIComponent(groupId)}`, {method:'DELETE'})
+            .then(async r => { if(!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || '删除失败'); return r.json(); });
+        canvasPromptLibraries = data.library?.libraries || canvasPromptLibraries;
+        if(promptTemplateCategory === groupId) promptTemplateCategory = 'all';
+        refreshCanvasPromptTemplatesFromLibraries();
+        renderPromptTemplateModal();
+    } catch(err){ setStatus(err.message || '删除失败'); }
 }
 function renderPromptTemplateModal(){
     if(!promptTemplateModal || !promptTemplatePanel || !promptTemplateCats || !promptTemplateBody) return;
@@ -7651,13 +7621,13 @@ function renderPromptTemplateModal(){
             </div>
             <div class="prompt-template-group-list">
                 ${activeGroups.map(group => `
-                    <div class="prompt-template-group-row ${['view','storyboard','character','product','lighting','mine'].includes(group.id) ? '' : 'has-delete'}">
+                    <div class="prompt-template-group-row ${(!group.legacyLocal && !['view','storyboard','character','product','lighting','mine'].includes(group.id)) ? 'has-delete' : ''}">
                         <button type="button" class="group-name ${group.id === promptTemplateCategory ? 'active' : ''}" data-template-cat="${escapeAttr(group.id)}">
                             <span>${escapeHtml(canvasPromptTemplateCategoryLabel(group.id))}</span>
                             <small>${counts[group.id] || 0}</small>
                         </button>
-                        <button type="button" class="group-tool" data-template-cat-edit="${escapeAttr(group.id)}" title="${escapeAttr(tr('smart.tplRename'))}"><i data-lucide="pencil"></i></button>
-                        ${['view','storyboard','character','product','lighting','mine'].includes(group.id) ? '' : `<button type="button" class="group-tool danger" data-template-cat-delete="${escapeAttr(group.id)}" title="${escapeAttr(tr('common.delete'))}"><i data-lucide="trash-2"></i></button>`}
+                        ${group.legacyLocal ? '' : `<button type="button" class="group-tool" data-template-cat-edit="${escapeAttr(group.id)}" title="${escapeAttr(tr('smart.tplRename'))}"><i data-lucide="pencil"></i></button>
+                        ${['view','storyboard','character','product','lighting','mine'].includes(group.id) ? '' : `<button type="button" class="group-tool danger" data-template-cat-delete="${escapeAttr(group.id)}" title="${escapeAttr(tr('common.delete'))}"><i data-lucide="trash-2"></i></button>`}`}
                     </div>
                 `).join('')}
             </div>
@@ -7678,8 +7648,9 @@ function renderPromptTemplateModal(){
     const items = canvasPromptTemplateVisibleItems();
     if(items.length && !items.some(item => item.id === promptTemplateSelectedId)) promptTemplateSelectedId = items[0].id;
     const selected = items.find(item => item.id === promptTemplateSelectedId) || items[0] || null;
-    const canCreateCurrentLibrary = currentCanvasPromptTemplateLibraryEditable();
-    const editMode = Boolean(promptTemplateEditing && selected);
+    const canCreateCurrentLibrary = currentCanvasPromptTemplateLibraryEditable() && !selectedCanvasPromptTemplateGroupIsLegacy();
+    const canEditSelectedTemplate = currentCanvasPromptTemplateLibraryEditable() && !canvasPromptTemplateIsLegacy(selected);
+    const editMode = Boolean(promptTemplateEditing && selected && canEditSelectedTemplate);
     promptTemplateBody.innerHTML = `
         <div class="prompt-template-list">
             <div class="prompt-template-list-tools">
@@ -7704,8 +7675,8 @@ function renderPromptTemplateModal(){
                     </div>
                     ${editMode ? '' : `
                         <div class="prompt-template-icon-actions">
-                            <button type="button" data-template-edit title="${escapeAttr(tr('smart.tplEditTemplate'))}"><i data-lucide="pencil"></i><span>${escapeHtml(tr('common.edit'))}</span></button>
-                            <button type="button" class="danger" data-template-delete title="${escapeAttr(tr('smart.tplDeleteTemplate'))}"><i data-lucide="trash-2"></i><span>${escapeHtml(tr('common.delete'))}</span></button>
+                            <button type="button" ${canEditSelectedTemplate ? '' : 'disabled'} data-template-edit title="${escapeAttr(tr('smart.tplEditTemplate'))}"><i data-lucide="pencil"></i><span>${escapeHtml(tr('common.edit'))}</span></button>
+                            <button type="button" class="danger" ${canEditSelectedTemplate ? '' : 'disabled'} data-template-delete title="${escapeAttr(tr('smart.tplDeleteTemplate'))}"><i data-lucide="trash-2"></i><span>${escapeHtml(tr('common.delete'))}</span></button>
                         </div>
                     `}
                 </div>
@@ -7715,7 +7686,7 @@ function renderPromptTemplateModal(){
                     <input data-template-edit-name value="${escapeAttr(canvasPromptTemplateName(selected) || '')}" placeholder="${escapeAttr(tr('smart.tplName'))}">
                     <label>${escapeHtml(tr('smart.tplGroup'))}</label>
                     <select data-template-edit-category>
-                        ${promptTemplateGroups.map(group => `<option value="${escapeAttr(group.id)}" ${group.id === (selected.category || 'mine') ? 'selected' : ''}>${escapeHtml(canvasPromptTemplateCategoryLabel(group.id))}</option>`).join('')}
+                        ${activeGroups.map(group => `<option value="${escapeAttr(group.id)}" ${group.id === (selected.category || 'custom') ? 'selected' : ''} ${group.legacyLocal && group.id !== selected.category ? 'disabled' : ''}>${escapeHtml(canvasPromptTemplateCategoryLabel(group.id))}</option>`).join('')}
                     </select>
                     <label>${escapeHtml(tr('smart.tplContent'))}</label>
                     <textarea data-template-edit-text placeholder="${escapeAttr(tr('smart.tplContent'))}">${escapeHtml(selected.positive || '')}</textarea>
@@ -9988,7 +9959,7 @@ function currentRunningHubWorkflowConfig(node){
             title:entry.title || cached?.title || workflowId,
             fields:rhEntryFields(entry).length ? rhEntryFields(entry) : (cached?.fields || []),
             optionalImageMode:entry.optionalImageMode || cached?.optionalImageMode || 'prune-workflow',
-            workflowJson:rhWorkflowJsonFromSources(cached?.workflowJson, entry.workflowJson, entry.raw?.workflowJson, entry.raw?.prompt)
+            workflowJson:rhWorkflowJsonFromSources(cached?.workflowJson, entry.workflowJson)
         };
     }
     return workflowId ? runningHubWorkflowCache[workflowId] : null;
@@ -10789,6 +10760,7 @@ async function runRhModelNode(node, opts={}){
     const prompt = media.prompt || '';
     const refs = imageRefsOnly(media.refs || []);
     if(!prompt && !refs.length){ alert(tr('canvas.needPromptOrImage')); return; }
+    if(!confirmCanvasUnknownResubmission(node, opts)) return;
     const count = Math.max(1, Math.min(8, Number(node.count || 1)));
     let out = outputForNode(node, 500);
     const run = runSnapshot(node, prompt || 'Edit the reference images.', refs);
@@ -10809,23 +10781,23 @@ async function runRhModelNode(node, opts={}){
         refreshRunNodes(node, out);
         setTimeout(() => { node.running = false; refreshRunNodes(node, out); }, 2000);
     }
+    rememberCanvasSubmissionWarning(node, '');
     try {
-        const taskInfos = await Promise.all(Array.from({length:count}, () => createCanvasImageTask(payload, {cascadeTargetId})));
+        const submission = await submitCanvasImageTaskBatch(count, payload, {cascadeTargetId});
+        const {taskInfos, warning, unknownCount} = submission;
+        rememberCanvasSubmissionWarning(node, warning, unknownCount > 0);
         if(!out){
-            let outputs = [];
-            for(const task of taskInfos){
-                const result = await waitCanvasImageTaskResult(task.task_id, {cascadeTargetId});
-                outputs.push(...(result.images || []));
-                run.request = requestMetaFromResult(result);
-            }
+            const outputs = await waitCanvasDirectTasks(node, taskInfos, run, {cascadeTargetId, refs, requestSize:payload.size, providerId:payload.provider_id, model:payload.model,
+                onAcceptedSaved:() => { if(warning && !opts.cascade) showErrorModal(warning, tr('canvas.apiFailed')); }});
             if(!outputs.length) throw new Error(tr('canvas.generationFailed'));
             mergeGeneratedOutputs(node, outputs, Boolean(opts.cascade));
             addGenerationLog({run, outputs, runMs:nowMs() - startedAt});
             node.runStatus = 'done';
-            node.runError = '';
+            node.runError = warning;
             node.running = false;
             refreshRunNodes(node, out);
             scheduleSave();
+            if(warning && opts.cascade) throw new Error(warning);
             return;
         }
         pendingIds = taskInfos.map(() => uid('p'));
@@ -10841,17 +10813,33 @@ async function runRhModelNode(node, opts={}){
         ];
         refreshRunNodes(node, out);
         scheduleSave();
-        await saveCanvas();
+        if(!await saveCanvas()) throw pauseCanvasAcceptedTasksUntilSaved(node, pendingIds.map(id => pendingById(out, id)).filter(Boolean), out);
+        if(warning && !opts.cascade) showErrorModal(warning, tr('canvas.apiFailed'));
         const statuses = await Promise.all(taskInfos.map(task => pollCanvasImageTask(task.task_id, {cascadeTargetId})));
         if(statuses.includes('aborted')) throw cascadeAbortError(cascadeStopMessage());
         if(statuses.includes('failed')) throw new Error(node.runError || tr('canvas.generationFailed'));
+        if(warning){
+            node.runError = warning;
+            refreshRunNodes(node, out);
+            scheduleSave();
+            if(opts.cascade) throw new Error(warning);
+        }
     } catch(err) {
+        if(err.submissionUnknown) rememberCanvasSubmissionWarning(node, err.message, true);
         const remainingPending = pendingIds.map(id => pendingById(out, id)).filter(Boolean);
-        const removableIds = remainingPending.filter(p => !(p.failed && p.recoverTaskId)).map(p => p.id);
+        const removableIds = remainingPending.filter(p => !(p.queryRecoverable || (p.failed && p.recoverTaskId))).map(p => p.id);
         if(removableIds.length){
             const metas = collectRunMetas(out, removableIds);
             addGenerationLog({run, outputs:[], runMs:Math.max(...metas.map(m => m.runMs || 0), 0), error:err.message || String(err)});
             if(out) out._pending = (out._pending || []).filter(p => !removableIds.includes(p.id));
+        }
+        if(err.queryPaused){
+            node.runStatus = 'query-paused';
+            node.running = false;
+            refreshRunNodes(node, out);
+            scheduleSave();
+            if(opts.cascade) throw cascadeAbortError('查询暂停，请先恢复原任务结果');
+            return;
         }
         if(isCascadeAbortError(err)){
             node.running = false;
@@ -11306,6 +11294,7 @@ async function runGenerator(genId, opts={}){
     const prompt = sources.map(s => s.prompt).filter(Boolean).join('\n\n');
     const refs = imageRefsOnly(sources.flatMap(s => s.refs || []));
     if(!prompt && !refs.length){ alert(tr('canvas.needPromptOrImage')); return; }
+    if(!confirmCanvasUnknownResubmission(gen, opts)) return;
     const count = Math.max(1, Math.min(8, Number(gen.count || 1)));
     let out = outputForNode(gen, 460);
     const run = runSnapshot(gen, prompt || 'Edit the reference images.', refs);
@@ -11326,23 +11315,23 @@ async function runGenerator(genId, opts={}){
         // API 支持并发：2s 后即可再次点击，任务仍由 pending 卡片继续追踪
         setTimeout(() => { gen.running = false; refreshRunNodes(gen, out); }, 2000);
     }
+    rememberCanvasSubmissionWarning(gen, '');
     try {
-        const taskInfos = await Promise.all(Array.from({length:count}, () => createCanvasImageTask(payload, {cascadeTargetId})));
+        const submission = await submitCanvasImageTaskBatch(count, payload, {cascadeTargetId});
+        const {taskInfos, warning, unknownCount} = submission;
+        rememberCanvasSubmissionWarning(gen, warning, unknownCount > 0);
         if(!out){
-            let outputs = [];
-            for(const task of taskInfos){
-                const result = await waitCanvasImageTaskResult(task.task_id, {cascadeTargetId});
-                outputs.push(...(result.images || []));
-                run.request = requestMetaFromResult(result);
-            }
+            const outputs = await waitCanvasDirectTasks(gen, taskInfos, run, {cascadeTargetId, refs, requestSize:payload.size, providerId:payload.provider_id, model:payload.model,
+                onAcceptedSaved:() => { if(warning && !opts.cascade) showErrorModal(warning, tr('canvas.apiFailed')); }});
             if(!outputs.length) throw new Error(tr('canvas.generationFailed'));
             mergeGeneratedOutputs(gen, outputs, Boolean(opts.cascade));
             addGenerationLog({run, outputs, runMs:nowMs() - startedAt});
             gen.runStatus = 'done';
-            gen.runError = '';
+            gen.runError = warning;
             gen.running = false;
             refreshRunNodes(gen, out);
             scheduleSave();
+            if(warning && opts.cascade) throw new Error(warning);
             return;
         }
         pendingIds = taskInfos.map(() => uid('p'));
@@ -11358,17 +11347,33 @@ async function runGenerator(genId, opts={}){
         ];
         refreshRunNodes(gen, out);
         scheduleSave();
-        await saveCanvas();
+        if(!await saveCanvas()) throw pauseCanvasAcceptedTasksUntilSaved(gen, pendingIds.map(id => pendingById(out, id)).filter(Boolean), out);
+        if(warning && !opts.cascade) showErrorModal(warning, tr('canvas.apiFailed'));
         const statuses = await Promise.all(taskInfos.map(task => pollCanvasImageTask(task.task_id, {cascadeTargetId})));
         if(statuses.includes('aborted')) throw cascadeAbortError(cascadeStopMessage());
         if(statuses.includes('failed')) throw new Error(gen.runError || tr('canvas.generationFailed'));
+        if(warning){
+            gen.runError = warning;
+            refreshRunNodes(gen, out);
+            scheduleSave();
+            if(opts.cascade) throw new Error(warning);
+        }
     } catch(err) {
+        if(err.submissionUnknown) rememberCanvasSubmissionWarning(gen, err.message, true);
         const remainingPending = pendingIds.map(id => pendingById(out, id)).filter(Boolean);
-        const removableIds = remainingPending.filter(p => !(p.failed && p.recoverTaskId)).map(p => p.id);
+        const removableIds = remainingPending.filter(p => !(p.queryRecoverable || (p.failed && p.recoverTaskId))).map(p => p.id);
         if(removableIds.length){
             const metas = collectRunMetas(out, removableIds);
             addGenerationLog({run, outputs:[], runMs:Math.max(...metas.map(m => m.runMs || 0), 0), error:err.message || String(err)});
             if(out) out._pending = (out._pending||[]).filter(p => !removableIds.includes(p.id));
+        }
+        if(err.queryPaused){
+            gen.runStatus = 'query-paused';
+            gen.running = false;
+            refreshRunNodes(gen, out);
+            scheduleSave();
+            if(opts.cascade) throw cascadeAbortError('查询暂停，请先恢复原任务结果');
+            return;
         }
         if(isCascadeAbortError(err)){
             gen.running = false;
@@ -11599,6 +11604,185 @@ async function runGeneratorLegacy(genId, opts={}){
         showErrorModal(err.message || tr('canvas.generationFailed'), tr('canvas.apiFailed'));
     }
 }
+function canvasVideoTaskIdForPending(pending){
+    if(!pending) return '';
+    if(!pending.canvasTaskId){
+        pending.canvasTaskId = `canvas_video_${uid('v').replace(/[^A-Za-z0-9_-]/g, '')}`;
+    }
+    pending.canvasTaskType = 'video';
+    pending.queryRecoverable = true;
+    return pending.canvasTaskId;
+}
+async function createCanvasVideoTask(payload, pending){
+    const taskId = canvasVideoTaskIdForPending(pending);
+    const response = await fetch('/api/canvas-video-tasks', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({...payload, client_task_id:taskId})
+    });
+    if(!response.ok) throw new Error(await responseErrorMessage(response, '视频任务提交失败'));
+    const task = await response.json();
+    if(!task.task_id) throw new Error('视频任务未返回本地编号，未继续提交');
+    return task;
+}
+async function refreshCanvasVideoTaskOnce(taskId, options={}){
+    const cascadeTargetId = cascadeTargetIdFromOptions(options);
+    const response = await cascadeFetch(`/api/canvas-video-tasks/${encodeURIComponent(taskId)}/refresh`, {
+        method:'POST'
+    }, {cascadeTargetId});
+    if(!response.ok){
+        const error = new Error(await responseErrorMessage(response, '视频任务刷新失败'));
+        if(response.status === 404 || response.status === 409){
+            error.taskLost = true;
+            error.videoTaskRefreshUnavailable = true;
+        } else if(response.status === 408 || response.status === 429 || response.status >= 500){
+            error.retryableQuery = true;
+            error.queryPaused = true;
+        }
+        throw error;
+    }
+    return response.json();
+}
+async function waitCanvasVideoTaskResult(taskId, options={}){
+    if(!taskId) throw new Error('视频任务缺少本地编号');
+    let queryFailures = 0;
+    let refreshAttempted = false;
+    const consumeRefreshResult = refreshed => {
+        if(refreshed?.status === 'succeeded') return {done:true, result:refreshed.result || {}};
+        if(refreshed?.status === 'failed'){
+            const error = new Error(refreshed.error || '视频生成失败');
+            error.videoTaskFailed = true;
+            throw error;
+        }
+        if(refreshed?.status === 'unknown'){
+            const canRefresh = refreshed?.remote?.query_supported === true && Boolean(refreshed?.remote?.task_id);
+            const error = new Error(refreshed.error || '视频任务状态未知，请稍后再次查询');
+            error.videoTaskUnknown = true;
+            error.remoteRefreshable = canRefresh;
+            error.taskLost = !canRefresh;
+            error.queryPaused = canRefresh;
+            throw error;
+        }
+        return {done:false};
+    };
+    if(options.forceRefresh){
+        refreshAttempted = true;
+        const refreshed = await refreshCanvasVideoTaskOnce(taskId, options);
+        const state = consumeRefreshResult(refreshed);
+        if(state.done) return state.result;
+    }
+    while(true){
+        const cascadeTargetId = cascadeTargetIdFromOptions(options);
+        if(cascadeTargetId) ensureCascadeActive(cascadeTargetId);
+        let response;
+        try {
+            response = await cascadeFetch(`/api/canvas-video-tasks/${encodeURIComponent(taskId)}`, {}, {cascadeTargetId});
+            if(response.status === 408 || response.status === 429 || response.status >= 500){
+                const error = new Error(await responseErrorMessage(response, '视频任务查询失败'));
+                error.retryableQuery = true;
+                throw error;
+            }
+        } catch(error){
+            if(isCascadeAbortError(error)) throw error;
+            if((error.retryableQuery || error.name === 'TypeError') && queryFailures < 3){
+                await sleep(1000 * (2 ** queryFailures++));
+                continue;
+            }
+            if(error.retryableQuery || error.name === 'TypeError') error.queryPaused = true;
+            throw error;
+        }
+        queryFailures = 0;
+        if(!response.ok){
+            const error = new Error(await responseErrorMessage(response, '视频任务查询失败'));
+            error.taskLost = response.status === 404;
+            throw error;
+        }
+        const task = await response.json();
+        if(task.status === 'succeeded') return task.result || {};
+        if(task.status === 'failed'){
+            const error = new Error(task.error || '视频生成失败');
+            error.videoTaskFailed = true;
+            throw error;
+        }
+        if(task.status === 'unknown'){
+            const canRefresh = task?.remote?.query_supported === true && Boolean(task?.remote?.task_id);
+            if(!canRefresh){
+                const error = new Error(task.error || '视频任务状态未知，请勿直接重新提交');
+                error.videoTaskUnknown = true;
+                error.remoteRefreshable = false;
+                error.taskLost = true;
+                throw error;
+            }
+            if(!refreshAttempted){
+                refreshAttempted = true;
+                let refreshed;
+                try {
+                    refreshed = await refreshCanvasVideoTaskOnce(taskId, options);
+                } catch(error){
+                    if(isCascadeAbortError(error)) throw error;
+                    error.remoteRefreshable = canRefresh && !error.videoTaskRefreshUnavailable;
+                    if(error.retryableQuery || error.name === 'TypeError') error.queryPaused = true;
+                    throw error;
+                }
+                const state = consumeRefreshResult(refreshed);
+                if(state.done) return state.result;
+                continue;
+            }
+            const error = new Error(task.error || '视频任务状态未知，请勿直接重新提交');
+            error.videoTaskUnknown = true;
+            error.remoteRefreshable = canRefresh;
+            error.taskLost = true;
+            throw error;
+        }
+        await sleep(1800);
+    }
+}
+async function pollCanvasVideoTask(taskId, options={}){
+    if(!taskId || activeCanvasTaskPolls.has(taskId)) return;
+    const found = findPendingTask(taskId);
+    if(!found || found.pending.savePending) return;
+    activeCanvasTaskPolls.add(taskId);
+    const {out, pending} = found;
+    pending.querying = true;
+    pending.queryPaused = false;
+    refreshRunNodes(nodes.find(n => n.id === pending.run?.node?.id), out);
+    try {
+        const result = await waitCanvasVideoTaskResult(taskId, options);
+        const outputUrls = resultMediaUrls(result).map(item => {
+            const url = outputUrlValue(item);
+            return item && typeof item === 'object' ? {...item, url, kind:item.kind || 'video'} : {url, kind:'video'};
+        }).filter(item => item.url);
+        if(!outputUrls.length) throw new Error('视频任务成功但没有返回视频地址');
+        out._pending = (out._pending || []).filter(item => item.id !== pending.id);
+        const gen = nodes.find(n => n.id === pending.run?.node?.id);
+        appendOutputImages(out, outputUrls, pending.run?.refs?.[0], [{run:pending.run || {}, runMs:nowMs() - Number(pending.startedAt || nowMs()), kind:'video'}]);
+        if(gen){
+            mergeGeneratedOutputs(gen, outputUrls, Boolean(pending.appendGenerated));
+            gen.runStatus = 'done';
+            gen.runError = '';
+            gen.running = false;
+        }
+        addGenerationLog({run:pending.run || {}, outputs:outputUrls, runMs:nowMs() - Number(pending.startedAt || nowMs())});
+    } catch(error){
+        const current = findPendingTask(taskId);
+        if(!current) return;
+        current.pending.querying = false;
+        current.pending.queryRecoverable = true;
+        current.pending.error = error.message || '视频任务查询失败';
+        current.pending.taskLost = Boolean(error.taskLost);
+        current.pending.queryPaused = !error.taskLost;
+        current.pending.remoteRefreshable = Boolean(error.remoteRefreshable);
+        current.pending.failed = true;
+        const gen = nodes.find(n => n.id === current.pending.run?.node?.id);
+        if(gen){ gen.running = false; gen.runStatus = error.taskLost ? 'task-lost' : 'query-paused'; gen.runError = current.pending.error; }
+    } finally {
+        const latest = findPendingTask(taskId);
+        if(latest) latest.pending.querying = false;
+        if(latest || !findPendingTask(taskId)) scheduleSave();
+        refreshRunNodes(nodes.find(n => n.id === pending.run?.node?.id), out);
+        activeCanvasTaskPolls.delete(taskId);
+    }
+}
 async function runVideoNode(nodeId, opts={}){
     const node = nodes.find(n => n.id === nodeId);
     if(!node || (node.running && !opts.cascade)) return;
@@ -11616,14 +11800,13 @@ async function runVideoNode(nodeId, opts={}){
     let out = outputForNode(node, 460);
     const pendingId = uid('p');
     const run = runSnapshot(node, prompt, refs);
-    if(out) out._pending = [...(out._pending || []), makePendingForRun(pendingId, run, node, {refs, cascadeTargetId})];
+    const pending = makePendingForRun(pendingId, run, node, {refs, cascadeTargetId});
+    canvasVideoTaskIdForPending(pending);
+    if(out) out._pending = [...(out._pending || []), pending];
     if(!opts.cascade){ node.running = true; refreshRunNodes(node, out); }
     else refreshRunNodes(node, out);
     try {
-        const result = await cascadeFetch('/api/canvas-video', {
-            method:'POST',
-            headers:{'Content-Type':'application/json'},
-            body:JSON.stringify({
+        const payload = {
                 prompt,
                 provider_id:resolveVideoProviderId(node.apiProvider || 'comfly'),
                 model:node.model || 'veo3-fast',
@@ -11641,8 +11824,21 @@ async function runVideoNode(nodeId, opts={}){
                 camerafixed:Boolean(node.cameraFixed),
                 generate_audio:Boolean(node.generateAudio),
                 multimodal:Boolean(node.multimodal)
-            })
-        }, {cascadeTargetId}).then(async r => { if(!r.ok) throw new Error(await responseErrorMessage(r, tr('canvas.videoFailed'))); return r.json(); });
+        };
+        if(!await saveCanvas()){
+            pending.savePending = true;
+            pending.queryPaused = true;
+            pending.error = '编号未保存，视频请求未提交；请先保存画布再查询。';
+            throw new Error(pending.error);
+        }
+        const accepted = await createCanvasVideoTask(payload, pending);
+        pending.canvasTaskId = accepted.task_id || pending.canvasTaskId;
+        pending.queryRecoverable = true;
+        pending.queryPaused = false;
+        pending.savePending = false;
+        refreshRunNodes(node, out);
+        scheduleSave();
+        const result = await waitCanvasVideoTaskResult(pending.canvasTaskId, {cascadeTargetId});
         const meta = collectRunMeta(out, pendingId);
         if(out) out._pending = (out._pending || []).filter(p => p.id !== pendingId);
         const outputUrls = resultMediaUrls(result).map(item => {
@@ -11660,7 +11856,13 @@ async function runVideoNode(nodeId, opts={}){
     } catch(err) {
         const meta = collectRunMeta(out, pendingId);
         addGenerationLog({run, outputs:[], runMs:meta.runMs || 0, error:err.message || String(err)});
-        if(out) out._pending = (out._pending || []).filter(p => p.id !== pendingId);
+        if(pending.canvasTaskId && out){
+            pending.failed = true;
+            pending.queryPaused = !err.taskLost;
+            pending.taskLost = Boolean(err.taskLost);
+            pending.queryRecoverable = true;
+            pending.error = err.message || '视频任务状态未知，请勿直接重新提交';
+        } else if(out) out._pending = (out._pending || []).filter(p => p.id !== pendingId);
         if(isCascadeAbortError(err)){
             if(opts.cascade) throw err;
             return;
@@ -11876,13 +12078,15 @@ async function runMiniMaxNode(nodeId, opts={}){
             run.request = rhResult.request || {};
         } else {
             const params = await miniMaxDynamicParams(node, media.prompt, media.refs);
+            const comfyPending = pendingById(out, pendingId);
+            if(comfyPending) comfyPending.segmentId = seg?.id || '';
             const result = await runQueuedComfyGenerate({
                 prompt:media.prompt,
                 workflow_json:node.workflow || 'MiniMax_H3.json',
                 params,
                 type:'minimax-h3',
                 client_id:CLIENT_ID
-            }, {cascadeTargetId});
+            }, {cascadeTargetId, out, pendingId});
             outputs = resultMediaUrls(result);
             run.request = requestMetaFromResult(result);
         }
@@ -11905,9 +12109,16 @@ async function runMiniMaxNode(nodeId, opts={}){
         scheduleSave();
     } catch(err) {
         const meta = collectRunMeta(out, pendingId);
+        if(err.comfyTaskPaused || err.comfyTaskLost){
+            node.runStatus = err.comfyTaskPaused ? 'query-paused' : 'task-lost';
+            node.runError = err.message || '';
+            refreshRunNodes(node, out);
+            if(opts.cascade) throw err;
+            return;
+        }
         const readable = miniMaxReadableError(err, engine);
         addGenerationLog({run, outputs:[], runMs:meta.runMs || 0, error:miniMaxLogError(err, engine)});
-        if(out) out._pending = (out._pending || []).filter(p => p.id !== pendingId);
+        if(out && !err.comfyTaskPaused && !err.comfyTaskLost) out._pending = (out._pending || []).filter(p => p.id !== pendingId);
         if(isCascadeAbortError(err)){
             if(opts.cascade) throw err;
             return;
@@ -12272,13 +12483,10 @@ function cascadeBackendRestartMessage(){
     return langIsEn() ? 'Backend restarted and task status was lost. This one-click run has been stopped.' : '后端已重启，任务状态已丢失，本次一键运行已停止';
 }
 function normalizeCanvasTaskError(err, fallback=''){
-    const raw = err?.message || String(err || '');
-    const text = String(raw || '').trim();
-    if(!text) return fallback || tr('canvas.generationFailed');
-    if(/backend restarted and task status was lost/i.test(text)) return cascadeBackendRestartMessage();
-    if(/(404|not found|missing)/i.test(text) && /canvas-image-task/i.test(text)) return cascadeBackendRestartMessage();
-    if(/Failed to fetch|NetworkError|Load failed|ERR_CONNECTION_REFUSED|ERR_CONNECTION_RESET/i.test(text)) return cascadeBackendRestartMessage();
-    return text;
+    return CanvasTaskErrorRules.normalizeErrorMessage(err, {
+        fallback:fallback || tr('canvas.generationFailed'),
+        restartMessage:cascadeBackendRestartMessage()
+    });
 }
 function clearCascadeNodeState(node, options={}){
     if(!node) return;
@@ -12541,7 +12749,7 @@ async function runLTXDirectorNode(nodeId, opts={}){
             params,
             type:'ltx-director',
             client_id:CLIENT_ID
-        }, {cascadeTargetId});
+        }, {cascadeTargetId, out, pendingId});
         run.request = requestMetaFromResult(result);
         if(result.error) throw new Error(result.error);
         const outputs = comfyResultOutputs(result);
@@ -12557,7 +12765,14 @@ async function runLTXDirectorNode(nodeId, opts={}){
         scheduleSave();
     } catch(err) {
         const meta = collectRunMeta(out, pendingId);
-        if(out) out._pending = (out._pending || []).filter(p => p.id !== pendingId);
+        if(err.comfyTaskPaused || err.comfyTaskLost){
+            node.runStatus = err.comfyTaskPaused ? 'query-paused' : 'task-lost';
+            node.runError = err.message || '';
+            refreshRunNodes(node, out);
+            if(opts.cascade) throw err;
+            return;
+        }
+        if(out && !err.comfyTaskPaused && !err.comfyTaskLost) out._pending = (out._pending || []).filter(p => p.id !== pendingId);
         addGenerationLog({run, outputs:[], runMs:meta.runMs || 0, error:err.message || String(err)});
         if(isCascadeAbortError(err)){
             if(opts.cascade) throw err;
@@ -12615,7 +12830,7 @@ async function runComfyNode(nodeId, opts={}){
                 workflow_json:'Z-Image.json',
                 type:'zimage',
                 client_id:CLIENT_ID
-            }, {cascadeTargetId});
+            }, {cascadeTargetId, out, pendingId});
             run.request = requestMetaFromResult(result);
             images = comfyResultOutputs(result);
         } else if(mode === 'enhance'){
@@ -12629,12 +12844,12 @@ async function runComfyNode(nodeId, opts={}){
                 },
                 type:'enhance',
                 client_id:CLIENT_ID
-            }, {cascadeTargetId});
+            }, {cascadeTargetId, out, pendingId});
             run.request = requestMetaFromResult(enhance);
             if(enhance.error) throw new Error(actionFailed('canvas.comfyEnhance', enhance.error));
             if(!enhance.images?.length) throw new Error(noReturnedImage('canvas.comfyEnhance'));
             if(node.enhanceUpscale){
-                images = await runComfyUpscale(enhance.images?.[0], node.enhanceUpscaleRes || 2048, {cascadeTargetId});
+                images = await runComfyUpscale(enhance.images?.[0], node.enhanceUpscaleRes || 2048, {cascadeTargetId, out, pendingId});
             } else {
                 images = enhance.images || [];
             }
@@ -12683,7 +12898,7 @@ async function runComfyNode(nodeId, opts={}){
                 params,
                 type:'workflow-custom',
                 client_id:CLIENT_ID
-            }, {cascadeTargetId});
+            }, {cascadeTargetId, out, pendingId});
             run.request = requestMetaFromResult(result);
             if(result.error) throw new Error(actionFailed('canvas.comfyCustom', result.error));
             images = comfyResultOutputs(result);
@@ -12706,11 +12921,11 @@ async function runComfyNode(nodeId, opts={}){
                     "314": { value:Boolean(names[2]) }
                 },
                 client_id:CLIENT_ID
-            }, {cascadeTargetId});
+            }, {cascadeTargetId, out, pendingId});
             run.request = requestMetaFromResult(result);
             if(result.error) throw new Error(actionFailed('canvas.comfyEdit', result.error));
             if(!result.images?.length) throw new Error(noReturnedImage('canvas.comfyEdit'));
-            images = node.editUpscale ? await runComfyUpscale(result.images?.[0], node.editUpscaleRes || 2048, {cascadeTargetId}) : result.images || [];
+            images = node.editUpscale ? await runComfyUpscale(result.images?.[0], node.editUpscaleRes || 2048, {cascadeTargetId, out, pendingId}) : result.images || [];
         }
         const meta = collectRunMeta(out, pendingId);
         if(out) out._pending = (out._pending||[]).filter(p => p.id !== pendingId);
@@ -12722,8 +12937,15 @@ async function runComfyNode(nodeId, opts={}){
         scheduleSave();
     } catch(err) {
         const meta = collectRunMeta(out, pendingId);
+        if(err.comfyTaskPaused || err.comfyTaskLost){
+            node.runStatus = err.comfyTaskPaused ? 'query-paused' : 'task-lost';
+            node.runError = err.message || '';
+            refreshRunNodes(node, out);
+            if(opts.cascade) throw err;
+            return;
+        }
         addGenerationLog({run, outputs:[], runMs:meta.runMs || 0, error:err.message || String(err)});
-        if(out) out._pending = (out._pending||[]).filter(p => p.id !== pendingId);
+        if(out && !err.comfyTaskPaused && !err.comfyTaskLost) out._pending = (out._pending||[]).filter(p => p.id !== pendingId);
         if(isCascadeAbortError(err)){
             refreshRunNodes(node, out);
             if(opts.cascade) throw err;
@@ -12872,6 +13094,9 @@ function bindCascadeButtons(wrap, nodeId){
 // —— 一键运行：从目标节点反向追溯到所有上游生成节点，按拓扑顺序串行执行 ——
 function runCascadeNodeByType(node, opts={}){
     const runOpts = {cascade:true, ...opts};
+    if(cascadeContextFromOptions(runOpts)?.submissionIncomplete){
+        throw cascadeAbortError('本次一键运行有任务未完整受理，已停止后续提交');
+    }
     if(node.type === 'generator') return runGenerator(node.id, runOpts);
     if(node.type === 'midjourney') return runMidjourneyNode(node.id, runOpts);
     if(node.type === 'msgen') return runMsGenNode(node.id, runOpts);
@@ -12966,6 +13191,7 @@ function computeConnectedWorkflowOrder(anchorId){
 async function runCanvasGenerate(nodeId){
     const node = nodes.find(n => n.id === nodeId);
     if(!node || node.running || cascadeRunningIds.has(nodeId)) return;
+    if(!confirmOrphanUnknownCanvasSubmission()) return;
     return runCascadeNodeByType(node, {cascade:false});
 }
 function computeCascadeOrder(targetId){
@@ -13024,6 +13250,7 @@ function cascadeUiNodeIds(targetId, order=null){
 async function runNodeCascade(nodeId){
     const target = nodes.find(n => n.id === nodeId);
     if(!target) return;
+    if(!confirmOrphanUnknownCanvasSubmission()) return;
     if(target.running){ alert('当前节点正在运行'); return; }
     const order = computeCascadeOrder(nodeId);
     if(!order.length){ alert('没有可运行的生成节点'); return; }
@@ -13612,14 +13839,236 @@ function findPendingTask(taskId){
     }
     return null;
 }
+function unsavedCanvasAcceptedTasksKey(canvasId=canvas?.id){
+    return canvasId ? `${CANVAS_UNSAVED_ACCEPTED_TASKS_PREFIX}${canvasId}` : '';
+}
+function readUnsavedCanvasAcceptedTasks(canvasId=canvas?.id){
+    const key = unsavedCanvasAcceptedTasksKey(canvasId);
+    if(!key) return [];
+    try {
+        const entries = JSON.parse(localStorage.getItem(key) || '[]');
+        return Array.isArray(entries) ? entries : [];
+    } catch(_) { return []; }
+}
+function clearUnsavedCanvasAcceptedTasks(canvasId=canvas?.id, savedNodes=[]){
+    const key = unsavedCanvasAcceptedTasksKey(canvasId);
+    if(!key) return;
+    const savedIds = new Set(savedNodes.flatMap(node => [...(node._pending || []), ...(node._directPending || [])]
+        .map(task => task.canvasTaskId).filter(Boolean)));
+    const remaining = readUnsavedCanvasAcceptedTasks(canvasId).filter(entry => !savedIds.has(entry?.taskId));
+    try {
+        if(remaining.length) localStorage.setItem(key, JSON.stringify(remaining));
+        else localStorage.removeItem(key);
+    } catch(_) {}
+}
+function unknownCanvasSubmissionKey(canvasId=canvas?.id){
+    return canvasId ? `${CANVAS_UNKNOWN_SUBMISSION_PREFIX}${canvasId}` : '';
+}
+function clearUnsavedCanvasUnknownWarnings(canvasId=canvas?.id, savedNodes=[]){
+    const key = unknownCanvasSubmissionKey(canvasId);
+    if(!key) return;
+    try {
+        const parsed = JSON.parse(localStorage.getItem(key) || '[]');
+        const entries = Array.isArray(parsed) ? parsed : [];
+        const remaining = entries.filter(entry => !savedNodes.some(node => node.id === entry?.nodeId
+            && node.submissionUnknown && node.submissionWarning?.includes(entry.warning)));
+        if(remaining.length) localStorage.setItem(key, JSON.stringify(remaining));
+        else localStorage.removeItem(key);
+    } catch(_) {}
+}
+function rememberUnsavedCanvasUnknownWarning(node){
+    const key = unknownCanvasSubmissionKey();
+    if(!key || !node?.submissionWarning) return;
+    try {
+        const parsed = JSON.parse(localStorage.getItem(key) || '[]');
+        const entries = Array.isArray(parsed) ? parsed : [];
+        const next = entries.filter(item => item?.nodeId !== node.id);
+        next.push({nodeId:String(node.id || ''), warning:String(node.submissionWarning).slice(0, 1000)});
+        localStorage.setItem(key, JSON.stringify(next.slice(-32)));
+    } catch(_) {}
+}
+function restoreUnsavedCanvasUnknownWarnings(){
+    const key = unknownCanvasSubmissionKey();
+    if(!key) return 0;
+    try {
+        const entries = JSON.parse(localStorage.getItem(key) || '[]');
+        if(!Array.isArray(entries)) return 0;
+        let recovered = 0;
+        entries.forEach(entry => {
+            if(!entry?.nodeId || !entry.warning) return;
+            const node = nodes.find(item => item.id === entry.nodeId);
+            if(node){
+                if(!node.submissionWarning?.includes(entry.warning)){
+                    node.submissionWarning = [node.submissionWarning, entry.warning].filter(Boolean).join('\n');
+                }
+                node.submissionUnknown = true;
+            } else canvasOrphanUnknownSubmissionCount += 1;
+            recovered += 1;
+        });
+        if(recovered) scheduleSave();
+        return recovered;
+    } catch(_) { return 0; }
+}
+function confirmOrphanUnknownCanvasSubmission(){
+    if(!canvasOrphanUnknownSubmissionCount) return true;
+    return window.confirm(`此画布有 ${canvasOrphanUnknownSubmissionCount} 次受理状态未知的请求，其原节点尚未保存。再次提交可能重复计费，请先核对原任务。确定继续吗？`);
+}
+function rememberUnsavedCanvasAcceptedTasks(node, tasks, out=null){
+    const key = unsavedCanvasAcceptedTasksKey();
+    if(!key) return false;
+    const entries = readUnsavedCanvasAcceptedTasks();
+    tasks.forEach(task => {
+        const taskId = String(task.canvasTaskId || '').slice(0, 256);
+        if(!taskId) return;
+        const entry = {
+            taskId, nodeId:String(node.id || ''), outputId:String(out?.id || ''),
+            taskType:task.canvasTaskType === 'comfy' ? 'comfy' : 'online-image',
+            segmentId:String(task.segmentId || '').slice(0, 128),
+            x:Number(node.x || 0), y:Number(node.y || 0),
+            providerId:String(task.providerId || '').slice(0, 128),
+            model:String(task.model || '').slice(0, 256),
+            startedAt:Number(task.startedAt || nowMs())
+        };
+        const index = entries.findIndex(item => item?.taskId === taskId);
+        if(index >= 0) entries[index] = entry;
+        else entries.push(entry);
+    });
+    try {
+        localStorage.setItem(key, JSON.stringify(entries.slice(-32)));
+        return true;
+    } catch(_) { return false; }
+}
+function restoreUnsavedCanvasAcceptedTasks(){
+    const entries = readUnsavedCanvasAcceptedTasks();
+    let recovered = 0;
+    entries.forEach(entry => {
+        const taskId = String(entry?.taskId || '');
+        if(!taskId) return;
+        const existing = findPendingTask(taskId);
+        if(existing){
+            existing.pending.savePending = true;
+            existing.pending.queryPaused = true;
+            existing.pending.queryRecoverable = true;
+            existing.pending.cascadeTargetId = '';
+            recovered += 1;
+            return;
+        }
+        const source = nodes.find(node => node.id === entry.nodeId);
+        let out = nodes.find(node => node.id === entry.outputId && node.type === 'output');
+        if(!out && source) out = connections.filter(link => link.from === source.id)
+            .map(link => nodes.find(node => node.id === link.to)).find(node => node?.type === 'output');
+        if(!out){
+            out = {id:uid('out'), type:'output', x:Number(source?.x ?? entry.x ?? 0), y:Number(source?.y ?? entry.y ?? 0) + 650, images:[]};
+            nodes.push(out);
+            if(source) connections.push({id:uid('c'), from:source.id, to:out.id});
+        }
+        out._pending = [...(out._pending || []), {
+            id:uid('p'), canvasTaskId:taskId, canvasTaskType:entry.taskType === 'comfy' ? 'comfy' : 'online-image',
+            providerId:String(entry.providerId || ''), model:String(entry.model || ''),
+            segmentId:String(entry.segmentId || ''),
+            startedAt:Number(entry.startedAt || nowMs()),
+            run:{node:{id:String(entry.nodeId || '')}, refs:[]},
+            queryPaused:true, queryRecoverable:true, savePending:true,
+            appendGenerated:true, error:'画布尚未保存，请先保存并查询原任务'
+        }];
+        recovered += 1;
+    });
+    if(recovered) scheduleSave();
+    return recovered;
+}
+function confirmCanvasUnknownResubmission(node, opts={}){
+    const unsavedTasks = [
+        ...(node._directPending || []),
+        ...nodes.filter(item => item.type === 'output').flatMap(item => item._pending || [])
+            .filter(pending => pending.run?.node?.id === node.id)
+    ].filter(pending => pending.savePending);
+    if(unsavedTasks.length){
+        const message = `原任务编号尚未保存（${unsavedTasks.map(task => task.canvasTaskId).filter(Boolean).join('、')}）。请先在结果卡片点击“保存并查询”，不要重新提交。`;
+        if(opts.cascade) throw cascadeAbortError(`${message}一键运行已停止。`);
+        showErrorModal(message, tr('canvas.apiFailed'));
+        return false;
+    }
+    if(!node.submissionUnknown) return true;
+    const warning = '上一次请求未收到可靠响应，可能已受理。再次提交可能重复计费。';
+    if(opts.cascade) throw new Error(`${warning}一键运行已停止；请先核对该节点。`);
+    return window.confirm(`${warning}请先核对上一次任务。确定再次提交吗？`);
+}
+function pauseCanvasAcceptedTasksUntilSaved(node, tasks, out=null){
+    const browserBackupSaved = rememberUnsavedCanvasAcceptedTasks(node, tasks, out);
+    const message = browserBackupSaved
+        ? '任务已受理，但画布尚未保存；请在结果卡片点击“保存并查询”，不要重新提交。'
+        : '任务已受理，但画布尚未保存且浏览器无法备份编号；请保持此页面打开，在结果卡片点击“保存并查询”，不要重新提交。';
+    tasks.forEach(task => {
+        task.queryPaused = true;
+        task.queryRecoverable = true;
+        task.savePending = true;
+        task.error = message;
+        task.cascadeTargetId = '';
+    });
+    node.running = false;
+    scheduleSave();
+    showErrorModal(message, tr('canvas.apiFailed'));
+    const error = new Error(message);
+    error.queryPaused = true;
+    return error;
+}
+function rememberCanvasSubmissionWarning(node, warning, unknown=false){
+    const previousUnknown = Boolean(node.submissionUnknown && node.submissionWarning);
+    if(warning){
+        if(previousUnknown){
+            if(!node.submissionWarning.includes(warning)) node.submissionWarning += `\n${warning}`;
+        } else {
+            node.submissionWarning = warning;
+        }
+        node.submissionUnknown = previousUnknown || Boolean(unknown);
+        if(unknown) rememberUnsavedCanvasUnknownWarning(node);
+    } else if(!previousUnknown){
+        delete node.submissionWarning;
+        delete node.submissionUnknown;
+    }
+}
 async function createCanvasImageTask(payload, options={}){
     const res = await cascadeFetch('/api/canvas-image-tasks', {
         method:'POST',
         headers:{'Content-Type':'application/json'},
         body:JSON.stringify(payload)
     }, options);
-    if(!res.ok) throw new Error(await responseErrorMessage(res, tr('canvas.generationFailed')));
-    return res.json();
+    if(!res.ok){
+        const error = new Error(await responseErrorMessage(res, tr('canvas.generationFailed')));
+        error.submissionKnownRejected = res.status >= 400 && res.status < 500 && res.status !== 408;
+        throw error;
+    }
+    const task = await res.json();
+    if(!task?.task_id) throw new Error('任务提交未返回编号，受理状态未知');
+    return task;
+}
+async function submitCanvasImageTaskBatch(count, payload, options={}){
+    const cascadeTargetId = cascadeTargetIdFromOptions(options);
+    const cascadeContext = cascadeContextFor(cascadeTargetId);
+    if(cascadeContext?.submissionIncomplete){
+        throw cascadeAbortError('本次一键运行有任务未完整受理，已停止后续提交');
+    }
+    const settled = await Promise.allSettled(Array.from({length:count}, () => createCanvasImageTask(payload, options)));
+    const taskInfos = settled.filter(item => item.status === 'fulfilled').map(item => item.value);
+    const rejected = settled.filter(item => item.status === 'rejected');
+    const knownRejected = rejected.filter(item => item.reason?.submissionKnownRejected).length;
+    const unknownCount = rejected.length - knownRejected;
+    if(rejected.length && cascadeContext) cascadeContext.submissionIncomplete = true;
+    const issues = [];
+    if(knownRejected) issues.push(`${knownRejected} 项被明确拒绝`);
+    if(unknownCount) issues.push(`${unknownCount} 项未收到可靠响应，可能已受理`);
+    const advice = taskInfos.length
+        ? '已取得编号的任务会继续查询，请勿直接重试整批。'
+        : unknownCount ? '请勿直接重试整批。' : '请检查失败原因后重试。';
+    const warning = rejected.length
+        ? `本次请求 ${count} 项，仅取得 ${taskInfos.length} 个任务编号；${issues.join('，')}。${advice}`
+        : '';
+    if(!taskInfos.length){
+        const error = new Error(warning || tr('canvas.generationFailed'));
+        error.submissionUnknown = unknownCount > 0;
+        throw error;
+    }
+    return {taskInfos, warning, unknownCount};
 }
 async function createCanvasComfyTask(payload, options={}){
     const res = await cascadeFetch('/api/canvas-comfy-tasks', {
@@ -13632,23 +14081,148 @@ async function createCanvasComfyTask(payload, options={}){
 }
 async function waitCanvasComfyTaskResult(taskId, options={}){
     if(!taskId) throw new Error(actionFailed('canvas.comfyGenerate'));
+    let queryFailures = 0;
     while(true){
         const cascadeTargetId = cascadeTargetIdFromOptions(options);
         if(cascadeTargetId) ensureCascadeActive(cascadeTargetId);
-        const res = await cascadeFetch(`/api/canvas-comfy-tasks/${encodeURIComponent(taskId)}`, {}, {cascadeTargetId});
+        let res;
+        try {
+            res = await cascadeFetch(`/api/canvas-comfy-tasks/${encodeURIComponent(taskId)}`, {}, {cascadeTargetId});
+            if(res.status === 408 || res.status === 429 || res.status >= 500){
+                const error = new Error(await responseErrorMessage(res, actionFailed('canvas.comfyGenerate')));
+                error.retryableQuery = true;
+                throw error;
+            }
+        } catch(error){
+            if(isCascadeAbortError(error)) throw error;
+            if((error.retryableQuery || error.name === 'TypeError') && queryFailures < 3){
+                await sleep(1000 * (2 ** queryFailures++));
+                continue;
+            }
+            if(error.retryableQuery || error.name === 'TypeError') error.queryPaused = true;
+            throw error;
+        }
+        queryFailures = 0;
         if(!res.ok){
-            if(res.status === 404) throw new Error(cascadeBackendRestartMessage());
+            if(res.status === 404){
+                const error = new Error(cascadeBackendRestartMessage());
+                error.restartLost = true;
+                throw error;
+            }
             throw new Error(await responseErrorMessage(res, actionFailed('canvas.comfyGenerate')));
         }
         const data = await res.json();
         if(data.status === 'succeeded') return data.result || {};
+        if(data.status === 'unknown'){
+            const error = new Error(data.error || '本地任务记录已失效，远端状态未知，请勿直接重新提交');
+            error.restartLost = true;
+            error.taskLost = true;
+            error.taskData = data;
+            throw error;
+        }
         if(data.status === 'failed') throw new Error(data.error || actionFailed('canvas.comfyGenerate'));
         await sleep(1600);
     }
 }
 async function runQueuedComfyGenerate(payload, options={}){
     const task = await createCanvasComfyTask(payload, options);
-    return waitCanvasComfyTaskResult(task.task_id, options);
+    if(!task?.task_id) throw new Error('任务提交未返回编号，受理状态未知');
+    const pending = pendingById(options.out, options.pendingId);
+    if(!pending) return waitCanvasComfyTaskResult(task.task_id, options);
+    const source = nodes.find(node => node.id === pending.run?.node?.id);
+    pending.canvasTaskId = task.task_id;
+    pending.canvasTaskType = 'comfy';
+    pending.queryRecoverable = true;
+    pending.cascadeTargetId = '';
+    rememberUnsavedCanvasAcceptedTasks(source || {}, [pending], options.out);
+    refreshRunNodes(source, options.out);
+    if(!await saveCanvas()){
+        const error = pauseCanvasAcceptedTasksUntilSaved(source || {}, [pending], options.out);
+        error.comfyTaskPaused = true;
+        throw error;
+    }
+    activeCanvasComfyTaskPolls.add(task.task_id);
+    try {
+        return await waitCanvasComfyTaskResult(task.task_id, options);
+    } catch(error){
+        if(error.queryPaused || isCascadeAbortError(error)){
+            pending.queryPaused = true;
+            pending.queryRecoverable = true;
+            pending.cascadeTargetId = '';
+            pending.error = isCascadeAbortError(error) ? '页面已停止等待，远端任务状态未知；可查询原任务。' : error.message || '暂时无法查询原任务';
+            error.comfyTaskPaused = true;
+        } else if(error.restartLost){
+            pending.failed = true;
+            pending.taskLost = true;
+            pending.error = `${error.message}；远端是否仍在生成未知，请勿直接重复提交。`;
+            error.comfyTaskLost = true;
+        }
+        if(error.comfyTaskPaused || error.comfyTaskLost){
+            refreshRunNodes(source, options.out);
+            scheduleSave();
+        }
+        throw error;
+    } finally {
+        activeCanvasComfyTaskPolls.delete(task.task_id);
+    }
+}
+function completeCanvasComfyTask(taskId, result){
+    const found = findPendingTask(taskId);
+    if(!found) return;
+    const {out, pending} = found;
+    const run = pending.run || {};
+    const outputs = resultMediaUrls(result);
+    if(!outputs.length) throw new Error(noReturnedImage('canvas.comfyGenerate'));
+    const runMs = nowMs() - Number(pending.startedAt || nowMs());
+    run.request = requestMetaFromResult(result);
+    out._pending = (out._pending || []).filter(item => item.id !== pending.id);
+    appendOutputImages(out, outputs, run.refs?.[0], [{run, runMs}]);
+    const gen = nodes.find(node => node.id === run.node?.id);
+    if(gen){
+        if(gen.type === 'minimax' && pending.segmentId){
+            const segment = (gen.segments || []).find(item => item.id === pending.segmentId);
+            if(segment) outputs.forEach(item => miniMaxSetSegmentResult(gen, segment, item));
+        }
+        mergeGeneratedOutputs(gen, outputs, Boolean(pending.appendGenerated));
+        gen.runStatus = 'done';
+        gen.runError = '';
+        gen.running = false;
+    }
+    addGenerationLog({run, outputs, runMs});
+    refreshRunNodes(gen, out);
+    scheduleSave();
+}
+async function pollCanvasComfyTask(taskId){
+    if(!taskId || activeCanvasComfyTaskPolls.has(taskId)) return;
+    const found = findPendingTask(taskId);
+    if(!found || found.pending.savePending || found.pending.taskLost) return;
+    activeCanvasComfyTaskPolls.add(taskId);
+    found.pending.queryPaused = false;
+    found.pending.error = '';
+    refreshRunNodes(nodes.find(node => node.id === found.pending.run?.node?.id), found.out);
+    try {
+        const result = await waitCanvasComfyTaskResult(taskId);
+        completeCanvasComfyTask(taskId, result);
+    } catch(error){
+        const current = findPendingTask(taskId);
+        if(!current) return;
+        if(error.queryPaused){
+            current.pending.queryPaused = true;
+            current.pending.error = error.message || '暂时无法查询原任务';
+        } else if(error.restartLost){
+            current.pending.failed = true;
+            current.pending.taskLost = true;
+            current.pending.error = `${error.message}；远端是否仍在生成未知，请勿直接重复提交。`;
+        } else {
+            current.out._pending = (current.out._pending || []).filter(item => item !== current.pending);
+            const gen = nodes.find(node => node.id === current.pending.run?.node?.id);
+            if(gen){ gen.runStatus = 'failed'; gen.runError = error.message || actionFailed('canvas.comfyGenerate'); }
+        }
+        refreshRunNodes(nodes.find(node => node.id === current.pending.run?.node?.id), current.out);
+        scheduleSave();
+    } finally {
+        activeCanvasComfyTaskPolls.delete(taskId);
+    }
 }
 function extractUpstreamTaskId(text){
     const match = String(text || '').match(/(?:task_id|taskId|task id)\s*[=:：]\s*([A-Za-z0-9_.:-]+)/i);
@@ -13727,17 +14301,70 @@ async function queryRecoverPendingOutput(pendingId){
     }
 }
 function sleep(ms){ return new Promise(resolve => setTimeout(resolve, ms)); }
+async function saveAndQueryCanvasPendingTask(pending){
+    if(!pending?.canvasTaskId) return 'missing';
+    if(pending.savePending){
+        if(!await saveCanvas()){
+            showErrorModal('画布尚未保存，请稍后点击“保存并查询”；不要重新提交。', tr('canvas.apiFailed'));
+            return 'paused';
+        }
+        delete pending.savePending;
+        scheduleSave();
+    }
+    return pending.canvasTaskType === 'comfy'
+        ? pollCanvasComfyTask(pending.canvasTaskId)
+        : pending.canvasTaskType === 'video'
+            ? pollCanvasVideoTask(pending.canvasTaskId, {forceRefresh:Boolean(pending.remoteRefreshable)})
+            : pollCanvasImageTask(pending.canvasTaskId);
+}
 async function pollCanvasImageTask(taskId, options={}){
     if(!taskId) return 'failed';
     if(activeCanvasTaskPolls.has(taskId)) return 'running';
     activeCanvasTaskPolls.add(taskId);
+    let queryFailures = 0;
     try {
         while(true){
             const found = findPendingTask(taskId);
             if(!found) return 'missing';
+            if(found.pending.savePending) return 'paused';
+            if(found.pending.taskLost) return 'failed';
             const cascadeTargetId = String(options?.cascadeTargetId || found?.pending?.cascadeTargetId || '');
             if(cascadeTargetId) ensureCascadeActive(cascadeTargetId);
-            const res = await cascadeFetch(`/api/canvas-image-tasks/${encodeURIComponent(taskId)}`, {}, {cascadeTargetId});
+            if(found.pending.queryPaused){
+                found.pending.queryPaused = false;
+                found.pending.error = '';
+                refreshRunNodes(nodes.find(n => n.id === found.pending.run?.node?.id), found.out);
+                scheduleSave();
+            }
+            let res;
+            try {
+                res = await cascadeFetch(`/api/canvas-image-tasks/${encodeURIComponent(taskId)}`, {}, {cascadeTargetId});
+                if(res.status === 408 || res.status === 429 || res.status >= 500){
+                    const error = new Error(await responseErrorMessage(res, tr('canvas.generationFailed')));
+                    error.retryableQuery = true;
+                    throw error;
+                }
+            } catch(error){
+                if(isCascadeAbortError(error)) throw error;
+                if(!error.retryableQuery && error.name !== 'TypeError') throw error;
+                if(queryFailures < 3){
+                    await sleep(1000 * (2 ** queryFailures++));
+                    continue;
+                }
+                // Keep the accepted task so refresh or the query button can resume GETs.
+                const current = findPendingTask(taskId);
+                if(!current) return 'missing';
+                current.pending.queryPaused = true;
+                current.pending.queryRecoverable = true;
+                current.pending.error = normalizeCanvasTaskError(error, tr('canvas.generationFailed'));
+                current.pending.cascadeTargetId = '';
+                const gen = nodes.find(n => n.id === current.pending.run?.node?.id);
+                if(gen){ gen.running = false; gen.runStatus = 'query-paused'; }
+                refreshRunNodes(gen, current.out);
+                scheduleSave();
+                return cascadeTargetId ? 'aborted' : 'paused';
+            }
+            queryFailures = 0;
             if(!res.ok){
                 if(res.status === 404) throw new Error(cascadeBackendRestartMessage());
                 throw new Error(await responseErrorMessage(res, tr('canvas.generationFailed')));
@@ -13746,6 +14373,13 @@ async function pollCanvasImageTask(taskId, options={}){
             if(data.status === 'succeeded'){
                 completeCanvasImageTask(taskId, data.result || {});
                 return 'succeeded';
+            }
+            if(data.status === 'unknown'){
+                const error = new Error(data.error || '本地任务记录已失效，远端状态未知，请勿直接重新提交');
+                error.restartLost = true;
+                error.taskLost = true;
+                error.taskData = data;
+                throw error;
             }
             if(data.status === 'failed'){
                 failCanvasImageTask(taskId, data.error || tr('canvas.generationFailed'), data);
@@ -13756,6 +14390,28 @@ async function pollCanvasImageTask(taskId, options={}){
     } catch(err) {
         const message = normalizeCanvasTaskError(err, tr('canvas.generationFailed'));
         if(isCascadeAbortError(err)) return 'aborted';
+        if(err.restartLost || err.taskLost){
+            const current = findPendingTask(taskId);
+            if(current){
+                const lostMessage = `${message}；远端是否仍在生成未知，请勿直接重复提交。`;
+                current.pending.failed = true;
+                current.pending.taskLost = true;
+                current.pending.queryPaused = false;
+                current.pending.querying = false;
+                current.pending.queryRecoverable = true;
+                current.pending.canvasTaskStatus = 'unknown';
+                current.pending.error = lostMessage;
+                const gen = nodes.find(n => n.id === current.pending.run?.node?.id);
+                if(gen){
+                    gen.running = false;
+                    gen.runStatus = 'task-lost';
+                    gen.runError = lostMessage;
+                }
+                refreshRunNodes(gen, current.out);
+                scheduleSave();
+            }
+            return 'failed';
+        }
         failCanvasImageTask(taskId, message);
         return 'failed';
     } finally {
@@ -13764,19 +14420,144 @@ async function pollCanvasImageTask(taskId, options={}){
 }
 async function waitCanvasImageTaskResult(taskId, options={}){
     if(!taskId) throw new Error(tr('canvas.generationFailed'));
+    let queryFailures = 0;
     while(true){
         const cascadeTargetId = cascadeTargetIdFromOptions(options);
         if(cascadeTargetId) ensureCascadeActive(cascadeTargetId);
-        const res = await cascadeFetch(`/api/canvas-image-tasks/${encodeURIComponent(taskId)}`, {}, {cascadeTargetId});
+        let res;
+        try {
+            res = await cascadeFetch(`/api/canvas-image-tasks/${encodeURIComponent(taskId)}`, {}, {cascadeTargetId});
+            if(res.status === 408 || res.status === 429 || res.status >= 500){
+                const error = new Error(await responseErrorMessage(res, tr('canvas.generationFailed')));
+                error.retryableQuery = true;
+                throw error;
+            }
+        } catch(error){
+            if(isCascadeAbortError(error)) throw error;
+            if((error.retryableQuery || error.name === 'TypeError') && queryFailures < 3){
+                await sleep(1000 * (2 ** queryFailures++));
+                continue;
+            }
+            if(error.retryableQuery || error.name === 'TypeError') error.queryPaused = true;
+            throw error;
+        }
+        queryFailures = 0;
         if(!res.ok){
             if(res.status === 404) throw new Error(cascadeBackendRestartMessage());
             throw new Error(await responseErrorMessage(res, tr('canvas.generationFailed')));
         }
         const data = await res.json();
         if(data.status === 'succeeded') return data.result || {};
-        if(data.status === 'failed') throw new Error(data.error || tr('canvas.generationFailed'));
+        if(data.status === 'unknown'){
+            const error = new Error(data.error || '本地任务记录已失效，远端状态未知，请勿直接重新提交');
+            error.restartLost = true;
+            error.taskLost = true;
+            error.taskData = data;
+            throw error;
+        }
+        if(data.status === 'failed'){
+            const error = new Error(data.error || tr('canvas.generationFailed'));
+            error.taskData = data;
+            throw error;
+        }
         await sleep(1800);
     }
+}
+function materializeCanvasDirectTasks(node, pendingTasks){
+    if(!pendingTasks?.length) return null;
+    let out = connections.filter(c => c.from === node.id)
+        .map(c => nodes.find(n => n.id === c.to)).find(n => n?.type === 'output');
+    if(!out){
+        out = {id:uid('out'), type:'output', x:node.x, y:node.y + 650, images:[]};
+        nodes.push(out);
+        connections.push({id:uid('c'), from:node.id, to:out.id});
+    }
+    const ids = new Set(pendingTasks.map(p => p.canvasTaskId));
+    const existing = new Set((out._pending || []).map(p => p.canvasTaskId));
+    out._pending = [...(out._pending || []), ...pendingTasks.filter(p => !existing.has(p.canvasTaskId)).map(p => ({
+        ...p, cascadeTargetId:'', queryPaused:true, queryRecoverable:true,
+        appendGenerated:true, error:p.savePending ? p.error : '查询暂停，可继续查询原任务'
+    }))];
+    node._directPending = (node._directPending || []).filter(p => !ids.has(p.canvasTaskId));
+    if(!node._directPending.length) delete node._directPending;
+    node.running = false;
+    node.runStatus = 'query-paused';
+    render();
+    scheduleSave();
+    return out;
+}
+async function waitCanvasDirectTasks(node, taskInfos, run, options={}){
+    const batch = taskInfos.map(task => makePendingForRun(uid('p'), run, node, options, {
+        canvasTaskId:task.task_id, canvasTaskType:'online-image',
+        providerId:options.providerId, model:options.model
+    }));
+    node._directPending = [...(node._directPending || []), ...batch];
+    scheduleSave();
+    if(!await saveCanvas()){
+        const error = pauseCanvasAcceptedTasksUntilSaved(node, batch);
+        materializeCanvasDirectTasks(node, batch);
+        throw error;
+    }
+    options.onAcceptedSaved?.();
+    const settled = await Promise.allSettled(taskInfos.map(task => waitCanvasImageTaskResult(task.task_id, options)));
+    const failures = settled.filter(item => item.status === 'rejected');
+    const needsRecovery = failures.some(({reason}) => reason?.queryPaused || reason?.taskLost || reason?.restartLost || isCascadeAbortError(reason)
+        || reason?.taskData?.upstream_task_id || extractUpstreamTaskId(reason?.message || ''));
+    if(failures.length === settled.length && !needsRecovery){
+        const ids = new Set(batch.map(p => p.canvasTaskId));
+        node._directPending = (node._directPending || []).filter(p => !ids.has(p.canvasTaskId));
+        if(!node._directPending.length) delete node._directPending;
+        failures.forEach(({reason}) => addGenerationLog({run, outputs:[], error:reason.message || tr('canvas.generationFailed')}));
+        scheduleSave();
+        throw failures[0].reason;
+    }
+    if(!failures.length){
+        const ids = new Set(batch.map(p => p.canvasTaskId));
+        node._directPending = (node._directPending || []).filter(p => !ids.has(p.canvasTaskId));
+        if(!node._directPending.length) delete node._directPending;
+        const last = settled[settled.length - 1]?.value;
+        if(last) run.request = requestMetaFromResult(last);
+        scheduleSave();
+        return settled.flatMap(item => item.value.images || []);
+    }
+    const out = materializeCanvasDirectTasks(node, batch);
+    settled.forEach((item, index) => {
+        const taskId = taskInfos[index].task_id;
+        if(item.status === 'fulfilled') completeCanvasImageTask(taskId, item.value);
+        else if(item.reason?.taskLost || item.reason?.restartLost){
+            const found = findPendingTask(taskId);
+            if(found){
+                const message = `${item.reason.message || '本地任务记录已失效，远端状态未知'}；远端是否仍在生成未知，请勿直接重复提交。`;
+                found.pending.failed = true;
+                found.pending.taskLost = true;
+                found.pending.queryPaused = false;
+                found.pending.querying = false;
+                found.pending.queryRecoverable = true;
+                found.pending.canvasTaskStatus = 'unknown';
+                found.pending.error = message;
+                const gen = nodes.find(n => n.id === found.pending.run?.node?.id);
+                if(gen){ gen.running = false; gen.runStatus = 'task-lost'; gen.runError = message; }
+                refreshRunNodes(gen, found.out);
+                scheduleSave();
+            }
+        }
+        else if(!item.reason?.queryPaused && !isCascadeAbortError(item.reason)){
+            failCanvasImageTask(taskId, item.reason.message || tr('canvas.generationFailed'), item.reason.taskData || {});
+        }
+    });
+    const cancelled = failures.find(item => isCascadeAbortError(item.reason));
+    if(cancelled) throw cancelled.reason;
+    if((out._pending || []).length){
+        const taskLost = (out._pending || []).some(item => item.taskLost);
+        node.runStatus = taskLost ? 'task-lost' : 'query-paused';
+        const error = new Error(taskLost
+            ? '本地任务记录已失效，远端是否仍在生成未知，请勿直接重复提交。'
+            : '查询暂停，请在恢复卡片中查询原任务');
+        if(taskLost) error.taskLost = true;
+        else error.queryPaused = true;
+        throw error;
+    }
+    throw failures[0].reason;
 }
 function completeCanvasImageTask(taskId, result){
     const found = findPendingTask(taskId);
@@ -13811,6 +14592,7 @@ function failCanvasImageTask(taskId, message, taskData={}){
     const gen = nodes.find(n => n.id === run?.node?.id);
     if(recoverTaskId){
         pending.failed = true;
+        pending.queryPaused = false;
         pending.querying = false;
         pending.error = message || tr('canvas.generationFailed');
         pending.recoverTaskId = recoverTaskId;
@@ -13839,9 +14621,12 @@ function failCanvasImageTask(taskId, message, taskData={}){
     scheduleSave();
 }
 function resumeCanvasImageTasks(){
+    nodes.filter(n => n._directPending?.length).forEach(node => materializeCanvasDirectTasks(node, node._directPending));
     nodes.filter(n => n.type === 'output').forEach(out => {
         (out._pending || []).forEach(p => {
-            if(p.canvasTaskType === 'online-image' && p.canvasTaskId && !p.failed) pollCanvasImageTask(p.canvasTaskId, {cascadeTargetId:p.cascadeTargetId || ''});
+            if(p.canvasTaskType === 'online-image' && p.canvasTaskId && !p.failed && !p.savePending) pollCanvasImageTask(p.canvasTaskId, {cascadeTargetId:p.cascadeTargetId || ''});
+            if(p.canvasTaskType === 'comfy' && p.canvasTaskId && !p.failed && !p.savePending) pollCanvasComfyTask(p.canvasTaskId);
+            if(p.canvasTaskType === 'video' && p.canvasTaskId && !p.failed && !p.savePending) pollCanvasVideoTask(p.canvasTaskId, {cascadeTargetId:p.cascadeTargetId || ''});
         });
     });
 }
@@ -14832,27 +15617,29 @@ function cloneNode(n, dx, dy){
     return copy;
 }
 function duplicateNodesForAltDrag(node, preserveConnections=false){
-    const copy = cloneNode(node, 0, 0);
-    const sourceIds = new Set([node.id]);
-    const idMap = new Map([[node.id, copy.id]]);
-    const copies = [copy];
-    const isGroup = node.type === 'group' || node.type === 'promptGroup';
-    if(isGroup && node.items?.length){
-        const childCopies = node.items
-            .map(id => nodes.find(n => n.id === id))
-            .filter(Boolean)
-            .map(child => {
-                const childCopy = cloneNode(child, 0, 0);
-                sourceIds.add(child.id);
-                idMap.set(child.id, childCopy.id);
-                copies.push(childCopy);
-                return childCopy;
+    const selectedSourceIds = selected.has(node.id) ? [...selected] : [node.id];
+    const sourceIds = new Set(selectedSourceIds);
+    selectedSourceIds.forEach(id => {
+        const source = nodes.find(n => n.id === id);
+        if(source?.type === 'group' || source?.type === 'promptGroup'){
+            (source.items || []).forEach(childId => {
+                if(nodes.some(n => n.id === childId)) sourceIds.add(childId);
             });
-        copy.items = copy.items.map(id => idMap.get(id) || id);
-        nodes.push(...childCopies, copy);
-    } else {
-        nodes.push(copy);
-    }
+        }
+    });
+    const sourceNodes = nodes.filter(n => sourceIds.has(n.id));
+    const idMap = new Map();
+    const copies = sourceNodes.map(source => {
+        const copy = cloneNode(source, 0, 0);
+        idMap.set(source.id, copy.id);
+        return copy;
+    });
+    copies.forEach(copy => {
+        if((copy.type === 'group' || copy.type === 'promptGroup') && Array.isArray(copy.items)){
+            copy.items = copy.items.map(id => idMap.get(id) || id);
+        }
+    });
+    nodes.push(...copies);
     if(preserveConnections){
         const copiedConnections = (connections || [])
             .filter(conn => sourceIds.has(conn.to))
@@ -14869,7 +15656,10 @@ function duplicateNodesForAltDrag(node, preserveConnections=false){
             }
         });
     }
-    return copy;
+    return {
+        dragCopy:copies.find(copy => copy.id === idMap.get(node.id)),
+        selectedCopyIds:selectedSourceIds.map(id => idMap.get(id)).filter(Boolean)
+    };
 }
 function copySelectedNodes(){
     if(!canvas || !selected.size) return;
@@ -15141,8 +15931,16 @@ async function importWorkflowFile(file){
         const res = await fetch('/api/canvas-workflows/import', {method:'POST', body:form});
         if(!res.ok) throw new Error(await responseErrorMessage(res, '导入工作流失败'));
         const data = await res.json();
-        insertWorkflowIntoCanvas(normalizeImportedWorkflow(data));
+        const imported = normalizeImportedWorkflow(data);
+        const importedUrls = canvasLocalAssetUrls(imported.nodes, []);
+        insertWorkflowIntoCanvas(imported);
+        await refreshMissingCanvasAssets();
+        render();
         closeWorkflowTransferModal();
+        const missing = importedUrls.filter(url => missingAssetUrls.has(url));
+        if(missing.length){
+            showErrorModal(`工作流已导入，但有 ${missing.length} 个本地素材文件缺失。请重新指定素材，或从原画布导出“包含资源”的 ZIP 后再导入。`, '导入资源缺失');
+        }
     } catch(err) {
         showErrorModal(err.message || '导入工作流失败', '导入工作流');
     }
@@ -15155,10 +15953,11 @@ function startNodeDrag(e, node){
     let dragTarget = node;
     if(e.altKey){
         setKnifeMode(false);
-        const copy = duplicateNodesForAltDrag(node, e.shiftKey);
+        pushUndo();
+        const {dragCopy, selectedCopyIds} = duplicateNodesForAltDrag(node, e.shiftKey);
         selected.clear();
-        selected.add(copy.id);
-        dragTarget = copy;
+        selectedCopyIds.forEach(id => selected.add(id));
+        dragTarget = dragCopy;
         if(e.shiftKey){
             sanitizeConnections();
             syncGeneratorInputs();

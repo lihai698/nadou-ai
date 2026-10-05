@@ -1,0 +1,50 @@
+{
+  "date": "2026-10-03",
+  "environment": {
+    "origin": "http://127.0.0.1:3018",
+    "page": "http://127.0.0.1:3018/static/asset-manager.html",
+    "browser": "Codex in-app browser, including the home-page embedded asset library",
+    "fixtureServer": "output/acceptance-20261003/f16_kind_server.py",
+    "isolatedDataRoot": "output/acceptance-20261003/f16-kind-data",
+    "data": "Self-made PNG, WAV, WebM, JSON workflow, canvas assets, and one generated PNG; no private configuration or provider call"
+  },
+  "change": "Known system media, workflow-format, and canvas-kind labels are translated inside mixed metadata without translating user names or paths. The storage delete count and confirmation are localized.",
+  "browserObservations": {
+    "assetCardsEnglish": [
+      "The image card displayed 模型 Image; the custom name 模型 stayed unchanged.",
+      "The audio and video cards displayed Audio and Video.",
+      "The workflow card and details displayed JSON Workflow; the custom name 中文工作流 stayed unchanged."
+    ],
+    "canvasAssetsEnglish": [
+      "The Smart Canvas and Classic Canvas categories and Audio and Video asset cards displayed in English.",
+      "The detail panel displayed Type Audio and Canvas Categories Classic Canvas; custom canvas and asset names stayed in Chinese.",
+      "After the cache refresh, a canvas group subtitle displayed Smart Canvas / date, and the detail copy-link title displayed Copy Link; switching back restored 智能画布 / date and 复制链接."
+    ],
+    "languageRoundTrip": [
+      "The home-page embedded asset library switched directly from Chinese to English with the already displayed cards updated.",
+      "After switching back to Chinese without reloading, the workflow type displayed JSON 工作流 and the custom name remained 中文工作流.",
+      "The Local Assets default root displayed All Uploads 0 in English and 全部上传 0 after switching back to Chinese and refreshing."
+    ],
+    "storageManagement": {
+      "englishSelectedButton": "Delete 1",
+      "englishConfirmation": "Delete selected images (1) from disk? This cannot be undone.",
+      "confirmationOutcome": "The confirmation was dismissed without acceptance; the file stayed listed and selected, and the button still showed Delete 1.",
+      "chineseSelectedButtonAfterLanguageSwitch": "删除 1"
+    }
+  },
+  "diskReadbackAfterCancelledDelete": {
+    "file": "output/acceptance-20261003/f16-kind-data/assets/output/f16_delete_cancel.png",
+    "sha256Before": "262CB7DA55D55D6C9B2BE5ABAC8E9C5A13F82623A173D0C56F1289395D14CA3D",
+    "sha256After": "262CB7DA55D55D6C9B2BE5ABAC8E9C5A13F82623A173D0C56F1289395D14CA3D",
+    "isolatedStorageApiTotalAfter": 1
+  },
+  "validation": [
+    "Actual browser page: existing asset, workflow and canvas-asset cards and details updated across English/Chinese switches; custom Chinese names stayed unchanged.",
+    "Actual browser page: selected storage delete button translated, confirmation was shown and dismissed without deletion; disk hash and isolated API listing were unchanged.",
+    "node --check for the changed asset manager and i18n scripts: passed",
+    "node static/js/i18n/validate-i18n.js: i18n ok, 1076 keys",
+    "frontend node --test: 101/101 passed",
+    "git diff --check for changed frontend files: passed"
+  ],
+  "limits": "The actual-page sample covered image, audio, video, JSON workflow and canvas-asset labels. ZIP workflow, text media and local-asset cards were wired through the same marked-label path but were not yet individually checked in this browser run. Other deep dialogs and error states still require F16 coverage; F16 remains partial."
+}

@@ -16,11 +16,11 @@
             } catch(e) {}
         })();
     </script>
-    <script src="/static/vendor/js/lucide.js?v=2026.08.28.1790740572"></script>
-    <script src="/static/js/theme.js?v=2026.08.28.1790740572"></script>
-    <script src="/static/js/touch-mouse.js?v=2026.08.28.1790740572"></script>
-    <script src="/static/js/i18n.js?v=2026.08.28.1790740572"></script>
-    <link rel="stylesheet" href="/static/css/smart-canvas.css?v=2026.08.28.1790743173">
+    <script src="/static/vendor/js/lucide.js?v=2026.10.05.1790740572"></script>
+    <script src="/static/js/theme.js?v=2026.10.05.1790740572"></script>
+    <script src="/static/js/touch-mouse.js?v=2026.10.05.1790740572"></script>
+    <script src="/static/js/i18n.js?v=2026.10.05.1791022416"></script>
+    <link rel="stylesheet" href="/static/css/smart-canvas.css?v=2026.10.05.1790963003">
 </head>
 <body>
     <div id="shell" class="shell">
@@ -64,6 +64,10 @@
         </div>
         <button class="smart-back" type="button" onclick="backToCanvasList()"><i data-lucide="arrow-left"></i><span data-i18n="canvas.backToList">返回画布列表</span></button>
         <div id="smartTitle" class="smart-title" data-i18n="smart.title">智能画布</div>
+        <div id="canvasSaveError" class="canvas-save-error" role="alert" hidden>
+            <span data-i18n="smart.canvasSaveFailed">保存失败，当前修改尚未保存。请检查连接后重试。</span>
+            <button type="button" onclick="retryCanvasSave()" data-i18n="smart.canvasSaveRetry">重试保存</button>
+        </div>
         <div id="createMenu" class="create-menu">
             <div class="create-menu-grid">
                 <button class="create-card" type="button" data-create-type="image">
@@ -444,6 +448,6 @@
         <div id="toast" class="toast"></div>
         <div id="mentionPreview" class="mention-preview"><img alt="preview"></div>
     </div>
-    <script src="/static/js/smart-canvas.js?v=2026.08.28.1790743220"></script>
+    <script src="/static/js/smart-canvas.js?v=2026.10.05.1791084931"></script>
 </body>
 </html>
