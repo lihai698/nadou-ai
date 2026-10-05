@@ -53,7 +53,6 @@ from backend.model_selection import (
     normalize_model_list,
     selected_model,
 )
-from backend.model_candidates import candidate_models
 from backend.tracing import (
     bind_context,
     current_request_id,
@@ -3932,7 +3931,8 @@ def looks_like_vision_chat_model(model):
     return any(key in lc for key in vision_keys)
 
 def preferred_chat_model(provider):
-    models = candidate_models("", provider.get("chat_models") or [], CHAT_MODEL)
+    values = [str(item or "").strip() for item in (provider.get("chat_models") or [CHAT_MODEL])]
+    models = [item for item in values if item]
     if not models:
         return CHAT_MODEL
     if is_volcengine_provider(provider):
