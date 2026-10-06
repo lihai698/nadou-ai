@@ -121,6 +121,7 @@ const ASSET_SMART_CATEGORY_PREFIX = '__smart_class__::';
 const PROMPT_PRESETS_KEY = 'smart_canvas_prompt_presets_v1';
 const PROMPT_TEMPLATE_GROUPS_KEY = 'smart_canvas_prompt_template_groups_v1';
 const PROMPT_TEMPLATE_OVERRIDES_KEY = 'smart_canvas_prompt_template_overrides_v1';
+const SMART_UNSAVED_ACCEPTED_TASKS_PREFIX = 'smart_canvas_unsaved_accepted_tasks:';
 let promptPresets = [];
 let builtinPromptTemplates = [];
 let promptLibraries = [];
@@ -6135,6 +6136,7 @@ async function loadCanvas(){
         loadRecentSmartSettings();
         if(settings.comfy_workflow && !settings.comfyWorkflow) settings.comfyWorkflow = settings.comfy_workflow;
         if(settings.comfy_params && !settings.comfyParams) settings.comfyParams = settings.comfy_params;
+        restoreSmartUnsavedAcceptedTasks();
         updateProviderModels();
         applyViewport();
         render();
@@ -6214,6 +6216,10 @@ async function saveCanvas(){
                 if(titleEl) titleEl.textContent = canvas.title || tr('canvas.smartCanvas');
             }
             rememberServerCanvasNodes(Array.isArray(data.canvas?.nodes) ? data.canvas : storageCanvas);
+            if(typeof clearSmartUnsavedAcceptedTasks === 'function'){
+                clearSmartUnsavedAcceptedTasks((storageCanvas.nodes || []).flatMap(node =>
+                    (node.pendingTasks || []).map(task => task?.taskId).filter(Boolean)));
+            }
             setCanvasSaveError(false);
             return true;
         } else if(res.status === 409) {
@@ -16753,16 +16759,24 @@ function recordSmartTaskSubmission(node, taskResult, runState=null){
     return warning;
 }
 async function saveSmartAcceptedTasksBeforeQuery(node, taskIds){
-    if(await saveCanvas()) return true;
-    const acceptedIds = new Set(taskIds);
-    smartPendingTasks(node).forEach(task => {
+    const acceptedIds = new Set((taskIds || []).map(value => String(value || '').trim()).filter(Boolean));
+    const pendingTasksForBackup = () => typeof smartPendingTasks === 'function'
+        ? smartPendingTasks(node)
+        : (Array.isArray(node?.pendingTasks) ? node.pendingTasks.filter(task => task && task.taskId) : []);
+    const acceptedTasks = pendingTasksForBackup().filter(task => acceptedIds.has(String(task.taskId || '')));
+    if(typeof rememberSmartAcceptedTasks === 'function') rememberSmartAcceptedTasks(node, acceptedTasks);
+    if(await saveCanvas()){
+        if(typeof clearSmartUnsavedAcceptedTasks === 'function') clearSmartUnsavedAcceptedTasks(taskIds);
+        return true;
+    }
+    pendingTasksForBackup().forEach(task => {
         if(!acceptedIds.has(task.taskId)) return;
         task.querying = false;
         task.queryPaused = true;
         task.savePending = true;
         task.error = '画布尚未保存，请先重试保存，再查询原任务';
     });
-    node.pending = smartPendingTasks(node).length;
+    node.pending = pendingTasksForBackup().length;
     node.running = false;
     render();
     scheduleSave();
@@ -17427,6 +17441,92 @@ function smartPendingTasks(node){
     if(!node || !Array.isArray(node.pendingTasks)) return [];
     return node.pendingTasks.filter(task => task && task.taskId);
 }
+function smartUnsavedAcceptedTasksKey(id){
+    const currentId = id === undefined
+        ? (typeof canvasId === 'string' ? canvasId : '')
+        : String(id || '');
+    return currentId ? `${SMART_UNSAVED_ACCEPTED_TASKS_PREFIX}${currentId}` : '';
+}
+function readSmartUnsavedAcceptedTasks(id){
+    const key = smartUnsavedAcceptedTasksKey(id);
+    if(!key || typeof localStorage === 'undefined') return [];
+    try {
+        const entries = JSON.parse(localStorage.getItem(key) || '[]');
+        return Array.isArray(entries) ? entries : [];
+    } catch(_) { return []; }
+}
+function rememberSmartAcceptedTasks(node, tasks=[]){
+    const key = smartUnsavedAcceptedTasksKey();
+    if(!key || !node?.id || typeof localStorage === 'undefined') return false;
+    const entries = readSmartUnsavedAcceptedTasks();
+    (tasks || []).forEach(task => {
+        const taskId = String(task?.taskId || '').trim().slice(0, 256);
+        if(!taskId) return;
+        const entry = {
+            taskId,
+            nodeId:String(node.id).slice(0, 160),
+            kind:String(task.kind || 'image').slice(0, 32),
+            providerId:String(task.providerId || '').slice(0, 128),
+            model:String(task.model || '').slice(0, 256),
+            segmentId:String(task.segmentId || '').slice(0, 128),
+            startedAt:Number(task.startedAt || nowMs())
+        };
+        const index = entries.findIndex(item => item?.taskId === taskId);
+        if(index >= 0) entries[index] = entry;
+        else entries.push(entry);
+    });
+    try {
+        localStorage.setItem(key, JSON.stringify(entries.slice(-32)));
+        return true;
+    } catch(_) { return false; }
+}
+function clearSmartUnsavedAcceptedTasks(taskIds=[]){
+    const key = smartUnsavedAcceptedTasksKey();
+    if(!key || typeof localStorage === 'undefined') return;
+    const ids = new Set((taskIds || []).map(value => String(value || '').trim()).filter(Boolean));
+    if(!ids.size) return;
+    const remaining = readSmartUnsavedAcceptedTasks().filter(item => !ids.has(String(item?.taskId || '')));
+    try {
+        if(remaining.length) localStorage.setItem(key, JSON.stringify(remaining));
+        else localStorage.removeItem(key);
+    } catch(_) {}
+}
+function restoreSmartUnsavedAcceptedTasks(){
+    const entries = readSmartUnsavedAcceptedTasks();
+    if(!entries.length) return 0;
+    let recovered = 0;
+    const alreadySaved = [];
+    entries.forEach(entry => {
+        const taskId = String(entry?.taskId || '').trim();
+        const node = nodes.find(item => item?.id === entry?.nodeId);
+        if(!taskId || !node) return;
+        const existing = smartPendingTasks(node).find(task => task.taskId === taskId);
+        if(existing){
+            alreadySaved.push(taskId);
+            return;
+        } else {
+            node.pendingTasks = [...smartPendingTasks(node), {
+                taskId,
+                kind:String(entry.kind || 'image'),
+                providerId:String(entry.providerId || ''),
+                model:String(entry.model || ''),
+                segmentId:String(entry.segmentId || ''),
+                startedAt:Number(entry.startedAt || nowMs()),
+                querying:false,
+                queryPaused:true,
+                savePending:true,
+                queryRecoverable:true,
+                error:'画布尚未保存，请先重试保存，再查询原任务'
+            }];
+        }
+        node.pending = smartPendingTasks(node).length;
+        node.running = false;
+        recovered += 1;
+    });
+    clearSmartUnsavedAcceptedTasks(alreadySaved);
+    if(recovered) render();
+    return recovered;
+}
 class JimengPendingSignal extends Error {
     constructor(info){
         const data = info || {};
@@ -17600,6 +17700,7 @@ async function querySmartImageTaskNow(nodeId, localTaskId){
                 toast('画布尚未保存，请先重试保存，再查询原任务');
                 return;
             }
+            if(typeof clearSmartUnsavedAcceptedTasks === 'function') clearSmartUnsavedAcceptedTasks([task.taskId]);
             delete task.savePending;
             scheduleSave();
         }

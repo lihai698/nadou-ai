@@ -44,6 +44,8 @@ function smartHarness(base, approve=()=>false){
         tr:key=>key,sizeForRun:()=> '1024x1024',API_RATIO_VALUES:{square:'1:1'},
         imageRefsOnly:refs=>refs,SMART_REFERENCE_IMAGE_MAX:8,
         fetch:(url,init)=>{posts++;return fetch(base+url,init);},
+        rememberSmartAcceptedTasks:()=>false,
+        clearSmartUnsavedAcceptedTasks:()=>{},
     });
     vm.runInContext(section('function smartUnknownSubmissionForNode(', 'function smartTaskSubmissionWarning('),context);
     vm.runInContext(section('function smartTaskSubmissionWarning(', 'async function runApiGeneration('),context);
