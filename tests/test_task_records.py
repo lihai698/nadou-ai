@@ -5,6 +5,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -32,6 +33,39 @@ class TaskRecordRuleTests(unittest.TestCase):
             write_task_record(root, task)
             self.assertEqual(read_task_record(root, task["id"]), task)
             self.assertTrue(Path(root, task["id"] + ".json").is_file())
+
+    def test_legacy_json_keeps_unknown_fields_and_utf8_bom(self):
+        with tempfile.TemporaryDirectory() as root:
+            task_id = "canvas_img_legacy_record_1234"
+            legacy = {
+                "id": task_id,
+                "task_id": task_id,
+                "status": "running",
+                "created_at": 1.0,
+                "updated_at": 2.0,
+                "result": None,
+                "error": "",
+                "legacy_provider_name": "旧配置字段",
+            }
+            Path(root, task_id + ".json").write_bytes(
+                b"\xef\xbb\xbf" + json.dumps(legacy, ensure_ascii=False).encode("utf-8")
+            )
+            self.assertEqual(read_task_record(root, task_id), legacy)
+
+    def test_atomic_write_failure_preserves_existing_record(self):
+        with tempfile.TemporaryDirectory() as root:
+            task = {"id": "canvas_img_atomic_record_1234", "status": "queued"}
+            write_task_record(root, task)
+            path = Path(root, task["id"] + ".json")
+            before = path.read_bytes()
+            with patch("backend.task_records.write_json_atomic", side_effect=OSError("disk full")):
+                with self.assertRaises(OSError):
+                    write_task_record(root, {**task, "status": "running"})
+            self.assertEqual(path.read_bytes(), before)
+
+    def test_missing_record_returns_none(self):
+        with tempfile.TemporaryDirectory() as root:
+            self.assertIsNone(read_task_record(root, "canvas_img_missing_record_1234"))
 
     def test_video_records_use_the_same_persistence_contract(self):
         with tempfile.TemporaryDirectory() as root:
