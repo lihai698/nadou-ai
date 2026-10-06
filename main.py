@@ -93,6 +93,7 @@ from backend.task_records import (
     _write_task_record_unlocked,
     mark_interrupted_task,
     read_task_record,
+    task_records_lock,
     task_record_path,
     task_input_summary,
     write_task_record,
@@ -17216,9 +17217,9 @@ def canvas_video_task_path(task_id: str) -> str:
 def canvas_video_task_record_lock(task_id: str):
     """同编号视频任务的短读改写锁；供应商请求必须在锁外执行。"""
 
-    # 与 backend.task_records 共用目录级维护锁；读改写仍由本地 RLock
-    # 保护，供应商请求继续在锁外执行，避免阻塞其他任务。
-    with interprocess_file_lock(os.path.join(CANVAS_VIDEO_TASK_DIR, ".task_records")):
+    # 统一使用任务记录模块的目录级维护锁；读改写仍由本地 RLock 保护，
+    # 供应商请求继续在锁外执行，避免阻塞其他任务。
+    with task_records_lock(CANVAS_VIDEO_TASK_DIR):
         with CANVAS_VIDEO_TASK_LOCK:
             yield
 

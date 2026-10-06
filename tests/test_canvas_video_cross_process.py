@@ -216,7 +216,7 @@ class CanvasVideoRefreshCoordinationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(main.read_canvas_video_task(self.task_id)["status"], "succeeded")
 
     async def test_lock_failure_returns_503_without_supplier_submission(self):
-        with patch.object(main, "interprocess_file_lock", side_effect=TimeoutError("synthetic lock timeout")), patch.object(
+        with patch.object(main, "task_records_lock", side_effect=TimeoutError("synthetic lock timeout")), patch.object(
             main, "canvas_video", new=AsyncMock()
         ) as generate:
             response = await self.client.post(
@@ -249,7 +249,7 @@ class CanvasVideoRefreshCoordinationTests(unittest.IsolatedAsyncioTestCase):
             provider_id="test-only",
             prompt="自制隔离提示",
         )
-        with patch.object(main, "interprocess_file_lock", side_effect=TimeoutError("synthetic lock timeout")), patch.object(
+        with patch.object(main, "task_records_lock", side_effect=TimeoutError("synthetic lock timeout")), patch.object(
             main, "canvas_video", new=AsyncMock()
         ) as generate:
             await main.run_canvas_video_task(self.task_id, payload)
