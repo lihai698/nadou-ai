@@ -7,6 +7,8 @@
 /output/
 .nadou-dependencies.ok
 /history.json
+/history.json.*.bak
+/global_config.json
 __pycache__/
 *.py[cod]
 *.log
