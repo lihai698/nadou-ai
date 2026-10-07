@@ -125,7 +125,8 @@ function isCanvasPreviewImage(img){
 function bindCanvasPreviewImageFallbacks(root=document){
     root.querySelectorAll?.('img[data-preview-src][data-original-src]:not([data-preview-fallback-bound])').forEach(img => {
         img.dataset.previewFallbackBound = '1';
-        img.addEventListener('error', () => {
+        const fallback = () => {
+            if(!img.parentElement) return;
             const original = img.dataset.originalSrc || img.dataset.url || '';
             if(img.dataset.previewKind === 'video'){
                 const video = document.createElement('template');
@@ -134,7 +135,10 @@ function bindCanvasPreviewImageFallbacks(root=document){
                 return;
             }
             if(original && img.getAttribute('src') !== original) img.src = original;
-        });
+        };
+        img.addEventListener('error', fallback);
+        // 动态输入列表可能在绑定前就收到预览接口的错误响应。
+        if(img.complete && !img.naturalWidth) fallback();
     });
 }
 const CANVAS_SELECTED_HIGH_RES_DELAY = 320;
@@ -3330,7 +3334,7 @@ function openImageNodeMenu(nodeId, clientX, clientY){
     closeCreateMenu();
     const kind = mediaKindForNode(node);
     const canPreview = node.url && !isMissingAssetUrl(node.url) && ['image','video'].includes(kind);
-    const canEdit = node.url && !isMissingAssetUrl(node.url) && kind === 'image';
+    const canEdit = node.url && !isMissingAssetUrl(node.url) && ['image','video'].includes(kind);
     imageNodeMenu.innerHTML = `
         ${canPreview ? `<button class="menu-btn" data-image-preview="${escapeAttr(nodeId)}"><i data-lucide="eye" class="w-4 h-4"></i><span>预览</span></button>` : ''}
         ${canEdit ? `<button class="menu-btn" data-image-edit="${escapeAttr(nodeId)}"><i data-lucide="pencil" class="w-4 h-4"></i><span>编辑</span></button>` : ''}
@@ -3352,7 +3356,8 @@ function openImageNodeMenu(nodeId, clientX, clientY){
         editBtn.onclick = e => {
             e.stopPropagation();
             closeImageNodeMenu();
-            openImageEditor(nodeId);
+            if(kind === 'video') openCanvasVideoEditor(node.id, node.url, node.name || '视频');
+            else openImageEditor(nodeId);
         };
     }
     imageNodeMenu.querySelector('[data-image-replace]').onclick = e => {
@@ -3368,6 +3373,135 @@ function openImageNodePreview(nodeId){
     const kind = mediaKindForNode(node);
     if(!['image','video'].includes(kind)) return;
     openOutputLightbox(node.url, node);
+}
+function canvasDepthPair(node){
+    const capture = node?.depthCapture;
+    if(!capture) return [];
+    return nodes.filter(item => item.depthCapture?.operationId === capture.operationId);
+}
+function remapCanvasDepthCopies(copies, idMap, preserveExternal=false){
+    const operations = new Map();
+    copies.forEach(node => {
+        const capture = node.depthCapture;
+        if(!capture) return;
+        const oldOperation = capture.operationId || node.id;
+        if(!operations.has(oldOperation)) operations.set(oldOperation, CanvasDepthCapture.operationId());
+        capture.operationId = operations.get(oldOperation);
+        capture.sourceId = idMap.get(capture.sourceId) || (preserveExternal ? capture.sourceId : '');
+        capture.taskId = '';
+        if(capture.status !== 'succeeded'){
+            capture.status = 'failed';
+            capture.stage = '复制的任务未继续运行';
+            capture.error = capture.sourceId ? '请点击重试' : '原视频未一同复制，请从原视频重新创建';
+        }
+    });
+}
+function latestCanvasDepthCapture(sourceId, sourceUrl){
+    return nodes.filter(item => item.depthCapture?.sourceId === sourceId && item.depthCapture?.sourceUrl === sourceUrl)
+        .sort((a,b) => Number(b.depthCapture.createdAt || 0) - Number(a.depthCapture.createdAt || 0))[0]?.depthCapture || null;
+}
+function openCanvasVideoEditor(sourceId, sourceUrl, title='视频'){
+    CanvasDepthCapture.open({sourceUrl, title,
+        getCurrent:() => latestCanvasDepthCapture(sourceId, sourceUrl) || {},
+        onStart:() => startCanvasDepthCapture(sourceId, sourceUrl),
+        onRetry:() => {
+            const capture = latestCanvasDepthCapture(sourceId, sourceUrl);
+            if(capture) return retryCanvasDepthCapture(nodes.find(n => n.depthCapture === capture)?.id);
+        },
+        onCancel:() => {
+            const capture = latestCanvasDepthCapture(sourceId, sourceUrl);
+            if(capture) return cancelCanvasDepthCapture(nodes.find(n => n.depthCapture === capture)?.id);
+        }
+    });
+}
+function updateCanvasDepthCapture(pair, task, operationId){
+    if(!pair.length || pair[0].depthCapture?.operationId !== operationId) return;
+    const old = pair[0].depthCapture;
+    const state = {...old, taskId:task.id || old.taskId || '', status:task.status || old.status,
+        stage:task.stage || old.stage, error:task.error || '', progress:task.progress || 0,
+        result_url:task.result_url || old.result_url || '', pose_url:task.pose_url || old.pose_url || '',
+        pose_data_url:task.pose_data_url || old.pose_data_url || '',
+        detected_frames:task.detected_frames, total_frames:task.total_frames};
+    pair.forEach(node => {
+        node.depthCapture = {...state, role:node.depthCapture.role};
+        if(task.status === 'succeeded'){
+            node.url = node.depthCapture.role === 'pose' ? state.pose_url : state.result_url;
+            node.mediaKind = 'video';
+            node.name = node.depthCapture.role === 'pose' ? '骨骼姿态参考' : '灰度深度参考';
+        }
+    });
+    refreshNodes(pair.map(node => node.id));
+    CanvasDepthCapture.update();
+    if(old.taskId !== state.taskId || ['succeeded','failed','cancelled'].includes(state.status)) scheduleSave();
+}
+function watchCanvasDepthCapture(node){
+    const capture = node?.depthCapture;
+    if(!capture || ['succeeded','failed','cancelled'].includes(capture.status)) return;
+    const operationId = capture.operationId;
+    CanvasDepthCapture.watch(`canvas:${canvas?.id}:${operationId}`,
+        async () => {
+            const live = nodes.find(n => n.id === node.id && n.depthCapture?.operationId === operationId);
+            if(!live) throw new Error('结果节点已移除');
+            return live.depthCapture.taskId
+                ? CanvasDepthCapture.get(live.depthCapture.taskId)
+                : CanvasDepthCapture.submit(live.depthCapture.sourceUrl, operationId);
+        }, task => updateCanvasDepthCapture(nodes.filter(n => n.depthCapture?.operationId === operationId), task, operationId));
+}
+async function startCanvasDepthCapture(sourceId, sourceUrl){
+    const source = nodes.find(n => n.id === sourceId);
+    if(!source) throw new Error('原视频节点已不存在');
+    pushUndo();
+    const id = CanvasDepthCapture.operationId();
+    const rect = nodeRect(source);
+    const base = {sourceId, sourceUrl, operationId:id, taskId:'', status:'submitting',
+        stage:'保存画布并提交任务', error:'', createdAt:Date.now()};
+    const sourceWidth = rect.w || rect.width || 260;
+    const depth = {id:uid('img'), type:'image', x:rect.x + sourceWidth + 70, y:rect.y,
+        url:'', name:'灰度深度参考', mediaKind:'video', depthCapture:{...base, role:'depth'}};
+    const pose = {id:uid('img'), type:'image', x:rect.x + sourceWidth + 70, y:rect.y + 245,
+        url:'', name:'骨骼姿态参考', mediaKind:'video', depthCapture:{...base, role:'pose'}};
+    const group = {
+        id:uid('grp'), type:'group',
+        x:depth.x - 24, y:depth.y - 58,
+        w:308, h:(pose.y - depth.y) + 336 + 90,
+        items:[depth.id, pose.id]
+    };
+    nodes.push(depth, pose, group);
+    connections.push({from:sourceId, to:depth.id}, {from:sourceId, to:pose.id});
+    selected.clear();
+    selected.add(group.id);
+    render();
+    if(!await saveCanvas()){
+        updateCanvasDepthCapture([depth,pose], {status:'failed', stage:'画布保存失败', error:'请保存画布后重试'}, id);
+        return;
+    }
+    watchCanvasDepthCapture(depth);
+    CanvasDepthCapture.update();
+}
+async function retryCanvasDepthCapture(nodeId){
+    const node = nodes.find(n => n.id === nodeId);
+    if(!node?.depthCapture) return;
+    const pair = canvasDepthPair(node);
+    const id = CanvasDepthCapture.operationId();
+    pair.forEach(item => { item.url = ''; item.depthCapture = {...item.depthCapture,
+        operationId:id, taskId:'', status:'submitting', stage:'保存画布并重试', error:'',
+        result_url:'', pose_url:'', pose_data_url:'', createdAt:Date.now()}; });
+    render();
+    if(!await saveCanvas()){
+        updateCanvasDepthCapture(pair, {status:'failed', stage:'画布保存失败', error:'请保存画布后重试'}, id);
+        return;
+    }
+    watchCanvasDepthCapture(pair[0]);
+}
+async function cancelCanvasDepthCapture(nodeId){
+    const node = nodes.find(n => n.id === nodeId);
+    if(!node?.depthCapture?.taskId) return;
+    const task = await CanvasDepthCapture.cancel(node.depthCapture.taskId);
+    updateCanvasDepthCapture(canvasDepthPair(node), task, node.depthCapture.operationId);
+}
+function resumeCanvasDepthCaptureTasks(){
+    nodes.filter(node => node.depthCapture && !['succeeded','failed','cancelled'].includes(node.depthCapture.status))
+        .forEach(watchCanvasDepthCapture);
 }
 function openOutputNodeMenu(nodeId, clientX, clientY){
     const node = nodes.find(n => n.id === nodeId);
@@ -5956,15 +6090,40 @@ function mediaSignatureFromElement(el){
 }
 function transplantNodeMediaElement(oldNodeEl, newNodeEl){
     const oldMedia = oldNodeEl?.querySelector?.('video,audio');
+    if(!oldMedia) return;
     const newMedia = newNodeEl?.querySelector?.('video,audio');
-    if(!oldMedia || !newMedia) return;
+    const newVideoPreview = oldMedia.tagName.toLowerCase() === 'video'
+        ? newNodeEl?.querySelector?.('img[data-preview-kind="video"]') : null;
+    const replacement = newMedia || newVideoPreview;
+    if(!replacement) return;
     const oldSignature = mediaSignatureFromElement(oldNodeEl);
-    const newSignature = mediaSignatureFromElement(newNodeEl);
+    const newSignature = newMedia ? mediaSignatureFromElement(newNodeEl)
+        : `video:${newVideoPreview.dataset.originalSrc || newVideoPreview.dataset.url || ''}`;
     if(!oldSignature || oldSignature !== newSignature) return;
     const state = captureMediaPlaybackState(oldMedia);
-    newMedia.replaceWith(oldMedia);
+    replacement.replaceWith(oldMedia);
+    if(newVideoPreview) newNodeEl.querySelector('.canvas-video-play')?.style?.setProperty('display', 'none');
     restoreMediaPlaybackState(oldMedia, state);
     requestAnimationFrame(() => restoreMediaPlaybackState(oldMedia, state));
+}
+function transplantInputPreviews(oldNodeEl, newNodeEl){
+    if(!oldNodeEl || !newNodeEl) return;
+    const oldItems = [...oldNodeEl.querySelectorAll('.input-list .input-item')];
+    newNodeEl.querySelectorAll('.input-list .input-item').forEach((item, index) => {
+        const oldItem = oldItems[index];
+        if(!oldItem || oldItem.dataset.sourceId !== item.dataset.sourceId) return;
+        const oldPreview = oldItem.querySelector('img[data-original-src], video[data-url]');
+        const newPreview = item.querySelector('img[data-original-src], video[data-url]');
+        const oldUrl = oldPreview?.dataset.originalSrc || oldPreview?.dataset.url;
+        const newUrl = newPreview?.dataset.originalSrc || newPreview?.dataset.url;
+        if(oldUrl && oldUrl === newUrl) newPreview.replaceWith(oldPreview);
+    });
+    const oldMiniMaxPreviews = [...oldNodeEl.querySelectorAll('.minimax-canvas-workbench img[data-original-src], .minimax-canvas-workbench video[data-url]:not([data-minimax-player])')];
+    newNodeEl.querySelectorAll('.minimax-canvas-workbench img[data-original-src]').forEach((preview, index) => {
+        const previous = oldMiniMaxPreviews[index];
+        const previousUrl = previous?.dataset.originalSrc || previous?.dataset.url;
+        if(previousUrl && previousUrl === preview.dataset.originalSrc) preview.replaceWith(previous);
+    });
 }
 function captureMediaPlaybackStates(){
     const states = new Map();
@@ -6005,29 +6164,29 @@ function measureCanvasOriginalImageNodes(root=nodesEl){
 function render(){
     const outputScrolls = captureOutputScrolls();
     const mediaStates = captureMediaPlaybackStates();
-    const reusableMediaNodes = new Map();
+    const oldNodeElements = new Map();
     nodesEl.querySelectorAll('.node').forEach(el => {
-        const node = nodes.find(n => n.id === el.dataset.id);
-        if(nodeHasLiveMedia(node)) reusableMediaNodes.set(node.id, el);
+        oldNodeElements.set(el.dataset.id, el);
     });
     applyViewport();
-    [...nodesEl.children].forEach(child => {
-        if(!reusableMediaNodes.has(child.dataset?.id)) child.remove();
-    });
     nodes.forEach(node => {
         // 单个节点渲染异常不能中断整个循环，否则它后面的节点（含新建节点，通常排在末尾）都不会被
         // 追加进 DOM，连带这些节点的连线也会因找不到 DOM 而画到 (0,0) 变成“消失”。
         try {
             const fresh = renderNode(node);
-            const old = reusableMediaNodes.get(node.id);
+            const old = oldNodeElements.get(node.id);
+            transplantInputPreviews(old, fresh);
             nodesEl.appendChild(fresh);
             if(old){
-                transplantNodeMediaElement(old, fresh);
+                if(nodeHasLiveMedia(node)) transplantNodeMediaElement(old, fresh);
                 if(old !== fresh) old.remove();
             }
         } catch(err){
             console.error('[canvas] renderNode 失败，已跳过该节点：', node?.id, node?.type, err);
         }
+    });
+    oldNodeElements.forEach((old, id) => {
+        if(!nodes.some(node => node.id === id)) old.remove();
     });
     restoreMediaPlaybackStates(mediaStates);
     restoreOutputScrolls(outputScrolls);
@@ -6056,6 +6215,7 @@ function refreshNodes(ids=[]){
         try {
             const fresh = renderNode(node);
             if(nodeHasLiveMedia(node)) transplantNodeMediaElement(current, fresh);
+            transplantInputPreviews(current, fresh);
             current.replaceWith(fresh);
         } catch(err){
             console.error('[canvas] refreshNode 失败，已跳过该节点：', id, err);
@@ -6202,6 +6362,16 @@ function isNodeDragSurface(target){
     return !isNodeControl(target) && !target.closest('.port, .resize-handle, .output-img-wrap');
 }
 function renderNode(node){
+    if(node.depthCapture && (node.x == null || node.x === '' || !Number.isFinite(Number(node.x)))){
+        const source = nodes.find(item => item.id === node.depthCapture.sourceId);
+        const sourceX = Number(source?.x);
+        const sourceY = Number(source?.y);
+        const sourceWidth = Number(source?.w) || defaultNodeSize(source?.type || 'image').w || 260;
+        node.x = (Number.isFinite(sourceX) ? sourceX : 0) + sourceWidth + 70;
+        if(node.y == null || node.y === '' || !Number.isFinite(Number(node.y))){
+            node.y = (Number.isFinite(sourceY) ? sourceY : 0) + (node.depthCapture.role === 'pose' ? 245 : 0);
+        }
+    }
     normalizeApiNodeLayout(node);
     if(node.type === 'rh' && Number(node.h) === 560) delete node.h;
     const el = document.createElement('div');
@@ -6228,7 +6398,7 @@ function renderNode(node){
         else openGeneratorNodeMenu(node.id, e.clientX, e.clientY);
     };
     const title = node.type === 'image' ? 'Image' : node.type === 'prompt' ? 'Prompt' : node.type === 'loop' ? tr('canvas.loopNode') : node.type === 'promptGroup' ? 'Prompts' : node.type === 'group' ? 'Group' : node.type === 'output' ? 'Output' : node.type === 'llm' ? 'LLM' : node.type === 'comfy' ? 'ComfyUI' : node.type === 'ltxDirector' ? tr('canvas.ltxDirector') : node.type === 'rh' ? 'RunningHub' : node.type === 'minimax' ? 'MiniMax H3' : node.type === 'midjourney' ? 'Midjourney' : node.type === 'msgen' ? tr('canvas.modelscopeGenerate') : node.type === 'video' ? tr('canvas.videoGenerateNode') : tr('canvas.apiGenerate');
-    const displayTitle = node.type === 'image' && node.url ? nodeTitleForMedia(node) : title;
+    const displayTitle = node.depthCapture ? (node.depthCapture.role === 'pose' ? '骨骼姿态' : '灰度深度') : node.type === 'image' && node.url ? nodeTitleForMedia(node) : title;
     // 失败徽章只在一键运行模式中显示，单节点失败已通过 alert 提示
     const showStatus = ['generator','midjourney','msgen','comfy','ltxDirector','llm','video','rh','minimax'].includes(node.type) && node.runStatus
         && (node.runStatus !== 'failed' || node._cascadeFailed);
@@ -6256,6 +6426,9 @@ function renderNode(node){
                     ? `<div class="media-card video-card">${canvasVideoPreviewHtml(node.url, 768, 'draggable="false" data-video-fallback-attrs="controls"')}<button class="canvas-video-play" type="button" title="播放"><i data-lucide="play"></i></button></div>`
                     : `<div class="media-card audio-card"><i data-lucide="file-audio" class="w-8 h-8"></i><div class="audio-title">${escapeHtml(node.name || 'Audio')}</div><div class="audio-sub">AUDIO</div><audio src="${escapeAttr(node.url)}" data-url="${escapeAttr(node.url)}" controls preload="metadata"></audio></div>`;
                 body.innerHTML = `<div class="image-preview-wrap">${mediaHtml}</div><div class="image-caption text-[11px] text-gray-400 truncate">${escapeHtml(node.name || nodeTitleForMedia(node))}</div>`;
+            }
+            if(node.depthCapture?.role === 'pose' && node.depthCapture.pose_data_url){
+                body.insertAdjacentHTML('beforeend', `<div class="canvas-depth-task-actions"><a href="${escapeAttr(node.depthCapture.pose_data_url)}" download>下载关节 JSON</a></div>`);
             }
             const previewWrap = body.querySelector('.image-preview-wrap');
             const loadedImg = body.querySelector('img');
@@ -6325,6 +6498,22 @@ function renderNode(node){
             } else if(loadedImg) {
                 loadedImg.onload = () => refreshGeometryAfterLayout();
             }
+        } else if(node.depthCapture){
+            const capture = node.depthCapture;
+            const running = ['queued','running','submitting','query-error'].includes(capture.status);
+            const progress = Math.max(0, Math.min(100, Math.round(Number(capture.progress) || 0)));
+            body.innerHTML = `<div class="canvas-depth-task"><strong>${capture.role === 'pose' ? '骨骼姿态参考' : '灰度深度参考'}</strong><span>${escapeHtml(capture.stage || '准备处理')}${capture.error ? `：${escapeHtml(capture.error)}` : ''}</span><span class="canvas-depth-progress-label">进度 ${progress}%</span><div class="canvas-depth-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${progress}"><i style="width:${progress}%"></i></div><div class="canvas-depth-task-actions">${running && capture.taskId ? `<button type="button" data-depth-action="cancel">取消</button>` : ''}${capture.sourceId && ['failed','cancelled'].includes(capture.status) ? `<button type="button" data-depth-action="retry">重试</button>` : ''}</div></div>`;
+            body.onmousedown = event => {
+                if(event.button !== 0 || event.target.closest('button, a')) return;
+                startNodeDrag(event, node);
+            };
+            body.querySelectorAll('[data-depth-action]').forEach(button => {
+                button.onclick = event => {
+                    event.stopPropagation();
+                    if(button.dataset.depthAction === 'retry') retryCanvasDepthCapture(node.id);
+                    else cancelCanvasDepthCapture(node.id);
+                };
+            });
         } else {
         body.innerHTML = `<div class="blank-image"><i data-lucide="image-plus" class="w-7 h-7"></i><div class="text-[11px] font-bold">${tr('canvas.clickDragPasteImage')}</div></div>`;
             const blank = body.querySelector('.blank-image');
@@ -6355,11 +6544,16 @@ function renderNode(node){
     if(node.type === 'loop') body.appendChild(renderLoopBody(node));
     if(node.type === 'group') {
         const items = (node.items || []).map(id => nodes.find(n => n.id === id)).filter(Boolean);
-        const imgCount = items.filter(n => n.type === 'image').length;
+        const imgCount = items.filter(n => n.type === 'image' && mediaKindForNode(n) === 'image').length;
+        const videoCount = items.filter(n => n.type === 'image' && mediaKindForNode(n) === 'video').length;
+        const audioCount = items.filter(n => n.type === 'image' && mediaKindForNode(n) === 'audio').length;
         const promptCount = items.filter(n => n.type === 'prompt').length;
         const parts = [];
         if(imgCount) parts.push(`${imgCount} ${tr('canvas.imageCount')}`);
+        if(videoCount) parts.push(langIsEn() ? `${videoCount} video` : `${videoCount} 个视频`);
+        if(audioCount) parts.push(langIsEn() ? `${audioCount} audio` : `${audioCount} 个音频`);
         if(promptCount) parts.push(`${promptCount} ${tr('canvas.promptCount')}`);
+        if(!parts.length && items.length) parts.push(langIsEn() ? `${items.length} items` : `${items.length} 项素材`);
         const text = parts.length ? `${parts.join(' · ')} ${tr('canvas.grouped')}` : tr('canvas.groupEmpty');
         body.innerHTML = `<div class="text-[11px] text-gray-400">${text}</div>`;
         const previewItems = groupImageItems(node);
@@ -6414,7 +6608,7 @@ function renderNode(node){
         if(e.button !== 0 || !isNodeDragSurface(e.target)) return;
         startNodeDrag(e, node);
     };
-    const canInput = ['generator','midjourney','comfy','ltxDirector','output','llm','msgen','video','rh','minimax'].includes(node.type) || (node.type === 'loop' && (node.imageInput || node.showPrompt));
+    const canInput = Boolean(node.depthCapture) || ['generator','midjourney','comfy','ltxDirector','output','llm','msgen','video','rh','minimax'].includes(node.type) || (node.type === 'loop' && (node.imageInput || node.showPrompt));
     const canOutput = ['image','prompt','loop','group','promptGroup','generator','midjourney','comfy','ltxDirector','llm','msgen','video','rh','minimax','output'].includes(node.type);
     if(canInput) el.insertAdjacentHTML('beforeend', `<div class="port in" title="${tr('canvas.connectHere')}"></div>`);
     if(canOutput) el.insertAdjacentHTML('beforeend', `<div class="port out" title="${tr('canvas.dragConnect')}"></div>`);
@@ -6445,6 +6639,7 @@ function bindOutputWrap(wrap, node){
     const audio = wrap.querySelector('audio');
     const fileCard = wrap.querySelector('.output-file-card');
     const playBtn = wrap.querySelector('.canvas-video-play');
+    const depthEdit = wrap.querySelector('.output-depth-edit');
     const del = wrap.querySelector('.output-del');
     const recoverQuery = wrap.querySelector('.output-recover-query');
     const outputDragUrl = () => img?.dataset.url || video?.dataset.url || audio?.dataset.url || wrap.dataset.outputUrl || '';
@@ -6488,6 +6683,14 @@ function bindOutputWrap(wrap, node){
         video.onclick = e => {
             e.stopPropagation();
             openOutputLightbox(video.dataset.url, node);
+        };
+    }
+    if(depthEdit){
+        depthEdit.onmousedown = e => e.stopPropagation();
+        depthEdit.onclick = e => {
+            e.stopPropagation();
+            const url = outputDragUrl();
+            if(url) openCanvasVideoEditor(node.id, url, outputImageName(url));
         };
     }
     if(fileCard){
@@ -9175,6 +9378,7 @@ function miniMaxStartPaneResize(e, node, pane){
 function renderMiniMaxBody(node){
     const wrap = document.createElement('div');
     wrap.className = 'minimax-canvas-workbench';
+    wrap.dataset.upstreamRefs = JSON.stringify(miniMaxRefsForNode(node).refs.map(ref => [ref.url, mediaKindForRef(ref), ref.name]));
     const selected = miniMaxSelectedSegment(node);
     const total = miniMaxTimelineTotal(node);
     const playhead = Math.max(0, Math.min(total, Number(node.playhead || 0)));
@@ -9504,10 +9708,18 @@ function bindMiniMaxWorkbench(wrap, node){
 }
 function renderPromptPreview(container, promptInputs){
     if(!container) return;
-    container.innerHTML = promptInputs.length ? `<div class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Prompts</div>${promptInputs.map(src => `<div class="text-[11px] text-slate-500 bg-slate-50 border border-slate-100 rounded-xl px-3 py-2 line-clamp-2">${escapeHtml(src.label)}</div>`).join('')}` : '';
+    const html = promptInputs.length ? `<div class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Prompts</div>${promptInputs.map(src => `<div class="text-[11px] text-slate-500 bg-slate-50 border border-slate-100 rounded-xl px-3 py-2 line-clamp-2">${escapeHtml(src.label)}</div>`).join('')}` : '';
+    if(container.innerHTML !== html) container.innerHTML = html;
+}
+function canvasInputListNeedsRender(list, signature){
+    const key = JSON.stringify(signature);
+    if(list.dataset.inputSignature === key) return false;
+    list.dataset.inputSignature = key;
+    return true;
 }
 function renderImageInputList(list, node, imageInputs, emptyText=null){
     if(!list) return;
+    if(!canvasInputListNeedsRender(list, [emptyText || tr('canvas.inputImagesEmpty'), imageInputs.map(src => [src.id, src.preview, src.label])])) return;
     list.innerHTML = imageInputs.length ? '' : `<div class="text-[11px] text-gray-300 py-2">${escapeHtml(emptyText || tr('canvas.inputImagesEmpty'))}</div>`;
     imageInputs.forEach((src, i) => {
         const item = document.createElement('div');
@@ -9533,9 +9745,11 @@ function renderImageInputList(list, node, imageInputs, emptyText=null){
         list.appendChild(item);
     });
     refreshIcons();
+    bindCanvasPreviewImageFallbacks(list);
 }
 function renderVideoImageInputs(list, node, imageInputs){
     if(!list) return;
+    if(!canvasInputListNeedsRender(list, [tr('canvas.groupEmpty'), node.useFrameRoles, imageInputs.map(src => [src.id, src.preview, src.label, mediaKindForRef(src.refs?.[0] || {url:src.preview || ''})])])) return;
     list.innerHTML = imageInputs.length ? '' : `<div class="text-[11px] text-gray-300 py-2">${tr('canvas.groupEmpty')}</div>`;
     imageInputs.forEach((src, i) => {
         const item = document.createElement('div');
@@ -9567,6 +9781,7 @@ function renderVideoImageInputs(list, node, imageInputs){
         list.appendChild(item);
     });
     refreshIcons();
+    bindCanvasPreviewImageFallbacks(list);
 }
 function comfyWorkflowOptions(selected){
     const opts = comfyWorkflows.map(w => `<option value="${escapeHtml(w.name)}" ${w.name === selected ? 'selected' : ''}>${escapeHtml(w.title || w.name.replace('.json',''))}</option>`).join('');
@@ -9739,6 +9954,8 @@ function renderComfyBody(node){
     return wrap;
 }
 function renderComfyImages(list, node, imageInputs){
+    if(!list) return;
+    if(!canvasInputListNeedsRender(list, [tr('canvas.groupEmpty'), imageInputs.map(src => [src.id, src.preview, src.label, mediaKindForRef((src.refs || [])[0] || src.preview)])])) return;
     list.innerHTML = imageInputs.length ? '' : `<div class="text-[11px] text-gray-300 py-2">${tr('canvas.groupEmpty')}</div>`;
     imageInputs.forEach((src, i) => {
         const item = document.createElement('div');
@@ -9771,6 +9988,7 @@ function renderComfyImages(list, node, imageInputs){
         };
         list.appendChild(item);
     });
+    bindCanvasPreviewImageFallbacks(list);
 }
 const RH_KNOWN_FIELD_OPTIONS = {
     aspectRatio:['1:1','16:9','9:16','4:3','3:4','4:5','5:4','3:2','2:3','21:9','9:21'],
@@ -10513,6 +10731,7 @@ function bindRhModelControls(wrap, node, media){
 function renderRhInputs(list, node, media){
     if(!list) return;
     const refs = media.refs || [];
+    if(!canvasInputListNeedsRender(list, [tr('canvas.groupEmpty'), refs.map(ref => [ref.url, mediaKindForRef(ref)])])) return;
     if(!refs.length){
         list.innerHTML = `<div class="text-[11px] text-gray-300 py-2">${tr('canvas.groupEmpty')}</div>`;
         return;
@@ -10525,15 +10744,12 @@ function renderRhInputs(list, node, media){
         item.innerHTML = `<span class="input-index">${i + 1}</span>${rhMediaPreviewHtml(ref, kind)}<span class="input-label">${escapeHtml(nodeTitleForMedia({mediaKind:kind}))}</span>`;
         list.appendChild(item);
     });
+    bindCanvasPreviewImageFallbacks(list);
 }
 function renderRhPromptFields(container, node, fields){
     if(!container) return;
     const prompts = (fields || []).filter(field => rhFieldRole(field) === 'prompt');
-    if(!prompts.length){
-        container.innerHTML = '';
-        return;
-    }
-    container.innerHTML = prompts.map(field => {
+    const html = prompts.map(field => {
         const key = rhParamKey(field.nodeId, field.fieldName);
         const label = field.label || field.fieldName || 'Prompt';
         const value = rhFieldValue(node, field, rhMediaSources(node));
@@ -10542,6 +10758,8 @@ function renderRhPromptFields(container, node, fields){
             <textarea class="setting-input rh-param-input" data-rh-param="${escapeAttr(key)}" data-rh-role="prompt">${escapeHtml(value)}</textarea>
         </label>`;
     }).join('');
+    if(container.innerHTML === html) return;
+    container.innerHTML = html;
     bindRhParamControls(container, node);
 }
 function renderRhParams(container, node, fields, media){
@@ -10550,11 +10768,7 @@ function renderRhParams(container, node, fields, media){
         const role = rhFieldRole(field);
         return !['image','video','audio','prompt'].includes(role);
     });
-    if(!params.length){
-        container.innerHTML = `<div class="rh-empty">${tr('canvas.rhNoParams')}</div>`;
-        return;
-    }
-    container.innerHTML = params.map((field, i) => {
+    const html = params.length ? params.map((field, i) => {
         const key = rhParamKey(field.nodeId, field.fieldName);
         const kind = rhFieldRole(field);
         const options = rhExtractFieldOptions(field);
@@ -10563,7 +10777,9 @@ function renderRhParams(container, node, fields, media){
         const valueText = String(value ?? '');
         const wide = kind === 'text' && (String(label).length > 18 || valueText.length > 28);
         return renderRhSettingField(node, field, key, kind, label, value, options, wide);
-    }).join('');
+    }).join('') : `<div class="rh-empty">${tr('canvas.rhNoParams')}</div>`;
+    if(container.innerHTML === html) return;
+    container.innerHTML = html;
     bindRhParamControls(container, node);
 }
 function renderRhSettingField(node, field, key, kind, label, value, options, wide=false){
@@ -11390,10 +11606,14 @@ function refreshGeneratorInputViews(){
             ltxSyncConnectedImagesToTimeline(gen);
             renderComfyImages(el.querySelector('.input-list'), gen, imageInputs);
         }
-        if(gen.type === 'video') renderVideoImageInputs(el.querySelector('.video-img-list'), gen, imageInputs);
+        if(gen.type === 'video'){
+            const mediaInputs = sources.filter(src => src.refs?.some(ref => ['image','video','audio'].includes(mediaKindForRef(ref))));
+            renderVideoImageInputs(el.querySelector('.video-img-list'), gen, mediaInputs);
+        }
         if(gen.type === 'minimax'){
             miniMaxEnsureSegment(gen);
-            refreshNodes([gen.id]);
+            const refs = JSON.stringify(miniMaxRefsForNode(gen).refs.map(ref => [ref.url, mediaKindForRef(ref), ref.name]));
+            if(el.querySelector('.minimax-canvas-workbench')?.dataset.upstreamRefs !== refs) refreshNodes([gen.id]);
             return;
         }
         if(gen.type === 'rh'){
@@ -14799,6 +15019,7 @@ function failCanvasImageTask(taskId, message, taskData={}){
     scheduleSave();
 }
 function resumeCanvasImageTasks(){
+    resumeCanvasDepthCaptureTasks();
     nodes.filter(n => n._directPending?.length).forEach(node => materializeCanvasDirectTasks(node, node._directPending));
     nodes.filter(n => n.type === 'output').forEach(out => {
         (out._pending || []).forEach(p => {
@@ -14820,7 +15041,7 @@ function renderOutputMedia(item, useGridLayout=false){
         return `<div class="output-img-wrap" data-output-url="${safe}" data-missing-url="${safe}"${gridStyle}>${missingAssetHtml(url, true)}${timePill}<button class="output-del" title="${tr('common.delete')}">×</button></div>`;
     }
     if(kind === 'video'){
-        return `<div class="output-img-wrap" data-output-url="${safe}"${gridStyle}>${canvasVideoPreviewHtml(url, useGridLayout ? 512 : 768, 'alt="video output" data-video-fallback-attrs="controls data-output-video-fallback=&quot;1&quot;"')}${timePill}<button class="canvas-video-play output-video-play" type="button" title="播放"><i data-lucide="play"></i></button><div class="output-video-badge"><i data-lucide="play" class="w-3 h-3"></i>VIDEO</div><button class="output-del" title="${tr('common.delete')}">×</button></div>`;
+        return `<div class="output-img-wrap" data-output-url="${safe}"${gridStyle}>${canvasVideoPreviewHtml(url, useGridLayout ? 512 : 768, 'alt="video output" data-video-fallback-attrs="controls data-output-video-fallback=&quot;1&quot;"')}${timePill}<button class="canvas-video-play output-video-play" type="button" title="播放"><i data-lucide="play"></i></button><div class="output-video-badge"><i data-lucide="play" class="w-3 h-3"></i>VIDEO</div><button class="output-depth-edit" type="button" title="编辑视频">编辑</button><button class="output-del" title="${tr('common.delete')} ">×</button></div>`;
     }
     if(kind === 'audio'){
         return `<div class="output-img-wrap output-audio-wrap" data-output-url="${safe}"${gridStyle}><div class="output-audio-card"><i data-lucide="file-audio" class="w-7 h-7"></i><span>${escapeHtml(outputImageName(url))}</span><audio src="${safe}" data-url="${safe}" controls preload="metadata"></audio></div>${timePill}<button class="output-del" title="${tr('common.delete')}">×</button></div>`;
@@ -15817,6 +16038,7 @@ function duplicateNodesForAltDrag(node, preserveConnections=false){
             copy.items = copy.items.map(id => idMap.get(id) || id);
         }
     });
+    remapCanvasDepthCopies(copies, idMap, preserveConnections);
     nodes.push(...copies);
     if(preserveConnections){
         const copiedConnections = (connections || [])
@@ -15874,6 +16096,7 @@ function pasteNodes(){
         if((c.type === 'group' || c.type === 'promptGroup') && c.items)
             c.items = c.items.map(id => idMap.get(id) || id);
     });
+    remapCanvasDepthCopies(copies, idMap);
     const newConnections = clipConnections
         .map(c => ({...c, id:uid('c'), from:idMap.get(c.from), to:idMap.get(c.to)}))
         .filter(c => c.from && c.to);
@@ -16088,6 +16311,7 @@ function insertWorkflowIntoCanvas(imported){
             node.items = node.items.map(id => idMap.get(id) || id).filter(id => idMap.has(id) || nodes.some(n => n.id === id));
         }
     });
+    remapCanvasDepthCopies(newNodes, idMap);
     const newConnections = srcConnections
         .map(c => ({...c, id:uid('c'), from:idMap.get(c.from), to:idMap.get(c.to)}))
         .filter(c => c.from && c.to);
@@ -16317,6 +16541,8 @@ function canConnect(fromId, toId){
     const from = nodes.find(n => n.id === fromId);
     const to = nodes.find(n => n.id === toId);
     if(!from || !to) return false;
+    if(to.depthCapture?.sourceId === fromId && from.type !== 'image' && from.type !== 'output') return false;
+    if(to.depthCapture?.sourceId === fromId) return true;
     if(CANVAS_GENERATOR_TYPES.includes(from.type)){
         if(to.type === 'output') return true;
         if(CANVAS_MEDIA_OUTPUT_TYPES.includes(from.type) && CANVAS_GENERATOR_TYPES.includes(to.type)){

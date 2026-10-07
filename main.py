@@ -162,6 +162,7 @@ from backend.storage_paths import (
     output_file_from_url as resolve_output_file,
 )
 from backend import local_env
+from backend.depth_capture import DepthCaptureManager
 
 QUIET_ACCESS_PATHS = {
     "/api/queue_status",
@@ -3267,6 +3268,11 @@ class CanvasVideoRequest(BaseModel):
 class CanvasVideoTaskRequest(CanvasVideoRequest):
     # The canvas saves this ID before POST, so a lost response cannot force a new submission.
     client_task_id: str = Field(min_length=20, max_length=100)
+
+
+class CanvasDepthCaptureRequest(BaseModel):
+    source_url: str = Field(min_length=1, max_length=2048)
+    operation_id: str = Field(min_length=20, max_length=100)
 
 class TempShUploadRequest(BaseModel):
     url: str = ""
@@ -7418,6 +7424,76 @@ def local_media_path_from_url(url: str) -> Optional[str]:
         return path if os.path.commonpath([root, path]) == root and os.path.exists(path) else None
     except ValueError:
         return None
+
+_depth_capture_manager = None
+_depth_capture_manager_key = None
+_depth_capture_manager_lock = Lock()
+
+
+def canvas_depth_capture_manager():
+    global _depth_capture_manager, _depth_capture_manager_key
+    key = (os.path.realpath(DATA_DIR), os.path.realpath(OUTPUT_OUTPUT_DIR))
+    with _depth_capture_manager_lock:
+        if _depth_capture_manager is None or _depth_capture_manager_key != key:
+            _depth_capture_manager = DepthCaptureManager(
+                DATA_DIR, OUTPUT_OUTPUT_DIR, lambda name: output_url_for(name, "output")
+            )
+            _depth_capture_manager_key = key
+        return _depth_capture_manager
+
+
+def public_depth_capture_task(task):
+    return {key: value for key, value in task.items()
+            if key not in {"source_path", "fallback_reason"}}
+
+
+@app.post("/api/canvas-depth-capture")
+def create_canvas_depth_capture(request: CanvasDepthCaptureRequest):
+    if not re.fullmatch(r"[A-Za-z0-9_-]{20,100}", request.operation_id):
+        raise HTTPException(status_code=400, detail="操作编号无效")
+    try:
+        source_path = local_media_path_from_url(request.source_url)
+    except (HTTPException, OSError, ValueError):
+        source_path = None
+    if not source_path:
+        raise HTTPException(status_code=400, detail="请先将视频保存到本地素材库或画布")
+    source = os.path.realpath(source_path)
+    roots = [ASSETS_DIR, OUTPUT_DIR, *_current_storage_dirs().values()]
+    try:
+        allowed = any(os.path.commonpath([source, os.path.realpath(root)]) == os.path.realpath(root)
+                      for root in roots if root)
+    except ValueError:
+        allowed = False
+    if not allowed:
+        raise HTTPException(status_code=400, detail="视频路径超出本地素材目录")
+    if not os.path.isfile(source) or os.path.splitext(source)[1].lower() not in {".mp4", ".mov", ".webm"}:
+        raise HTTPException(status_code=400, detail="请选择 MP4、MOV 或 WebM 视频")
+    try:
+        task = canvas_depth_capture_manager().create(request.source_url, source, request.operation_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return public_depth_capture_task(task)
+
+
+@app.get("/api/canvas-depth-capture/{task_id}")
+def get_canvas_depth_capture(task_id: str):
+    if not re.fullmatch(r"[0-9a-f]{32}", task_id):
+        raise HTTPException(status_code=404, detail="深度任务不存在")
+    task = canvas_depth_capture_manager().get(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="深度任务不存在")
+    return public_depth_capture_task(task)
+
+
+@app.post("/api/canvas-depth-capture/{task_id}/cancel")
+def cancel_canvas_depth_capture(task_id: str):
+    if not re.fullmatch(r"[0-9a-f]{32}", task_id):
+        raise HTTPException(status_code=404, detail="深度任务不存在")
+    task = canvas_depth_capture_manager().cancel(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="深度任务不存在")
+    return public_depth_capture_task(task)
+
 
 def generated_media_path_from_url(url: str) -> Optional[str]:
     """Resolve a URL only when it points inside a generated-output directory."""

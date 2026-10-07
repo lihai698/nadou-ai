@@ -968,6 +968,7 @@ function insertSmartWorkflowIntoCanvas(imported){
         return normalizeLegacySmartNode(copy);
     }).filter(Boolean);
     newNodes.forEach(copy => remapSmartViewAdjustRefs(copy, idMap));
+    remapSmartDepthCopies(newNodes, idMap);
     const newConnections = srcConnections
         .map(conn => ({...JSON.parse(JSON.stringify(conn)), from:idMap.get(conn.from), to:idMap.get(conn.to)}))
         .filter(conn => conn.from && conn.to);
@@ -6429,6 +6430,7 @@ function pasteNodes(){
         if(copy.sourceNodeId) copy.sourceNodeId = idMap.get(copy.sourceNodeId) || '';
         remapSmartViewAdjustRefs(copy, idMap);
     });
+    remapSmartDepthCopies(copies, idMap);
     const newConnections = (nodeClipboard.connections || []).map(conn => ({
         ...conn,
         from:idMap.get(conn.from),
@@ -6501,6 +6503,7 @@ function duplicateForAltDrag(node, preserveConnections=false){
         if(copy.sourceNodeId) copy.sourceNodeId = preserveConnections ? (idMap.get(copy.sourceNodeId) || copy.sourceNodeId) : '';
         remapSmartViewAdjustRefs(copy, idMap, preserveConnections);
     });
+    remapSmartDepthCopies(copies, idMap, preserveConnections);
     if(preserveConnections){
         const idSet = new Set(sourceNodes.map(n => n.id));
         const newConnections = (canvas.connections || [])
@@ -8327,11 +8330,23 @@ function smartMinimaxBodyHtml(node){
 }
 
 function nodeBodyHtml(node, layout){
+    if(node.depthCapture && !(node.images || []).length){
+        const capture = node.depthCapture;
+        const running = ['queued','running','submitting','query-error'].includes(capture.status);
+        const progress = Math.max(0, Math.min(100, Math.round(Number(capture.progress) || 0)));
+        return `<div class="canvas-depth-task" style="width:${layout.width}px;min-height:${layout.height}px"><strong>${capture.role === 'pose' ? '骨骼姿态参考' : '灰度深度参考'}</strong><span>${escapeHtml(capture.stage || '准备处理')}${capture.error ? `：${escapeHtml(capture.error)}` : ''}</span><span class="canvas-depth-progress-label">进度 ${progress}%</span><div class="canvas-depth-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${progress}"><i style="width:${progress}%"></i></div><div class="canvas-depth-task-actions">${running && capture.taskId ? '<button type="button" data-depth-action="cancel">取消</button>' : ''}${capture.sourceId && ['failed','cancelled'].includes(capture.status) ? '<button type="button" data-depth-action="retry">重试</button>' : ''}</div></div>`;
+    }
     const media = nodeMediaBodyHtml(node, layout);
+    const videoEdit = (node.type === 'smart-image' || !node.type) && (node.images || []).length === 1
+        && mediaKindForItem(imageForDisplay(node.images[0])) === 'video'
+        ? '<button type="button" class="smart-video-edit-direct" data-smart-video-edit="0"><i data-lucide="scan-face"></i><span>编辑</span></button>' : '';
+    if(node.depthCapture?.role === 'pose' && node.depthCapture.pose_data_url){
+        return `${media}${videoEdit}<div class="canvas-depth-task-actions"><a href="${escapeAttr(node.depthCapture.pose_data_url)}" download>下载关节 JSON</a></div>`;
+    }
     const task = (node.type === 'smart-image' || !node.type) && (node.images || []).length
         ? smartRecoverableImageTask(node) : null;
-    if(!task) return media;
-    return `${media}<div class="partial-task-recovery">${imageTaskRecoverBodyHtml(node, task, {width:layout.width, height:150})}</div>`;
+    if(!task) return media + videoEdit;
+    return `${media}${videoEdit}<div class="partial-task-recovery">${imageTaskRecoverBodyHtml(node, task, {width:layout.width, height:150})}</div>`;
 }
 function nodeMediaBodyHtml(node, layout){
     if(node.type === 'smart-minimax') return smartMinimaxBodyHtml(node);
@@ -8425,6 +8440,7 @@ function smartNodeToolbarHtml(node){
     const gridLabel = imageCount > 1 ? '宫格拼接' : '宫格切分';
     const actions = [
         {key:'preview', icon:'eye', label:'预览', enabled:kind === 'image' || kind === 'video'},
+        {key:'video-edit', icon:'scan-face', label:'编辑', enabled:kind === 'video'},
         {key:'crop', icon:'crop', label:'裁剪', enabled:canEditImage},
         {key:'outpaint', icon:'expand', label:'扩图', enabled:canEditImage},
         {key:'mask', icon:'brush', label:'遮罩', enabled:canEditImage},
@@ -8526,6 +8542,10 @@ function runSmartNodeToolbarAction(nodeId, action){
         duplicateSmartNodeMediaToCanvas(node, index);
         return;
     }
+    if(action === 'video-edit' && kind === 'video'){
+        openSmartVideoEditor(nodeId, index);
+        return;
+    }
     if(kind !== 'image' && action !== 'preview'){
         toast('当前素材不支持该操作');
         return;
@@ -8544,6 +8564,144 @@ function runSmartNodeToolbarAction(nodeId, action){
     if(action === 'grid' && canGridJoinCurrentNode()){
         setGridOperationMode('join');
     }
+}
+function smartDepthPair(node){
+    const capture = node?.depthCapture;
+    return capture ? nodes.filter(item => item.depthCapture?.operationId === capture.operationId) : [];
+}
+function remapSmartDepthCopies(copies, idMap, preserveExternal=false){
+    const operations = new Map();
+    copies.forEach(node => {
+        const capture = node.depthCapture;
+        if(!capture) return;
+        const oldOperation = capture.operationId || node.id;
+        if(!operations.has(oldOperation)) operations.set(oldOperation, CanvasDepthCapture.operationId());
+        capture.operationId = operations.get(oldOperation);
+        capture.sourceId = idMap.get(capture.sourceId) || (preserveExternal ? capture.sourceId : '');
+        capture.taskId = '';
+        if(capture.status !== 'succeeded'){
+            capture.status = 'failed';
+            capture.stage = '复制的任务未继续运行';
+            capture.error = capture.sourceId ? '请点击重试' : '原视频未一同复制，请从原视频重新创建';
+            node.pending = 0;
+            node.running = false;
+        }
+    });
+}
+function latestSmartDepthCapture(sourceId, sourceIndex, sourceUrl){
+    return nodes.filter(item => item.depthCapture?.sourceId === sourceId
+        && item.depthCapture?.sourceIndex === sourceIndex && item.depthCapture?.sourceUrl === sourceUrl)
+        .sort((a,b) => Number(b.depthCapture.createdAt || 0) - Number(a.depthCapture.createdAt || 0))[0]?.depthCapture || null;
+}
+function openSmartVideoEditor(sourceId, sourceIndex){
+    const node = nodes.find(item => item.id === sourceId);
+    const item = node?.images?.[sourceIndex];
+    if(!item?.url || mediaKindForItem(imageForDisplay(item)) !== 'video') return;
+    const sourceUrl = item.url;
+    CanvasDepthCapture.open({sourceUrl, title:item.name || '视频',
+        getCurrent:() => latestSmartDepthCapture(sourceId, sourceIndex, sourceUrl) || {},
+        onStart:() => startSmartDepthCapture(sourceId, sourceIndex, sourceUrl),
+        onRetry:() => {
+            const capture = latestSmartDepthCapture(sourceId, sourceIndex, sourceUrl);
+            if(capture) return retrySmartDepthCapture(nodes.find(n => n.depthCapture === capture)?.id);
+        },
+        onCancel:() => {
+            const capture = latestSmartDepthCapture(sourceId, sourceIndex, sourceUrl);
+            if(capture) return cancelSmartDepthCapture(nodes.find(n => n.depthCapture === capture)?.id);
+        }
+    });
+}
+function updateSmartDepthCapture(pair, task, operationId){
+    if(!pair.length || pair[0].depthCapture?.operationId !== operationId) return;
+    const old = pair[0].depthCapture;
+    const state = {...old, taskId:task.id || old.taskId || '', status:task.status || old.status,
+        stage:task.stage || old.stage, error:task.error || '', progress:task.progress || 0,
+        result_url:task.result_url || old.result_url || '', pose_url:task.pose_url || old.pose_url || '',
+        pose_data_url:task.pose_data_url || old.pose_data_url || '',
+        detected_frames:task.detected_frames, total_frames:task.total_frames};
+    pair.forEach(node => {
+        node.depthCapture = {...state, role:node.depthCapture.role};
+        node.pending = ['queued','running','submitting','query-error'].includes(state.status) ? 1 : 0;
+        node.running = Boolean(node.pending);
+        if(task.status === 'succeeded'){
+            const pose = node.depthCapture.role === 'pose';
+            node.images = [{url:pose ? state.pose_url : state.result_url, kind:'video',
+                name:pose ? '骨骼姿态参考' : '灰度深度参考'}];
+            node.title = pose ? '骨骼姿态' : '灰度深度';
+        }
+    });
+    render();
+    CanvasDepthCapture.update();
+    if(old.taskId !== state.taskId || ['succeeded','failed','cancelled'].includes(state.status)) scheduleSave();
+}
+function watchSmartDepthCapture(node){
+    const capture = node?.depthCapture;
+    if(!capture || ['succeeded','failed','cancelled'].includes(capture.status)) return;
+    const operationId = capture.operationId;
+    CanvasDepthCapture.watch(`smart:${canvasId}:${operationId}`,
+        async () => {
+            const live = nodes.find(n => n.id === node.id && n.depthCapture?.operationId === operationId);
+            if(!live) throw new Error('结果节点已移除');
+            return live.depthCapture.taskId
+                ? CanvasDepthCapture.get(live.depthCapture.taskId)
+                : CanvasDepthCapture.submit(live.depthCapture.sourceUrl, operationId);
+        }, task => updateSmartDepthCapture(nodes.filter(n => n.depthCapture?.operationId === operationId), task, operationId));
+}
+async function saveSmartDepthPlaceholders(){
+    for(let attempt=0; attempt<6; attempt++){
+        if(await saveCanvas()) return true;
+        await new Promise(resolve => setTimeout(resolve, 350));
+    }
+    return false;
+}
+async function startSmartDepthCapture(sourceId, sourceIndex, sourceUrl){
+    const source = nodes.find(n => n.id === sourceId);
+    if(source?.images?.[sourceIndex]?.url !== sourceUrl) throw new Error('原视频已改变，请重新打开编辑面板');
+    pushUndo();
+    const id = CanvasDepthCapture.operationId();
+    const rect = nodeRect(source);
+    const base = {sourceId, sourceIndex, sourceUrl, operationId:id, taskId:'',
+        status:'submitting', stage:'保存画布并提交任务', error:'', createdAt:Date.now()};
+    const depth = createImageNodeAt({x:rect.x + rect.width + 250, y:rect.y + 95}, [], {select:false, skipUndo:true});
+    const pose = createImageNodeAt({x:rect.x + rect.width + 250, y:rect.y + 320}, [], {select:false, skipUndo:true});
+    depth.depthCapture = {...base, role:'depth'};
+    pose.depthCapture = {...base, role:'pose'};
+    depth.pending = pose.pending = 1;
+    depth.title = '灰度深度'; pose.title = '骨骼姿态';
+    connectInputNode(source.id, depth.id);
+    connectInputNode(source.id, pose.id);
+    render();
+    if(!await saveSmartDepthPlaceholders()){
+        updateSmartDepthCapture([depth,pose], {status:'failed', stage:'画布保存失败', error:'请保存画布后重试'}, id);
+        return;
+    }
+    watchSmartDepthCapture(depth);
+    CanvasDepthCapture.update();
+}
+async function retrySmartDepthCapture(nodeId){
+    const node = nodes.find(n => n.id === nodeId);
+    if(!node?.depthCapture) return;
+    const pair = smartDepthPair(node);
+    const id = CanvasDepthCapture.operationId();
+    pair.forEach(item => { item.images = []; item.pending = 1; item.depthCapture = {...item.depthCapture,
+        operationId:id, taskId:'', status:'submitting', stage:'保存画布并重试', error:'',
+        result_url:'', pose_url:'', pose_data_url:'', createdAt:Date.now()}; });
+    render();
+    if(!await saveSmartDepthPlaceholders()){
+        updateSmartDepthCapture(pair, {status:'failed', stage:'画布保存失败', error:'请保存画布后重试'}, id);
+        return;
+    }
+    watchSmartDepthCapture(pair[0]);
+}
+async function cancelSmartDepthCapture(nodeId){
+    const node = nodes.find(n => n.id === nodeId);
+    if(!node?.depthCapture?.taskId) return;
+    const task = await CanvasDepthCapture.cancel(node.depthCapture.taskId);
+    updateSmartDepthCapture(smartDepthPair(node), task, node.depthCapture.operationId);
+}
+function resumeSmartDepthCaptureTasks(){
+    nodes.filter(node => node.depthCapture && !['succeeded','failed','cancelled'].includes(node.depthCapture.status))
+        .forEach(watchSmartDepthCapture);
 }
 async function runJimengUpscale(node, index){
     node = liveSmartNode(node) || node;
@@ -8712,7 +8870,7 @@ function render(){
         .sort((a, b) => (isSmartGroupNode(a) ? 0 : 1) - (isSmartGroupNode(b) ? 0 : 1))
         .map(node => {
         const imgs = node.images || [];
-        const title = node.viewAdjust ? `API · ${node.viewAdjust.kind === 'angle' ? '多角度' : '打光'}` : node.type === 'smart-group' ? (node.title === '万能分组' ? '智能分组' : (node.title || '智能分组')) : node.type === 'smart-prompt' ? 'Prompt' : node.type === 'smart-loop' ? 'Loop' : node.type === 'smart-minimax' ? 'MiniMax H3' : (imgs.length > 1 ? 'Group' : imgs.length ? 'Image' : escapeHtml(tr('smart.createImportNode')));
+        const title = node.depthCapture ? (node.depthCapture.role === 'pose' ? '骨骼姿态' : '灰度深度') : node.viewAdjust ? `API · ${node.viewAdjust.kind === 'angle' ? '多角度' : '打光'}` : node.type === 'smart-group' ? (node.title === '万能分组' ? '智能分组' : (node.title || '智能分组')) : node.type === 'smart-prompt' ? 'Prompt' : node.type === 'smart-loop' ? 'Loop' : node.type === 'smart-minimax' ? 'MiniMax H3' : (imgs.length > 1 ? 'Group' : imgs.length ? 'Image' : escapeHtml(tr('smart.createImportNode')));
         const scale = nodeScale(node);
         const layout = imageLayout(imgs, scale, node);
         const isPrompt = node.type === 'smart-prompt';
@@ -8723,7 +8881,7 @@ function render(){
         const isImageNode = node.type === 'smart-image' || !node.type;
         const isJimengPending = Boolean(node.jimengPending && node.jimengPending.submitId && imgs.length === 0);
         const isQueued = Boolean(node.queued && imgs.length === 0 && !node.pending && !isJimengPending);
-        const isEmpty = isImageNode && imgs.length === 0 && !node.pending && !isQueued && !isJimengPending;
+        const isEmpty = isImageNode && imgs.length === 0 && !node.pending && !isQueued && !isJimengPending && !node.depthCapture;
         const isHistory = isHistoryGroupNode(node);
         const isGroup = isImageNode && imgs.length > 1;
         const isPending = ((node.pending || isQueued || isJimengPending) && imgs.length === 0);
@@ -9922,6 +10080,21 @@ function bindNodeEvents(){
     world.querySelectorAll('.image-node').forEach(el => {
         const id = el.dataset.id;
         const nodeForControls = nodes.find(n => n.id === id);
+        el.querySelectorAll('[data-smart-video-edit]').forEach(button => {
+            button.addEventListener('mousedown', event => { event.preventDefault(); event.stopPropagation(); }, true);
+            button.addEventListener('click', event => {
+                event.preventDefault(); event.stopPropagation();
+                openSmartVideoEditor(id, Number(button.dataset.smartVideoEdit || 0));
+            }, true);
+        });
+        el.querySelectorAll('[data-depth-action]').forEach(button => {
+            button.addEventListener('mousedown', event => event.stopPropagation());
+            button.addEventListener('click', event => {
+                event.preventDefault(); event.stopPropagation();
+                if(button.dataset.depthAction === 'retry') retrySmartDepthCapture(id);
+                else cancelSmartDepthCapture(id);
+            });
+        });
         el.querySelector('[data-smart-submission-warning]')?.addEventListener('click', e => {
             e.preventDefault();
             e.stopPropagation();
@@ -18276,6 +18449,7 @@ async function resumeSmartPendingNode(node, logContext={}, onlyTaskId=''){
     }
 }
 function resumeSmartPendingTasks(){
+    resumeSmartDepthCaptureTasks();
     nodes.filter(node => smartPendingTasks(node).length).forEach(node => {
         smartPendingTasks(node).forEach(task => { task.querying = false; });
         resumeSmartPendingNode(node).catch(() => {}); // The node handler already displays and saves terminal failures.

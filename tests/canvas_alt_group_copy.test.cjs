@@ -25,6 +25,7 @@ function editor(initialNodes, initialConnections, selectedIds){
             && context.nodes.some(n => n.id === to),
         startKnifeDrag:() => false, setKnifeMode:() => {},
         sanitizeConnections:() => {}, syncGeneratorInputs:() => {},
+        remapCanvasDepthCopies:() => {},
         render:() => {}, scheduleSave:() => {},
         document:{body:{classList:{add:() => {}}}}, window:{},
         nodesEl:{querySelector:() => null},

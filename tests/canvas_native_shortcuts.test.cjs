@@ -35,6 +35,8 @@ function loadClassicEditor(initialNodes, initialConnections, selectedIds) {
         canConnect: (from, to) => from !== to && context.nodes.some(n => n.id === from)
             && context.nodes.some(n => n.id === to),
         sanitizeConnections: () => {},
+        // 快捷键测试不覆盖深度捕获任务复制；这里只提供真实入口所需的无副作用依赖。
+        remapCanvasDepthCopies: () => {},
         syncGeneratorInputs: () => {},
         render: () => {},
         scheduleSave: () => {},
@@ -87,9 +89,12 @@ function loadSmartEditor(initialNodes, initialConnections, selectedIds) {
     const source = readFileSync(path.join(__dirname, '../static/js/smart-canvas.js'), 'utf8');
     const fnStart = source.indexOf('function cloneSmartNode(');
     const fnEnd = source.indexOf('// 跨页"素材库', fnStart);
+    const viewAdjustStart = source.indexOf('function remapSmartViewAdjustRefs(');
+    const viewAdjustEnd = source.indexOf('function createSmartViewAdjustApiNode(', viewAdjustStart);
     const keyStart = source.indexOf("window.addEventListener('keydown', e => {");
     const keyEnd = source.indexOf("\n});", keyStart) + 3;
-    assert.ok(fnStart >= 0 && fnEnd > fnStart && keyStart >= 0 && keyEnd > keyStart);
+    assert.ok(fnStart >= 0 && fnEnd > fnStart && viewAdjustStart >= 0 && viewAdjustEnd > viewAdjustStart
+        && keyStart >= 0 && keyEnd > keyStart);
 
     let serial = 0;
     const nodes = structuredClone(initialNodes);
@@ -111,6 +116,8 @@ function loadSmartEditor(initialNodes, initialConnections, selectedIds) {
         viewportCenter: () => ({x: 500, y: 300}),
         uid: prefix => `${prefix}-shortcut-${++serial}`,
         clearSmartNodeTransientRunState: () => {},
+        // 快捷键测试不覆盖深度捕获任务复制；这里只提供真实入口所需的无副作用依赖。
+        remapSmartDepthCopies: () => {},
         selectedNodeIds: () => context.selectedIds.slice(),
         isEditableTarget: target => target?.tagName === 'INPUT'
             || target?.tagName === 'TEXTAREA' || target?.isContentEditable === true,
@@ -141,7 +148,12 @@ function loadSmartEditor(initialNodes, initialConnections, selectedIds) {
         document: {activeElement: body},
         setTimeout,
     });
-    vm.runInContext(source.slice(fnStart, fnEnd) + source.slice(keyStart, keyEnd), context);
+    vm.runInContext(
+        source.slice(fnStart, fnEnd)
+        + source.slice(viewAdjustStart, viewAdjustEnd)
+        + source.slice(keyStart, keyEnd),
+        context,
+    );
 
     const dispatch = (key, options = {}) => {
         handlers.keydown({
