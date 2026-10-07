@@ -372,7 +372,7 @@ test('canvas save failure retains the local backup and successful PUT clears it'
         sanitizeConnections:()=>{},setStatus:value=>statuses.push(value),
         clearUnsavedCanvasAcceptedTasks:id=>clears.push(id),
         clearUnsavedCanvasUnknownWarnings:()=>{},
-        loadCanvasList:()=>{},setTimeout:()=>{},
+        loadCanvasList:()=>{},setTimeout:()=>{},clearTimeout(){},saveTimer:null,
         fetch:async()=>({ok:responseStatus===200,status:responseStatus,
             json:async()=>({canvas:{id:'isolated-canvas',updated_at:2,nodes:[]}})}),
         console:{error:()=>{}},

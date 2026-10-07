@@ -967,6 +967,7 @@ function insertSmartWorkflowIntoCanvas(imported){
         idMap.set(oldId, copy.id);
         return normalizeLegacySmartNode(copy);
     }).filter(Boolean);
+    newNodes.forEach(copy => remapSmartViewAdjustRefs(copy, idMap));
     const newConnections = srcConnections
         .map(conn => ({...JSON.parse(JSON.stringify(conn)), from:idMap.get(conn.from), to:idMap.get(conn.to)}))
         .filter(conn => conn.from && conn.to);
@@ -2573,8 +2574,8 @@ function jimengImageEditMode(){
     const refs = node ? visibleReferenceImagesFor(node) : [];
     return refs.length > 0;
 }
-function filterJimengImageModels(models){
-    if(!isJimengProviderId(settings.provider_id) || !jimengImageEditMode()) return models;
+function filterJimengImageModels(models, providerId=settings.provider_id, editMode=jimengImageEditMode()){
+    if(!isJimengProviderId(providerId) || !editMode) return models;
     return (models || []).filter(m => !JIMENG_IMAGE2IMAGE_UNSUPPORTED.includes(String(m)));
 }
 let _jimengLastEditMode = null;
@@ -6426,6 +6427,7 @@ function pasteNodes(){
             copy.inputNodeIds = copy.inputNodeIds.map(id => idMap.get(id)).filter(Boolean);
         }
         if(copy.sourceNodeId) copy.sourceNodeId = idMap.get(copy.sourceNodeId) || '';
+        remapSmartViewAdjustRefs(copy, idMap);
     });
     const newConnections = (nodeClipboard.connections || []).map(conn => ({
         ...conn,
@@ -6497,6 +6499,7 @@ function duplicateForAltDrag(node, preserveConnections=false){
                 : [];
         }
         if(copy.sourceNodeId) copy.sourceNodeId = preserveConnections ? (idMap.get(copy.sourceNodeId) || copy.sourceNodeId) : '';
+        remapSmartViewAdjustRefs(copy, idMap, preserveConnections);
     });
     if(preserveConnections){
         const idSet = new Set(sourceNodes.map(n => n.id));
@@ -8359,6 +8362,11 @@ function nodeMediaBodyHtml(node, layout){
         return `<div class="thumb-grid" data-thumb-scroll="1" style="--thumb-cols:${layout.cols}; --thumb-size:${layout.thumb}px; --thumb-max-height:${maxHeight}px">${imgs.map((img, i) => `<div class="thumb-item has-outside-image-name ${selectedImage.nodeId === node.id && selectedImage.index === i ? 'image-selected' : ''}" data-image-index="${i}" data-media-signature="${escapeAttr(`${mediaKindForItem(img)}:${img?.url || ''}`)}">${thumbMediaHtml(img)}${imageNameBadgeHtml(img, {outside:true})}${imageResolutionBadgeHtml(img)}<button class="mini-x image-delete" type="button" data-image-index="${i}" title="${escapeHtml(tr('smart.deleteImage'))}"><i data-lucide="trash-2"></i></button></div>`).join('')}</div>`;
     }
     if(imgs[0]) return `<div class="image-wrap has-outside-image-name ${selectedImage.nodeId === node.id && selectedImage.index === 0 ? 'image-selected' : ''}" data-image-index="0" data-media-signature="${escapeAttr(`${mediaKindForItem(imgs[0])}:${imgs[0]?.url || ''}`)}" style="--node-img-w:${layout.width}px;--node-img-h:${layout.height}px">${singleMediaHtml(imgs[0], layout.width, layout.height)}${imageNameBadgeHtml(imgs[0], {outside:true})}${imageResolutionBadgeHtml(imgs[0])}<button class="mini-x image-delete" type="button" data-image-index="0" title="${escapeHtml(tr('smart.deleteImage'))}"><i data-lucide="trash-2"></i></button></div>`;
+    if(node.viewAdjust) return `<div class="node-drop view-adjust-ready">
+        <span class="upload-node-main"><i data-lucide="${node.viewAdjust.kind === 'angle' ? 'camera' : 'sun'}"></i></span>
+        <span class="upload-node-title">${node.viewAdjust.kind === 'angle' ? '多角度' : '打光'}待生成</span>
+        <span class="upload-node-sub">提示词与原图已关联</span>
+    </div>`;
     return `<div class="node-drop" data-upload-action="files">
         <span class="upload-node-main"><i data-lucide="upload-cloud"></i></span>
         <span class="upload-node-title">${escapeHtml(tr('smart.createImportNode'))}</span>
@@ -8425,10 +8433,65 @@ function smartNodeToolbarHtml(node){
         ...(jimengImageProviderId() ? [{key:'upscale', icon:'maximize-2', label:tr('smart.jimengUpscaleAction'), enabled:canEditImage}] : []),
         {key:'download', icon:'download', label:'下载', enabled:true}
     ];
-    return `<div class="smart-node-floating-menu" data-smart-node-menu="1">${actions.map(action => `
+    return `<div class="smart-node-floating-menu" data-smart-node-menu="1">${canEditImage ? CanvasViewAdjust.menuHtml() : ''}${actions.map(action => `
         <button type="button" data-smart-node-action="${escapeAttr(action.key)}" data-node-id="${escapeAttr(node.id)}" ${action.enabled ? '' : 'disabled'} title="${escapeAttr(action.label)}">
             <i data-lucide="${escapeAttr(action.icon)}"></i><span>${escapeHtml(action.label)}</span>
         </button>`).join('')}</div>`;
+}
+function remapSmartViewAdjustRefs(node, idMap, preserveExternal=false){
+    if(!node.viewAdjust) return;
+    const remap = id => idMap.get(id) || (preserveExternal ? id : '');
+    node.viewAdjust.sourceNodeId = remap(node.viewAdjust.sourceNodeId);
+    node.blockedInputRefs = (node.blockedInputRefs || []).map(key => {
+        const split = key.lastIndexOf('|'), sourceId = remap(key.slice(0,split));
+        return sourceId ? `${sourceId}${key.slice(split)}` : '';
+    }).filter(Boolean);
+}
+function createSmartViewAdjustApiNode(source, imageIndex, compiled){
+    const item=imageForDisplay(source?.images?.[imageIndex]);
+    if(!item?.url)throw new Error('原图片已删除或改变，请重新打开');
+    pushUndo();
+    const point=nextOutputPositionForSource(source,{w:EMPTY_UPLOAD_NODE_WIDTH,h:EMPTY_UPLOAD_NODE_HEIGHT});
+    const target=createImageNodeAt({x:point.x+EMPTY_UPLOAD_NODE_WIDTH/2,y:point.y+EMPTY_UPLOAD_NODE_HEIGHT/2},[],{select:false,skipUndo:true});
+    target.runSettings={...cloneSmartSettings(smartSettingsForNode(source)),engine:'api',apiKind:'image',count:1,ratio:'source'};
+    if(compiled.selection){target.runSettings.provider_id=compiled.selection.providerId;target.runSettings.model=compiled.selection.model;}
+    target.viewAdjust={kind:compiled.kind,sourceNodeId:source.id,sourceImageIndex:imageIndex,sourceUrl:item.url,params:compiled.params,title:compiled.title};
+    target.blockedInputRefs=(source.images || []).map((_,index)=>index===imageIndex?'':`${source.id}|${index}`).filter(Boolean);
+    setPromptDraftForNode(target,compiled.prompt);
+    target.runPrompt=compiled.prompt;
+    connectInputNode(source.id,target.id);
+    // Flush the previous composer's draft before changing its target.
+    savePromptDraftForCurrent();
+    activeComposerSubject=null;
+    lastComposerNodeId='';
+    selectedId=target.id;
+    selectedIds=[];
+    selectedImage={nodeId:'',index:-1};
+    render();
+    scheduleSave();
+    return target;
+}
+function openSmartViewAdjustment(nodeId, kind){
+    const source=nodes.find(node=>node.id===nodeId),index=smartNodeToolbarImageIndex(source);
+    const item=imageForDisplay(source?.images?.[index]);
+    if(!item?.url || mediaKindForItem(item)!=='image')return;
+    const sourceUrl=item.url,owner=canvasId;
+    const isAlive=()=>canvasId===owner && nodes.some(node=>node.id===nodeId && imageForDisplay(node.images?.[index])?.url===sourceUrl);
+    CanvasViewAdjust.open({kind,source:{url:sourceUrl},models:CanvasViewAdjust.configuredModels(imageProviders(),provider=>filterJimengImageModels(providerImageModels(provider.id),provider.id,true)),initial:source.viewAdjustDrafts?.[kind] || {selection:{providerId:source.runSettings?.provider_id,model:source.runSettings?.model}},isAlive,
+        onDraft:draft=>{if(!isAlive())return;const live=nodes.find(node=>node.id===nodeId);live.viewAdjustDrafts={...live.viewAdjustDrafts,[kind]:draft};scheduleSave();},
+        onSubmit:async compiled=>{
+            if(!isAlive())throw new Error('原图片已改变，请重新打开');
+            if(compiled.selection && (!imageProviders().some(provider=>provider.id===compiled.selection.providerId) || !filterJimengImageModels(providerImageModels(compiled.selection.providerId),compiled.selection.providerId,true).includes(compiled.selection.model)))throw new Error('API 模型配置已改变，请重新打开调整面板。');
+            const live=nodes.find(node=>node.id===nodeId);
+            const target=createSmartViewAdjustApiNode(live,index,compiled);
+            const box=nodeRect(target);
+            const editHeight=box.height+14+composer.offsetHeight, editWidth=Math.max(box.width,composer.offsetWidth);
+            viewport.scale=Math.max(0.06,Math.min(Math.max(safeScale(viewport.scale),0.65),1,Math.max(1,shell.clientWidth-96)/editWidth,Math.max(1,shell.clientHeight-120)/editHeight));
+            centerViewportOnWorldPoint({x:box.x+box.width/2,y:box.y+editHeight/2});
+            const saved=await saveCanvas();
+            return {saved,message:saved?'API 节点已创建并保存，提示词和原图已关联；在节点上点击运行即可。':'API 节点已创建，但画布尚未保存。请先重试保存，无需再次创建节点。',nodeId:target.id};
+        }
+    });
 }
 function duplicateSmartNodeMediaToCanvas(node, imageIndex){
     const source = node?.images?.[imageIndex];
@@ -8649,7 +8712,7 @@ function render(){
         .sort((a, b) => (isSmartGroupNode(a) ? 0 : 1) - (isSmartGroupNode(b) ? 0 : 1))
         .map(node => {
         const imgs = node.images || [];
-        const title = node.type === 'smart-group' ? (node.title === '万能分组' ? '智能分组' : (node.title || '智能分组')) : node.type === 'smart-prompt' ? 'Prompt' : node.type === 'smart-loop' ? 'Loop' : node.type === 'smart-minimax' ? 'MiniMax H3' : (imgs.length > 1 ? 'Group' : imgs.length ? 'Image' : escapeHtml(tr('smart.createImportNode')));
+        const title = node.viewAdjust ? `API · ${node.viewAdjust.kind === 'angle' ? '多角度' : '打光'}` : node.type === 'smart-group' ? (node.title === '万能分组' ? '智能分组' : (node.title || '智能分组')) : node.type === 'smart-prompt' ? 'Prompt' : node.type === 'smart-loop' ? 'Loop' : node.type === 'smart-minimax' ? 'MiniMax H3' : (imgs.length > 1 ? 'Group' : imgs.length ? 'Image' : escapeHtml(tr('smart.createImportNode')));
         const scale = nodeScale(node);
         const layout = imageLayout(imgs, scale, node);
         const isPrompt = node.type === 'smart-prompt';
@@ -8672,7 +8735,7 @@ function render(){
             ? `<button class="smart-submission-warning" type="button" title="${escapeAttr(node.submissionWarning)}" data-smart-submission-warning="1">${node.submissionUnknown ? '提交状态未知' : '部分受理'}</button>` : '';
         const taskFailureHtml = node.taskFailureNotice
             ? `<button class="smart-submission-warning" type="button" title="${escapeAttr(node.taskFailureNotice)}" data-smart-task-failure="1">任务已失效</button>` : '';
-        const hint = isSmartGroup ? '双击添加 · 拖入归组 · 选中后生成' : isMinimax ? 'Timeline editing' : isPending ? escapeHtml(tr('smart.hintPending')) : (imgs.length > 1 ? escapeHtml(tr('smart.hintMulti')) : imgs.length ? escapeHtml(tr('smart.hintSingle')) : escapeHtml(tr('smart.hintEmpty')));
+        const hint = isSmartGroup ? '双击添加 · 拖入归组 · 选中后生成' : isMinimax ? 'Timeline editing' : isPending ? escapeHtml(tr('smart.hintPending')) : (imgs.length > 1 ? escapeHtml(tr('smart.hintMulti')) : imgs.length ? escapeHtml(tr('smart.hintSingle')) : node.viewAdjust ? '在下方 API 面板调整模型并运行' : escapeHtml(tr('smart.hintEmpty')));
         const html = `<div class="image-node ${isEmpty ? 'empty-node' : ''} ${isGroup ? 'group-node' : ''} ${isHistory ? 'history-group-node' : ''} ${isPrompt ? 'prompt-smart-node' : ''} ${isLoop ? 'loop-smart-node' : ''} ${isMinimax ? 'minimax-smart-node' : ''} ${isSmartGroup ? 'smart-group-node' : ''} ${isCompactMember ? 'smart-group-member-node' : ''} ${isNodeSelected(node.id) ? 'selected' : ''} ${(dragState?.groupIds?.includes(node.id) || dragState?.id === node.id) ? 'dragging' : ''} ${node.running ? 'node-running' : ''} ${isPending ? 'node-pending' : ''}" data-id="${escapeHtml(node.id)}" style="left:${node.x || 0}px;top:${node.y || 0}px;width:${layout.width}px;height:${layout.height}px">
 
             <div class="node-head"><div class="node-title">${title}</div><div class="node-actions">${deleteBtn}</div></div>
@@ -8750,7 +8813,7 @@ function render(){
             ${smartNodeToolbarHtml(node)}
             ${runTimePillHtml(node)}
             <div class="node-body">${body}</div>
-            <div class="node-hint">${isPending ? escapeHtml(tr('smart.hintPending')) : (imgs.length > 1 ? escapeHtml(tr('smart.hintMulti')) : imgs.length ? escapeHtml(tr('smart.hintSingle')) : escapeHtml(tr('smart.hintEmpty')))}</div>
+            <div class="node-hint">${isPending ? escapeHtml(tr('smart.hintPending')) : (imgs.length > 1 ? escapeHtml(tr('smart.hintMulti')) : imgs.length ? escapeHtml(tr('smart.hintSingle')) : node.viewAdjust ? '在下方 API 面板调整模型并运行' : escapeHtml(tr('smart.hintEmpty')))}</div>
             ${imgs.length || node.pending || isQueued || isPrompt || isLoop ? '<div class="node-resize-handle" data-resize="1"></div>' : ''}
             <div class="node-port port-in" data-port="in" title="输入"></div>
             <div class="node-port port-out" data-port="out" title="输出"></div>
@@ -9900,7 +9963,7 @@ function bindNodeEvents(){
             render();
         };
         if(nodeForControls?.type !== 'smart-group') el.ondblclick = e => e.stopPropagation();
-        const nodeDrop = el.querySelector('.node-drop');
+        const nodeDrop = el.querySelector('.node-drop:not(.view-adjust-ready)');
         nodeDrop?.addEventListener('mousedown', e => {
             if(e.button !== 0) return;
             e.preventDefault();
@@ -9923,6 +9986,14 @@ function bindNodeEvents(){
                 e.preventDefault(); e.stopPropagation();
                 deleteNodeFromButton(id);
             });
+        });
+        el.querySelectorAll('.view-adjust-menu').forEach(menu => {
+            menu.addEventListener('mousedown',event=>event.stopPropagation());
+            menu.addEventListener('click',event=>event.stopPropagation());
+            menu.querySelectorAll('[data-view-adjust]').forEach(button=>button.addEventListener('click',()=>{
+                menu.open=false;
+                openSmartViewAdjustment(id,button.dataset.viewAdjust);
+            }));
         });
         el.querySelectorAll('[data-smart-node-action]').forEach(btn => {
             btn.addEventListener('mousedown', e => {
@@ -19084,6 +19155,7 @@ window.addEventListener('paste', e => {
     }
 });
 window.addEventListener('keydown', e => {
+    if(window.CanvasViewAdjust?.isOpen()) return;
     const key = String(e.key || '').toLowerCase();
     if((e.code === 'Space' || e.key === ' ') && !e.ctrlKey && !e.metaKey && !e.altKey && !isEditableTarget(e.target)){
         const active = selectedNode();
@@ -19662,6 +19734,7 @@ document.addEventListener('click', event => {
     if(!event.target.closest('.prompt-template-panel') && !event.target.closest('.prompt-preset-edit') && !event.target.closest('#composerTemplateBtn')) closePromptTemplatePanel();
 });
 document.addEventListener('keydown', event => {
+    if(window.CanvasViewAdjust?.isOpen()) return;
     if(event.key === 'Escape') { closeSmartLogLightbox(); closeAllSmartPopovers(); closeCreateMenu(); closeSmartCanvasLog(); closeSmartCanvasShortcuts(); closePromptPresetPanel(); closePromptTemplatePanel(); }
 });
 function cropDragModeFromPointer(event){

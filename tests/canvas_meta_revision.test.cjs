@@ -25,7 +25,7 @@ test('classic canvas retries a same-time metadata conflict with the server title
         sanitizeConnections(){}, serializableCanvasNodes(){return nodes;},
         setStatus(){}, tr:key=>key, formatCanvasTime:()=>'',
         clearUnsavedCanvasAcceptedTasks(){}, clearUnsavedCanvasUnknownWarnings(){},
-        loadCanvasList:async()=>{}, setTimeout:()=>0,
+        loadCanvasList:async()=>{}, setTimeout:()=>0, clearTimeout(){},
         fetch:async(_url, options)=>{
             const body = JSON.parse(options.body);
             sent.push(body);

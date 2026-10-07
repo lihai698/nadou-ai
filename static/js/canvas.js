@@ -1459,13 +1459,22 @@ async function saveCanvas(){
     if(!canvas || applyingRemoteCanvas) return false;
     if(savingCanvasNow){
         saveCanvasAgain = true;
-        return false;
+        const inFlight = saveCanvas.inFlight;
+        if(!inFlight) return false;
+        const waitingCanvasId = canvas.id;
+        await inFlight;
+        if(!canvas || canvas.id !== waitingCanvasId || applyingRemoteCanvas) return false;
+        // The earlier snapshot may not include this caller's accepted task ID.
+        return saveCanvas();
     }
+    clearTimeout(saveTimer);
     sanitizeConnections();
     const savingCanvasId = canvas.id;
     const sentNodes = serializableCanvasNodes();
     savingCanvasNow = true;
     saveCanvasAgain = false;
+    let finishSave;
+    saveCanvas.inFlight = new Promise(resolve => { finishSave = resolve; });
     try {
         const res = await fetch(`/api/canvases/${canvas.id}`, {
             method:'PUT',
@@ -1528,10 +1537,12 @@ async function saveCanvas(){
         return false;
     } finally {
         savingCanvasNow = false;
+        saveCanvas.inFlight = null;
+        finishSave();
         if(saveCanvasAgain && canvas && !applyingRemoteCanvas){
             saveCanvasAgain = false;
             localCanvasDirty = true;
-            setTimeout(saveCanvas, 0);
+            saveTimer = setTimeout(saveCanvas, 0);
         }
     }
 }
@@ -5430,6 +5441,7 @@ function openImageEditor(nodeId, initialMode='crop'){
     img.style.maxWidth = '';
     img.style.maxHeight = '';
     modal.classList.add('open');
+    installCanvasViewAdjustMenu();
     const editorSrcToken = `${nodeId}:${Date.now()}`;
     img.dataset.editorSrcToken = editorSrcToken;
     img.onload = () => {
@@ -5498,6 +5510,63 @@ function closeImageEditor(){
         textCanvas.style.left = '';
         textCanvas.style.top = '';
     }
+}
+function installCanvasViewAdjustMenu(){
+    const host = document.querySelector('#imageEditModal .image-edit-mode');
+    if(!host || host.querySelector('.view-adjust-menu')) return;
+    host.insertAdjacentHTML('beforeend', CanvasViewAdjust.menuHtml());
+    host.querySelectorAll('[data-view-adjust]').forEach(button => button.addEventListener('click', event => {
+        event.stopPropagation();
+        button.closest('details').open = false;
+        openCanvasViewAdjustment(cropState?.nodeId, button.dataset.viewAdjust);
+    }));
+}
+function createCanvasViewAdjustApiNode(source, compiled){
+    if(!source?.url) throw new Error('原图片已删除或改变，请重新打开');
+    const providerId=compiled.selection?.providerId || imageApiProviders()[0]?.id || '', model=compiled.selection?.model || allImageModels(providerId)[0] || '';
+    const x=Number(source.x || 0)+460, y=Number(source.y || 0);
+    const occupied=nodes.map(nodeRect);
+    pushUndo();
+    const target = {
+        id:uid('gen'), type:'generator', x, y,
+        apiProvider:providerId, model,
+        count:1, ratio:'source', resolution:defaultApiImageResolution(model),
+        quality:'auto', inputs:[], viewAdjustPrompt:compiled.prompt,
+        viewAdjust:{kind:compiled.kind, sourceNodeId:source.id, params:compiled.params, title:compiled.title}
+    };
+    nodes.push(target);
+    connections.push({id:uid('c'), from:source.id, to:target.id});
+    selected = new Set([target.id]);
+    render();
+    // Measure the native API card, whose height depends on its prompt and controls.
+    const box=nodeRect(target);
+    for(let hit;(hit=occupied.find(rect=>x<rect.x+rect.w && x+box.w>rect.x && target.y<rect.y+rect.h && target.y+box.h>rect.y));)target.y=hit.y+hit.h+28;
+    if(target.y!==y)render();
+    scheduleSave();
+    return target;
+}
+function openCanvasViewAdjustment(nodeId, kind){
+    const source = nodes.find(node => node.id === nodeId);
+    if(!source?.url || mediaKindForNode(source) !== 'image') return;
+    const sourceUrl = source.url, owner = canvas?.id;
+    const isAlive = () => canvas?.id === owner && nodes.some(node => node.id === nodeId && node.url === sourceUrl);
+    CanvasViewAdjust.open({kind,source:{url:sourceUrl,previewUrl:canvasDisplayMediaUrl(sourceUrl,source.name || '')},
+        models:CanvasViewAdjust.configuredModels(imageApiProviders(),provider=>allImageModels(provider.id)),initial:source.viewAdjustDrafts?.[kind],isAlive,
+        onDraft:draft => {if(!isAlive())return;const live=nodes.find(node=>node.id===nodeId);live.viewAdjustDrafts={...live.viewAdjustDrafts,[kind]:draft};scheduleSave();},
+        onSubmit:async compiled => {
+            if(!isAlive())throw new Error('原图片已改变，请重新打开');
+            if(compiled.selection && (!imageApiProviders().some(provider=>provider.id===compiled.selection.providerId) || !allImageModels(compiled.selection.providerId).includes(compiled.selection.model)))throw new Error('API 模型配置已改变，请重新打开调整面板。');
+            const live=nodes.find(node=>node.id===nodeId);
+            const target=createCanvasViewAdjustApiNode(live,compiled);
+            closeImageEditor();
+            const box=nodeRect(target), view=board.getBoundingClientRect();
+            viewport.scale=Math.max(0.06,Math.min(Math.max(safeViewportScale(viewport.scale),0.65),1,Math.max(1,view.width-96)/box.w,Math.max(1,view.height-120)/box.h));
+            centerViewportOnWorldPoint({x:box.x+box.w/2,y:box.y+box.h/2});
+            scheduleViewportSave();
+            const saved=await saveCanvas();
+            return {saved,message:saved?'API 节点已创建并保存，提示词和原图已关联；在节点上点击运行即可。':'API 节点已创建，但画布尚未保存。请先重试保存，无需再次创建节点。',nodeId:target.id};
+        }
+    });
 }
 function clampCrop(){
     if(!cropState) return;
@@ -8317,10 +8386,11 @@ function renderGeneratorBody(node){
     const inputSources = generatorSources(node);
     const ordered = orderedSources(node, inputSources);
     const mediaInputs = ordered.filter(src => src.refs?.some(ref => ['image','video','audio'].includes(mediaKindForRef(ref))));
-    const promptInputs = ordered.filter(src => src.prompt && !src.refs?.length);
+    const promptInputs = ordered.filter(src => src.prompt && !src.refs?.length && src.id !== `${node.id}:view-adjust`);
     sanitizeImageNodeProviderModel(node);
     normalizeApiNodeSizeChoice(node);
     wrap.innerHTML = `
+        ${typeof node.viewAdjustPrompt === 'string' ? `<div class="prompt-editor view-adjust-node-prompt"><textarea data-view-adjust-prompt aria-label="视角调整提示词">${escapeHtml(node.viewAdjustPrompt)}</textarea></div>` : ''}
         <div class="prompt-list mb-3"></div>
         <div class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">${tr('canvas.images')}</div>
         <div class="input-list"></div>
@@ -8392,6 +8462,11 @@ function renderGeneratorBody(node){
         </div>
         ${retryBarHtml(node)}
     `;
+    const viewPrompt = wrap.querySelector('[data-view-adjust-prompt]');
+    if(viewPrompt){
+        viewPrompt.onmousedown = event => event.stopPropagation();
+        viewPrompt.oninput = () => {node.viewAdjustPrompt = viewPrompt.value; scheduleSave();};
+    }
     const providerSelect = wrap.querySelector('.provider-select');
     const modelSelect = wrap.querySelector('.model-select');
     providerSelect.onmousedown = e => e.stopPropagation();
@@ -11178,7 +11253,8 @@ function mediaRefsFromNode(node){
     return [];
 }
 function generatorSources(gen){
-    return connections.filter(c => c.to === gen.id).map(c => nodes.find(n => n.id === c.from)).filter(Boolean).map(n => {
+    const localPrompt = typeof gen.viewAdjustPrompt === 'string' ? [{id:`${gen.id}:view-adjust`,type:'prompt',label:'视角调整',refs:[],prompt:gen.viewAdjustPrompt}] : [];
+    return localPrompt.concat(connections.filter(c => c.to === gen.id).map(c => nodes.find(n => n.id === c.from)).filter(Boolean).map(n => {
         if(n.type === 'output' && (n.images||[]).length){
             // 从 output 节点取最新一张图当作 reference 给下游
             const reversed = [...n.images].map((item, index) => ({item, index})).reverse();
@@ -11260,7 +11336,7 @@ function generatorSources(gen){
         }
         if(n.type === 'llm' && (n.mode || 'node') === 'node' && n.outputText) return {id:n.id, type:'llm', label:(n.outputText || 'LLM').slice(0, 32), refs:[], prompt:n.outputText || ''};
         return null;
-    }).flat().filter(Boolean);
+    }).flat().filter(Boolean));
 }
 function orderedSources(gen, sources){
     gen.inputs = (gen.inputs || []).filter(id => sources.some(s => s.id === id));
@@ -14357,6 +14433,9 @@ async function queryRecoverPendingOutput(pendingId){
     const out = findOutputByPendingId(pendingId);
     const pending = pendingById(out, pendingId);
     if(!out || !pending || pending.querying) return;
+    if(pending.canvasTaskId && ['online-image', 'comfy', 'video'].includes(pending.canvasTaskType)){
+        return saveAndQueryCanvasPendingTask(pending);
+    }
     const taskId = pending.recoverTaskId || extractUpstreamTaskId(pending.error || '');
     if(!taskId){
         showErrorModal('没有任务 ID，无法查询结果', tr('canvas.apiFailed'));
@@ -16913,6 +16992,7 @@ window.addEventListener('paste', e => {
     else uploadImages(files);
 });
 window.addEventListener('keydown', e => {
+    if(window.CanvasViewAdjust?.isOpen()) return;
     if(!canvas) return;
     const key = String(e.key || '').toLowerCase();
     if(key === 'r' && !isEditableTarget(e.target)) isRKeyDown = true;
