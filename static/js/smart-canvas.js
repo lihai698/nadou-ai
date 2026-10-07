@@ -6530,7 +6530,15 @@ function shellPoint(event){
     return {x:event.clientX - rect.left, y:event.clientY - rect.top};
 }
 function renderConnections(){
-    const conns = (canvas?.connections || []).map((conn, index) => ({...conn, index})).filter(c => nodes.some(n => n.id === c.from) && nodes.some(n => n.id === c.to));
+    const nodeById = new Map();
+    nodes.forEach(node => { if(!nodeById.has(node.id)) nodeById.set(node.id, node); });
+    const groupScopes = new Map();
+    nodes.forEach(node => {
+        if(!isSmartGroupNode(node) || !Array.isArray(node.items)) return;
+        node.items.forEach(id => { if(!groupScopes.has(id)) groupScopes.set(id, node.id); });
+    });
+    const scopeFor = id => groupScopes.get(id) || (isSmartGroupNode(nodeById.get(id)) ? id : '');
+    const conns = (canvas?.connections || []).map((conn, index) => ({...conn, index})).filter(c => nodeById.has(c.from) && nodeById.has(c.to));
     const cascadeKeys = cascadeConnectionKeys();
     const activeCascadeCount = (smartCascadeRunPath?.states && Object.values(smartCascadeRunPath.states).filter(state => state && state !== 'done').length) || 0;
     const reduceMotion = activeCascadeCount > 24;
@@ -6541,8 +6549,8 @@ function renderConnections(){
     const items = [];
     conns.forEach(conn => {
         const kind = conn.kind || 'flow';
-        const fromScope = kind === 'history' ? '' : smartGroupScopeId(conn.from);
-        const toScope = kind === 'history' ? '' : smartGroupScopeId(conn.to);
+        const fromScope = kind === 'history' ? '' : scopeFor(conn.from);
+        const toScope = kind === 'history' ? '' : scopeFor(conn.to);
         // 同一分组内部的连线（成员↔成员、成员↔分组本体）属于内部关系，入组后隐藏，保持整洁。
         if(fromScope && fromScope === toScope) return;
         // 终点是某分组的成员：把同一来源连到该分组各成员的线合并成一条到分组的线。
@@ -6558,8 +6566,8 @@ function renderConnections(){
         }
     });
     const paths = items.map(item => {
-        const fromNode = nodes.find(n => n.id === item.from);
-        const toNode = nodes.find(n => n.id === item.toId);
+        const fromNode = nodeById.get(item.from);
+        const toNode = nodeById.get(item.toId);
         if(!fromNode || !toNode) return '';
         const fr = nodeRect(fromNode), tr = nodeRect(toNode);
         const kind = item.kind;
@@ -6573,7 +6581,7 @@ function renderConnections(){
         else if(states.some(s => s !== 'done')) cascadeState = states.find(s => s !== 'done');
         else if(states.length) cascadeState = 'done';
         const isCascade = !isHistory && (edgeKeys.some(k => cascadeKeys.has(k)) || Boolean(cascadeState) || isInsertPreview);
-        const isPendingLine = !isCascade && item.targets.some(t => nodes.find(n => n.id === t)?.pending);
+        const isPendingLine = !isCascade && item.targets.some(t => nodeById.get(t)?.pending);
         const isSelectedLine = selectedConnIds.size > 0 && (selectedConnIds.has(item.from) || selectedConnIds.has(item.toId) || item.targets.some(t => selectedConnIds.has(t)));
         const fx = isHistory ? fr.x + fr.width / 2 : fr.x + fr.width;
         const fy = isHistory ? fr.y + fr.height : fr.y + fr.height / 2;
@@ -8627,8 +8635,10 @@ function render(){
     // 移动 DOM 节点会打断输入法合成会话,导致输入中断(即使保留焦点描边也接不上)。
     const promptHadFocus = document.activeElement === promptInput;
     const reusableNodes = new Map();
+    const nodeById = new Map();
+    nodes.forEach(node => { if(!nodeById.has(node.id)) nodeById.set(node.id, node); });
     world.querySelectorAll('.image-node').forEach(el => {
-        const node = nodes.find(n => n.id === el.dataset.id);
+        const node = nodeById.get(el.dataset.id);
         if(smartNodeHasLiveMedia(node)) reusableNodes.set(node.id, el);
     });
     const nodeHtmlEntries = nodes
@@ -8682,9 +8692,8 @@ function render(){
     const tpl = document.createElement('template');
     tpl.innerHTML = nodeHtmlEntries.map(entry => entry.html).join('');
     const renderedNodeEls = new Map();
-    nodeHtmlEntries.forEach(entry => {
-        const fresh = tpl.content.querySelector(`.image-node[data-id="${CSS.escape(entry.node.id)}"]`);
-        if(fresh) renderedNodeEls.set(entry.node.id, fresh);
+    [...tpl.content.children].forEach(el => {
+        if(!renderedNodeEls.has(el.dataset.id)) renderedNodeEls.set(el.dataset.id, el);
     });
     const keepEls = new Set();
     reusableNodes.forEach(el => keepEls.add(el));
