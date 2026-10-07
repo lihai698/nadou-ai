@@ -17,21 +17,21 @@
             } catch(e) {}
         })();
     </script>
-    <script src="/static/vendor/js/tailwindcss-cdn.js?v=2026.10.05.1790740572"></script>
-    <script src="/static/vendor/js/lucide.js?v=2026.10.05.1790740572"></script>
-    <script src="/static/js/theme.js?v=2026.10.05.1790740572"></script>
-    <script src="/static/js/i18n.js?v=2026.10.05.1791022416"></script>
-    <script src="/static/js/image-preview.js?v=2026.10.05.1791101490"></script>
-    <script src="/static/js/history-bulk-manager.js?v=2026.10.05.1790740572"></script>
+    <script src="/static/vendor/js/tailwindcss-cdn.js?v=2026.10.06.1790740572"></script>
+    <script src="/static/vendor/js/lucide.js?v=2026.10.06.1790740572"></script>
+    <script src="/static/js/theme.js?v=2026.10.06.1790740572"></script>
+    <script src="/static/js/i18n.js?v=2026.10.06.1791325378"></script>
+    <script src="/static/js/image-preview.js?v=2026.10.06.1791101490"></script>
+    <script src="/static/js/history-bulk-manager.js?v=2026.10.06.1790740572"></script>
     <script type="importmap">
         {
             "imports": {
-                "three": "/static/vendor/js/three-0.160.0.module.js?v=2026.10.05"
+                "three": "/static/vendor/js/three-0.160.0.module.js?v=2026.10.06"
             }
         }
     </script>
     <style>
-        @import url('/static/vendor/css/fonts.css?v=2026.10.05.1790740572');
+        @import url('/static/vendor/css/fonts.css?v=2026.10.06.1790740572');
 
         :root {
             --accent: #111827;
@@ -274,7 +274,7 @@
             border-color: #0f141d;
         }
     </style>
-    <link rel="stylesheet" href="/static/css/theme.css?v=2026.10.05.1790740572">
+    <link rel="stylesheet" href="/static/css/theme.css?v=2026.10.06.1790740572">
 </head>
 
 <body class="selection:bg-black selection:text-white">
@@ -829,6 +829,7 @@
 
         let uploadedPath = "";
         let uploadedFile = null; // Store raw file for cloud upload
+        let uploadVersion = 0;
         let currentResult = null;
         let allHistory = [];
         let currentIndex = 0;
@@ -876,6 +877,8 @@
 
         async function handleFile(file) {
             if (!file) return;
+            const version = ++uploadVersion;
+            uploadedPath = "";
             uploadedFile = file; // Store for cloud usage
             const btn = document.getElementById('genBtn');
             const btnText = document.getElementById('btnText');
@@ -885,6 +888,7 @@
 
             const reader = new FileReader();
             reader.onload = (e) => {
+                if (version !== uploadVersion) return;
                 previewImg.src = e.target.result;
                 previewImg.classList.remove('hidden');
                 document.getElementById('uploadContent').classList.add('opacity-0');
@@ -901,14 +905,20 @@
             formData.append('files', file);
             try {
                 const res = await fetch('/api/upload', { method: 'POST', body: formData });
-                const data = await res.json();
-                uploadedPath = data.files[0].comfy_name;
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) throw new Error(data.detail || tr('studio.uploadFailed'));
+                const name = data.files?.[0]?.comfy_name;
+                if (!name) throw new Error(tr('studio.uploadFailed'));
+                if (version !== uploadVersion) return;
+                uploadedPath = name;
                 btn.disabled = false;
                 btnText.innerText = tr('studio.generateAngle');
             } catch (err) {
+                if (version !== uploadVersion) return;
                 console.error("Upload error");
                 btnText.innerText = tr('studio.uploadFailed');
                 btn.disabled = false;
+                alert(err.message || tr('studio.uploadFailed'));
             }
         }
 
@@ -953,25 +963,29 @@
         async function runCloudTask() {
             if (!uploadedFile) throw new Error("Please upload an image first");
 
-            // Get token from centralized management (Global server token first, legacy localStorage fallback)
+            // 只查询服务端是否已配置 Token，不把服务端密钥读入浏览器。
+            // localStorage 仅作为旧版本用户手动保存的 Token 兼容回退。
             let token = '';
+            let serverConfigured = null;
+            let legacyToken = '';
+            try { legacyToken = localStorage.getItem('modelscope_api_token') || ''; } catch (e) { }
             try {
-                const res = await fetch('/api/config/token');
+                const res = await fetch('/api/config/token/status', { cache: 'no-store' });
                 if (res.ok) {
                     const data = await res.json();
-                    if (data.token) token = data.token;
+                    serverConfigured = data.configured === true;
                 }
             } catch (e) {
-                console.warn("Failed to fetch global token", e);
+                console.warn("Failed to fetch ModelScope token status", e);
             }
-            if (token) {
-                // 自愈：清掉可能过期的旧版本地 Token，避免覆盖服务端有效 Token
+            if (serverConfigured === true) {
+                // 服务端配置优先，清掉可能过期的旧版本地 Token。
                 try { localStorage.removeItem('modelscope_api_token'); } catch (e) { }
-            } else {
-                token = localStorage.getItem('modelscope_api_token') || '';
+            } else if (serverConfigured === false) {
+                token = legacyToken;
             }
 
-            if (!token) {
+            if (serverConfigured === false && !token) {
                 if (window.parent && typeof window.parent.openTokenModal === 'function') {
                     window.parent.openTokenModal();
                     // Allow the error to propagate so user sees the message

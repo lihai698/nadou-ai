@@ -1,5 +1,9 @@
 #!/bin/bash
 cd "$(dirname "$0")"
+NO_PAUSE=0
+if [ "${1:-}" = "--no-pause" ]; then
+  NO_PAUSE=1
+fi
 echo "============================================"
 echo "   Installing pinned dependencies"
 echo "============================================"
@@ -34,6 +38,10 @@ fi
 
 echo ""
 echo "Done. Run 'bash mac-启动服务.sh' to start."
-if [ -t 0 ]; then
-    read -r -p "Press Enter to exit..." _
+if ! python3 tools/dependency_marker.py --write; then
+  echo "[ERROR] Could not write the dependency installation marker."
+  exit 1
+fi
+if [ "$NO_PAUSE" -eq 0 ] && [ -t 0 ]; then
+  read -r -p "Press Enter to exit..." _
 fi

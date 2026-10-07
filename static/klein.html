@@ -17,14 +17,14 @@
             } catch(e) {}
         })();
     </script>
-    <script src="/static/vendor/js/tailwindcss-cdn.js?v=2026.10.05.1790740572"></script>
-    <script src="/static/vendor/js/lucide.js?v=2026.10.05.1790740572"></script>
-    <script src="/static/js/theme.js?v=2026.10.05.1790740572"></script>
-    <script src="/static/js/i18n.js?v=2026.10.05.1791022416"></script>
-    <script src="/static/js/image-preview.js?v=2026.10.05.1791101490"></script>
-    <script src="/static/js/history-bulk-manager.js?v=2026.10.05.1790740572"></script>
+    <script src="/static/vendor/js/tailwindcss-cdn.js?v=2026.10.06.1790740572"></script>
+    <script src="/static/vendor/js/lucide.js?v=2026.10.06.1790740572"></script>
+    <script src="/static/js/theme.js?v=2026.10.06.1790740572"></script>
+    <script src="/static/js/i18n.js?v=2026.10.06.1791325378"></script>
+    <script src="/static/js/image-preview.js?v=2026.10.06.1791101490"></script>
+    <script src="/static/js/history-bulk-manager.js?v=2026.10.06.1790740572"></script>
     <style>
-        @import url('/static/vendor/css/fonts.css?v=2026.10.05.1790740572');
+        @import url('/static/vendor/css/fonts.css?v=2026.10.06.1790740572');
 
         :root {
             --accent: #111827;
@@ -189,7 +189,7 @@
         html.studio-theme-dark .lora-track { background: #3a465a; }
         html.studio-theme-dark .lora-track.on { background: #3b82f6; }
     </style>
-    <link rel="stylesheet" href="/static/css/theme.css?v=2026.10.05.1790740572">
+    <link rel="stylesheet" href="/static/css/theme.css?v=2026.10.06.1790740572">
 </head>
 
 <body class="antialiased transition-colors duration-300">
@@ -403,6 +403,8 @@
 
         let uploadedNames = { 1: "", 2: "", 3: "" };
         let base64Images = { 1: "", 2: "", 3: "" };
+        let uploadVersion = { 1: 0, 2: 0, 3: 0 };
+        let uploadPending = { 1: false, 2: false, 3: false };
         let allHistory = [];
         let currentResult = null;
         let currentLightboxData = null;
@@ -469,8 +471,13 @@
 
         async function handleFile(file, index) {
             if (!file) return;
+            const version = ++uploadVersion[index];
+            uploadedNames[index] = "";
+            base64Images[index] = "";
+            uploadPending[index] = true;
             const reader = new FileReader();
             reader.onload = (e) => {
+                if (version !== uploadVersion[index]) return;
                 base64Images[index] = e.target.result;
                 const prev = document.getElementById(`prev${index}`);
                 prev.src = e.target.result;
@@ -484,16 +491,28 @@
             formData.append('files', file);
             try {
                 const res = await fetch('/api/upload', { method: 'POST', body: formData });
-                const data = await res.json();
-                uploadedNames[index] = data.files[0].comfy_name;
-            } catch (e) { uploadedNames[index] = file.name; }
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) throw new Error(data.detail || tr('studio.uploadFailed'));
+                const name = data.files?.[0]?.comfy_name;
+                if (!name) throw new Error(tr('studio.uploadFailed'));
+                if (version !== uploadVersion[index]) return;
+                uploadedNames[index] = name;
+                uploadPending[index] = false;
+            } catch (err) {
+                if (version !== uploadVersion[index]) return;
+                uploadPending[index] = false;
+                alert(err.message || tr('studio.uploadFailed'));
+            }
         }
 
         function clearSlot(index, ev) {
             if (ev) ev.stopPropagation();
+            uploadVersion[index]++;
+            uploadPending[index] = false;
             const prev = document.getElementById(`prev${index}`);
             prev.src = ""; prev.classList.add("hidden");
             document.getElementById(`del${index}`).classList.add("hidden");
+            document.getElementById(`file${index}`).value = '';
             uploadedNames[index] = "";
             base64Images[index] = "";
         }
@@ -507,6 +526,8 @@
         }
 
         async function submitLocal() {
+            if (Object.values(uploadPending).some(Boolean)) { alert(tr('studio.uploading')); return; }
+            if ([1, 2, 3].some(id => base64Images[id] && !uploadedNames[id])) { alert(tr('studio.uploadFailed')); return; }
             if (!uploadedNames[1]) { alert("Please upload Main Image (Slot 1)"); return; }
             const btn = document.getElementById('genBtn');
             const loader = document.getElementById('loader');
@@ -543,19 +564,20 @@
                     body: JSON.stringify({ ...payload, client_id: CLIENT_ID })
                 });
                 const result = await response.json();
-                if (result.images?.[0]) {
-                    currentResult = result;
-                    outputImg.src = result.images[0];
-                    outputImg.classList.remove('hidden');
-                    downloadBtn.classList.remove('hidden');
-                    downloadBtn.href = result.images[0];
-                    renderImageCard(result, true);
-                } else if (result.error) {
-                    alert("Generation failed: " + result.error);
+                if (!response.ok || !result?.images?.[0]) {
+                    alert(typeof result?.error === 'string' && result.error.trim()
+                        ? result.error : tr('studio.localRenderFailed'));
                     placeholder.classList.remove('hidden');
+                    return;
                 }
+                currentResult = result;
+                outputImg.src = result.images[0];
+                outputImg.classList.remove('hidden');
+                downloadBtn.classList.remove('hidden');
+                downloadBtn.href = result.images[0];
+                renderImageCard(result, true);
             } catch (err) {
-                alert("Generation failed: " + err.message);
+                alert(tr('studio.localRenderFailed'));
                 placeholder.classList.remove('hidden');
             } finally {
                 loader.classList.add('hidden');
@@ -776,6 +798,7 @@
             document.getElementById('promptInput').value = currentLightboxData.prompt || "";
             const params = currentLightboxData.params;
             const setSlot = (slotId, nodeId) => {
+                clearSlot(slotId);
                 if (params[nodeId]?.image) {
                     const fname = params[nodeId].image;
                     uploadedNames[slotId] = fname;
@@ -783,7 +806,7 @@
                     prev.src = `/api/view?filename=${encodeURIComponent(fname)}&type=input`;
                     prev.classList.remove('hidden');
                     document.getElementById(`del${slotId}`).classList.remove('hidden');
-                } else { clearSlot(slotId); }
+                }
             };
             setSlot(1, "278"); setSlot(2, "270"); setSlot(3, "292");
             closeLightbox();

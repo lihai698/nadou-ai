@@ -43,6 +43,8 @@ def prepare_python_sandbox(target):
     """Copy public code and tests only; never copy API/, data/, assets/ or output/."""
     for name in ("main.py",):
         shutil.copy2(ROOT / name, target / name)
+    for name in ("run.bat", "安装依赖.bat", "检查核心流程.bat", "mac-启动服务.sh", "mac-安装依赖.sh"):
+        shutil.copy2(ROOT / name, target / name)
     for name in ("backend", "tests", "static", "tools", "workflows"):
         source = ROOT / name
         if source.is_dir():

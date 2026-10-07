@@ -1,4 +1,4 @@
-"""可靠地替换 JSON 文件的最小写入工具。
+"""可靠地替换 JSON 和文本文件的最小写入工具。
 
 写入过程先在目标文件同目录创建临时文件，完成 JSON 编码、刷新和
     ``fsync`` 后再通过 ``os.replace`` 替换目标。这样异常退出发生在替换前
@@ -80,6 +80,44 @@ def write_json_atomic(
             pass
         except OSError:
             # 清理失败不能遮盖原始写入异常；下次启动仍可识别临时文件。
+            pass
+        raise
+
+
+def write_text_atomic(
+    path: str | PathLike[str],
+    text: str,
+    *,
+    encoding: str = "utf-8",
+    newline: str | None = "",
+) -> None:
+    """以原子替换方式写入普通文本文件。
+
+    启动时同步静态页面版本也必须经过同一临时文件和替换流程，避免
+    进程在直接写入目标文件时留下半个 HTML 文件。
+    """
+
+    target = os.fspath(path)
+    target_dir = os.path.dirname(os.path.abspath(target)) or os.curdir
+    os.makedirs(target_dir, exist_ok=True)
+    target_name = os.path.basename(target) or "data.txt"
+    fd, temporary = tempfile.mkstemp(
+        prefix=f".{target_name}.",
+        suffix=".tmp",
+        dir=target_dir,
+    )
+    try:
+        with os.fdopen(fd, "w", encoding=encoding, newline=newline) as handle:
+            handle.write(str(text))
+            handle.flush()
+            os.fsync(handle.fileno())
+        _replace_with_windows_retry(temporary, target)
+    except BaseException:
+        try:
+            os.unlink(temporary)
+        except FileNotFoundError:
+            pass
+        except OSError:
             pass
         raise
 

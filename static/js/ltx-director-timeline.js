@@ -35,6 +35,10 @@ const api = (window.comfyAPI && window.comfyAPI.api) ? window.comfyAPI.api : {
     }
   }
 };
+
+function promptRelayUploadError(message = '素材上传失败') {
+  if (typeof window.alert === 'function') window.alert(message);
+}
 const app = (window.comfyAPI && window.comfyAPI.app) ? window.comfyAPI.app : null;
 
 // --- UI Constants & Configuration ---
@@ -1550,10 +1554,15 @@ class TimelineEditor {
           const body = new FormData();
           body.append("image", file);
           const resp = await api.fetchApi("/upload/image", { method: "POST", body });
-          if (resp.status !== 200) { resolve(); return; }
+          if (resp.status !== 200) {
+            promptRelayUploadError(`图片上传失败（HTTP ${resp.status}）`);
+            resolve();
+            return;
+          }
 
           const data = await resp.json();
           const filename = data.name;
+          if (!filename) throw new Error('图片上传未返回文件名');
           const subfolder = data.subfolder || "";
           const imageFile = subfolder ? subfolder + "/" + filename : filename;
           const imgUrl = api.apiURL(`/view?filename=${encodeURIComponent(filename)}&type=input&subfolder=${encodeURIComponent(subfolder)}`);
@@ -1629,6 +1638,7 @@ class TimelineEditor {
           img.src = imgUrl;
         } catch (err) {
           console.error("[PromptRelay] Image upload failed", err);
+          promptRelayUploadError(err.message || '图片上传失败');
           resolve();
         }
       });
@@ -1649,10 +1659,15 @@ class TimelineEditor {
           const body = new FormData();
           body.append("image", file);
           const resp = await api.fetchApi("/upload/image", { method: "POST", body });
-          if (resp.status !== 200) { resolve(); return; }
+          if (resp.status !== 200) {
+            promptRelayUploadError(`音频上传失败（HTTP ${resp.status}）`);
+            resolve();
+            return;
+          }
 
           const data = await resp.json();
           const filename = data.name;
+          if (!filename) throw new Error('音频上传未返回文件名');
           const subfolder = data.subfolder || "";
           const audioFile = subfolder ? subfolder + "/" + filename : filename;
 
@@ -1735,6 +1750,7 @@ class TimelineEditor {
           resolve();
         } catch (err) {
           console.error("[PromptRelay] Audio processing failed", err);
+          promptRelayUploadError(err.message || '音频上传失败');
           resolve();
         }
       });

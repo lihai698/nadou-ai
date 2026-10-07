@@ -23,6 +23,28 @@ def _concurrent_atomic_writer(path, marker):
 
 
 class AtomicJsonTests(unittest.TestCase):
+    def test_success_writes_text_and_replaces_after_fsync(self):
+        with tempfile.TemporaryDirectory() as root:
+            target = Path(root) / "nested" / "page.html"
+            target.parent.mkdir()
+            target.write_text("<old>", encoding="utf-8")
+            original_replace = atomic_json.os.replace
+            with patch.object(atomic_json.os, "replace") as replace_mock:
+                replace_mock.side_effect = original_replace
+                atomic_json.write_text_atomic(target, "<中文>", newline="")
+            self.assertEqual(target.read_text(encoding="utf-8"), "<中文>")
+            self.assertEqual(list(target.parent.glob(f".{target.name}.*.tmp")), [])
+
+    def test_text_replace_failure_keeps_previous_file_and_cleans_temporary(self):
+        with tempfile.TemporaryDirectory() as root:
+            target = Path(root) / "page.html"
+            target.write_text("<old>", encoding="utf-8")
+            with patch.object(atomic_json.os, "replace", side_effect=OSError("replace failed")):
+                with self.assertRaisesRegex(OSError, "replace failed"):
+                    atomic_json.write_text_atomic(target, "<new>")
+            self.assertEqual(target.read_text(encoding="utf-8"), "<old>")
+            self.assertEqual(list(target.parent.glob(f".{target.name}.*.tmp")), [])
+
     def test_windows_sharing_violation_retries_only_the_replace(self):
         class SharingViolation(PermissionError):
             winerror = 32

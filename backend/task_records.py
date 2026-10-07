@@ -19,6 +19,7 @@ from typing import Any, Dict, Optional
 
 from .atomic_json import write_json_atomic
 from .process_lock import interprocess_file_lock
+from .task_states import interrupted_task_update
 
 
 TASK_ID_RE = re.compile(r"canvas_(?:img|comfy|video)_[A-Za-z0-9_-]{8,87}\Z")
@@ -153,14 +154,14 @@ def mark_interrupted_task(
     now: Optional[float] = None,
     unknown_message: str,
 ) -> Dict[str, Any]:
-    """将其他进程遗留的未结束任务标记为 ``unknown``。"""
+    """兼容入口：校验记录、提供时钟，再委托纯规则计算重启状态。"""
 
     _validate_task_record(task)
     result = dict(task)
-    if result.get("status") in {"queued", "running"} and result.get("process_id") != process_id:
-        result["status"] = "unknown"
-        result["error"] = str(unknown_message or "远端状态未知")[:600]
-        result["updated_at"] = float(time.time() if now is None else now)
+    result.update(interrupted_task_update(
+        task, process_id, time.time() if now is None else now,
+        unknown_message=unknown_message,
+    ))
     return result
 
 

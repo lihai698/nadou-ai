@@ -1,5 +1,5 @@
 (function(){
-    const VERSION = '2026.10.03.comfy-query-retry';
+    const VERSION = '2026.10.07.zimage-queue-state';
     const scripts = [
         '/static/js/i18n-core.js',
         '/static/js/i18n/common.js',

@@ -3,6 +3,8 @@ const statusEl = document.getElementById('assetStatus');
 const refreshBtn = document.getElementById('refreshBtn');
 const storageSettingsBtn = document.getElementById('storageSettingsBtn');
 const uploadInput = document.getElementById('assetUploadInput');
+const ASSET_UPLOAD_MAX_FILE_BYTES = 100 * 1024 * 1024;
+const ASSET_UPLOAD_MAX_BATCH_BYTES = 500 * 1024 * 1024;
 
 const LOCAL_CAPTION_SETTINGS_KEY = 'asset_manager_local_caption_settings_v1';
 function readLocalCaptionSettings(){
@@ -2517,8 +2519,12 @@ function renderPromptDetail(item, readonly){
 async function uploadFiles(files){
     const cat = activeAssetCategory();
     if(!cat) throw new Error('请先创建图片分组');
+    const list = [...files];
+    const oversized = list.find(file => Number(file.size || 0) > ASSET_UPLOAD_MAX_FILE_BYTES);
+    if(oversized) throw new Error(`${oversized.name || '文件'}超过 100MB，无法上传`);
+    if(list.reduce((sum, file) => sum + Number(file.size || 0), 0) > ASSET_UPLOAD_MAX_BATCH_BYTES) throw new Error('本次上传总大小超过 500MB');
     const form = new FormData();
-    [...files].forEach(file => form.append('files', file));
+    list.forEach(file => form.append('files', file));
     const uploaded = await apiJson('/api/ai/upload', {method:'POST', body:form});
     const items = (uploaded.files || []).filter(file => file?.url).map(file => ({
         library_id:activeAssetLibraryId,
@@ -2544,6 +2550,9 @@ async function uploadWorkflowFiles(files){
     if(!cat) throw new Error('请先创建工作流分组');
     const list = [...files].filter(file => /\.(json|zip)$/i.test(file.name || '') || ['application/json','application/zip','application/x-zip-compressed'].includes(String(file.type || '').toLowerCase()));
     if(!list.length) throw new Error('没有可上传的工作流文件');
+    const oversized = list.find(file => Number(file.size || 0) > ASSET_UPLOAD_MAX_FILE_BYTES);
+    if(oversized) throw new Error(`${oversized.name || '文件'}超过 100MB，无法上传`);
+    if(list.reduce((sum, file) => sum + Number(file.size || 0), 0) > ASSET_UPLOAD_MAX_BATCH_BYTES) throw new Error('本次上传总大小超过 500MB');
     const form = new FormData();
     form.append('library_id', activeWorkflowLibraryId || '');
     form.append('category_id', activeWorkflowCategoryId || '');

@@ -7,6 +7,8 @@ const path = require('node:path');
 const root = path.join(__dirname, '..');
 const html = readFileSync(path.join(root, 'static/comfyui-settings.html'), 'utf8');
 const rulesSource = readFileSync(path.join(root, 'static/js/comfyui-settings-rules.js'), 'utf8');
+const settingsSource = readFileSync(path.join(root, 'static/js/comfyui-settings.js'), 'utf8');
+const apiSettingsSource = readFileSync(path.join(root, 'static/js/api-settings.js'), 'utf8');
 
 test('ComfyUI field rules retain workflow input and media formats', () => {
     const rules = require('../static/js/comfyui-settings-rules.js');
@@ -33,6 +35,16 @@ test('ComfyUI save rules keep address compatibility and reject the first blank f
     const fields = [{input: 'steps', name: '步数'}, {input: 'seed', name: ' '}, {input: 'cfg', name: ''}];
     assert.equal(rules.firstUnnamedField(fields), fields[1]);
     assert.equal(rules.firstUnnamedField([{input: 'steps', name: '步数'}]), undefined);
+});
+
+test('media preview uploads guard against stale responses and never fall back to local filenames', () => {
+    assert.match(settingsSource, /const previewUploadVersion = \{\};/);
+    assert.match(settingsSource, /previewUploadVersion\[`node:\$\{nodeId\}`\] !== version/);
+    assert.match(settingsSource, /previewUploadVersion\[`field:\$\{fieldId\}`\] !== version/);
+    assert.doesNotMatch(settingsSource, /comfy_name\s*\|\|\s*data\.files\?\.\[0\]\?\.filename\s*\|\|\s*file\.name/);
+    assert.match(apiSettingsSource, /const rhPreviewUploadVersion = \{\};/);
+    assert.match(apiSettingsSource, /rhPreviewUploadVersion\[key\] !== version/);
+    assert.doesNotMatch(apiSettingsSource, /url:uploaded\?\.url \|\| localUrl/);
 });
 
 test('real ComfyUI HTML loads rules before page script and page save uses them', async () => {

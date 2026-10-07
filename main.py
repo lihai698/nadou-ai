@@ -3,6 +3,7 @@ import uuid
 import base64
 import hashlib
 import hmac
+import ipaddress
 import datetime
 import urllib.request
 import urllib.parse
@@ -29,7 +30,7 @@ import html
 import xml.etree.ElementTree as ET
 from contextvars import ContextVar
 from contextlib import contextmanager
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict, Any, Optional, Tuple, Mapping
 from threading import Lock, RLock, Thread, local
 import httpx
 from PIL import Image, ImageOps
@@ -63,7 +64,7 @@ from backend.tracing import (
     task_context,
 )
 from backend.diagnostics import configure_diagnostics, write_diagnostic
-from backend.atomic_json import write_json_atomic
+from backend.atomic_json import write_json_atomic, write_text_atomic
 from backend.process_lock import interprocess_file_lock
 from backend.data_formats import (
     InvalidDataFormat,
@@ -86,7 +87,7 @@ from backend.canvas_records import (
 )
 from backend.project_records import next_project_order, project_record, project_sort_key
 from backend.history_records import history_records_for_api, read_history_records
-from backend.task_states import task_state_update
+from backend.task_states import image_batch_outcome, task_state_update
 from backend.task_records import (
     TaskRecordError,
     _read_task_record_unlocked,
@@ -105,14 +106,21 @@ from backend.task_record_cleanup import (
     public_task_cleanup_plan,
 )
 from backend.remote_task_protocol import (
+    IMAGE_TASK_FAILED_STATUSES,
+    IMAGE_TASK_SUCCESS_STATUSES,
     REMOTE_FAILED,
     REMOTE_PENDING,
     REMOTE_SUCCEEDED,
     REMOTE_UNKNOWN,
+    image_task_data,
+    image_task_status,
     observe_remote_task,
     remote_task_decision,
 )
+from backend.runninghub_protocol import runninghub_extract_task_id, runninghub_query_status
+from backend.image_generation_dispatch import ImageGenerationDispatchContext, resolve_image_generation_dispatch
 from backend.task_concurrency import TaskConcurrencyGate, configured_task_limits
+from backend import comfy_task_service
 from backend.extensions import ExtensionError, ExtensionRegistry
 from backend.local_media_extension import LOCAL_MEDIA_EXTENSION
 from backend.asset_media_rules import (
@@ -185,6 +193,99 @@ logging.getLogger("uvicorn.access").addFilter(QuietAccessLogFilter())
 app = FastAPI()
 
 
+def model_dump_compat(value, **kwargs):
+    """兼容 Pydantic 1/2 的模型转字典方法。"""
+
+    dump = getattr(value, "model_dump", None)
+    if callable(dump):
+        return dump(**kwargs)
+    legacy = getattr(value, "dict", None)
+    if callable(legacy):
+        return legacy(**kwargs)
+    return dict(value)
+
+
+def configured_bind_host():
+    return os.getenv("NADOU_BIND_HOST", "").strip() or "127.0.0.1"
+
+
+def bind_host_requires_access_control(host=None):
+    value = str(host if host is not None else configured_bind_host()).strip().strip("[]").lower()
+    if value in {"localhost", "127.0.0.1", "::1"}:
+        return False
+    try:
+        return not ipaddress.ip_address(value).is_loopback
+    except ValueError:
+        # 未知主机名可能解析到局域网地址，按远端监听处理更安全。
+        return True
+
+
+def configured_access_token():
+    return str(os.getenv("NADOU_ACCESS_TOKEN", "") or "").strip()
+
+
+def supplied_access_token(scope):
+    headers = {
+        key.decode("latin-1").lower(): value.decode("latin-1")
+        for key, value in scope.get("headers", [])
+    }
+    direct = headers.get("x-nadou-access-token", "").strip()
+    if direct:
+        return direct
+    authorization = headers.get("authorization", "").strip()
+    scheme, _, value = authorization.partition(" ")
+    if scheme.lower() == "bearer":
+        return value.strip()
+    if scheme.lower() == "basic":
+        try:
+            decoded = base64.b64decode(value, validate=True).decode("utf-8")
+        except (ValueError, UnicodeError):
+            return ""
+        _, separator, password = decoded.partition(":")
+        return password if separator else decoded
+    return ""
+
+
+class RemoteAccessMiddleware:
+    """非回环监听时保护 HTTP 与 WebSocket，默认本机监听不增加登录步骤。"""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope.get("type") not in {"http", "websocket"} or not bind_host_requires_access_control():
+            await self.app(scope, receive, send)
+            return
+        if scope.get("type") == "http" and scope.get("method", "").upper() == "OPTIONS":
+            # 允许跨域预检先完成；真正的 GET/POST 仍必须携带令牌。
+            await self.app(scope, receive, send)
+            return
+        token = configured_access_token()
+        supplied = supplied_access_token(scope)
+        authorized = bool(token and supplied and hmac.compare_digest(supplied, token))
+        if authorized:
+            await self.app(scope, receive, send)
+            return
+        if scope.get("type") == "websocket":
+            await send({"type": "websocket.close", "code": 1008, "reason": "需要访问令牌"})
+            return
+        if not token:
+            status = 503
+            body = "服务绑定到非本机地址，但未配置 NADOU_ACCESS_TOKEN。"
+            headers = [(b"content-type", b"text/plain; charset=utf-8")]
+        else:
+            status = 401
+            body = "需要 NADOU_ACCESS_TOKEN。"
+            headers = [
+                (b"content-type", b"text/plain; charset=utf-8"),
+                (b"www-authenticate", b'Basic realm="nadou ai"'),
+            ]
+        payload = body.encode("utf-8")
+        headers.append((b"content-length", str(len(payload)).encode("ascii")))
+        await send({"type": "http.response.start", "status": status, "headers": headers})
+        await send({"type": "http.response.body", "body": payload})
+
+
 @app.middleware("http")
 async def request_tracing_middleware(request: Request, call_next):
     """为每个 HTTP 请求建立可传递的 request/trace 标识。
@@ -215,6 +316,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(RemoteAccessMiddleware)
 
 GITHUB_REPO_SLUG = "lihai698/nadou-ai"
 GITHUB_REPO_URL = f"https://github.com/{GITHUB_REPO_SLUG}"
@@ -345,6 +447,97 @@ SHARED_FOLDERS_FILE = os.path.join(DATA_DIR, "shared_folders.json")
 GLOBAL_CONFIG_FILE = os.path.join(BASE_DIR, "global_config.json")
 CANVAS_TRASH_RETENTION_MS = 30 * 24 * 60 * 60 * 1000
 LOCAL_IMAGE_IMPORT_MAX_BYTES = int(os.getenv("LOCAL_IMAGE_IMPORT_MAX_BYTES", str(50 * 1024 * 1024)))
+# 所有用户上传入口统一限制：单文件 100MB，单次请求累计 500MB。
+UPLOAD_MAX_FILE_BYTES = 100 * 1024 * 1024
+UPLOAD_MAX_BATCH_BYTES = 500 * 1024 * 1024
+UPLOAD_READ_CHUNK_BYTES = 1024 * 1024
+BASE64_UPLOAD_MAX_BYTES = UPLOAD_MAX_FILE_BYTES
+BASE64_UPLOAD_MAX_TEXT_LENGTH = ((BASE64_UPLOAD_MAX_BYTES + 2) // 3) * 4 + 512
+WORKFLOW_ZIP_MAX_FILES = 2000
+WORKFLOW_ZIP_MAX_UNCOMPRESSED_BYTES = UPLOAD_MAX_BATCH_BYTES
+
+
+def _upload_limit_error(filename="文件", *, batch=False):
+    if batch:
+        return HTTPException(status_code=413, detail=f"本次上传总大小超过 {UPLOAD_MAX_BATCH_BYTES // (1024 * 1024)}MB")
+    return HTTPException(status_code=413, detail=f"{filename or '文件'}超过 {UPLOAD_MAX_FILE_BYTES // (1024 * 1024)}MB，无法上传")
+
+
+async def read_upload_file_limited(file: UploadFile, *, batch_state=None):
+    """分块读取 UploadFile，并同时执行单文件与批次大小限制。"""
+    filename = file.filename or "文件"
+    chunks = []
+    total = 0
+    while True:
+        chunk = await file.read(UPLOAD_READ_CHUNK_BYTES)
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > UPLOAD_MAX_FILE_BYTES:
+            raise _upload_limit_error(filename)
+        if batch_state is not None:
+            batch_total = int(batch_state.get("total", 0)) + len(chunk)
+            if batch_total > UPLOAD_MAX_BATCH_BYTES:
+                raise _upload_limit_error(batch=True)
+            batch_state["total"] = batch_total
+        chunks.append(chunk)
+    return b"".join(chunks)
+
+
+def _base64_payload_size_hint(value):
+    original = str(value or "")
+    text = original
+    if len(text) > BASE64_UPLOAD_MAX_TEXT_LENGTH:
+        raise _upload_limit_error("Base64 数据")
+    if text.startswith("data:"):
+        _, _, text = text.partition(",")
+    # Base64 的长度上界足够保守，实际解码后仍会再次精确检查。
+    if len(text) > ((BASE64_UPLOAD_MAX_BYTES + 2) // 3) * 4:
+        raise _upload_limit_error("Base64 数据")
+    return original
+
+
+async def read_httpx_response_limited(response, *, batch_state=None, filename="远程文件"):
+    """分块读取 httpx 响应，避免远程素材通过 response.content 无上限进内存。"""
+    content_length = response.headers.get("Content-Length")
+    try:
+        announced = int(content_length) if content_length else 0
+    except (TypeError, ValueError):
+        announced = 0
+    if announced > UPLOAD_MAX_FILE_BYTES:
+        raise _upload_limit_error(filename)
+    chunks = []
+    total = 0
+    async for chunk in response.aiter_bytes(UPLOAD_READ_CHUNK_BYTES):
+        if not chunk:
+            continue
+        total += len(chunk)
+        if total > UPLOAD_MAX_FILE_BYTES:
+            raise _upload_limit_error(filename)
+        if batch_state is not None:
+            batch_total = int(batch_state.get("total", 0)) + len(chunk)
+            if batch_total > UPLOAD_MAX_BATCH_BYTES:
+                raise _upload_limit_error(batch=True)
+            batch_state["total"] = batch_total
+        chunks.append(chunk)
+    return b"".join(chunks)
+
+
+def validate_workflow_zip_limits(archive):
+    infos = archive.infolist()
+    if len(infos) > WORKFLOW_ZIP_MAX_FILES:
+        raise HTTPException(status_code=413, detail=f"工作流压缩包文件数超过 {WORKFLOW_ZIP_MAX_FILES} 个")
+    total_uncompressed = 0
+    for info in infos:
+        size = int(getattr(info, "file_size", 0) or 0)
+        if size < 0:
+            raise HTTPException(status_code=400, detail="工作流压缩包包含无效文件")
+        total_uncompressed += size
+        if total_uncompressed > WORKFLOW_ZIP_MAX_UNCOMPRESSED_BYTES:
+            raise HTTPException(status_code=413, detail="工作流压缩包解压后超过 500MB")
+    return infos
+
+
 LOCAL_IMAGE_IMPORT_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
 RUNNINGHUB_THUMBNAIL_EXTS = (".jpg",)
 STORAGE_SETTINGS_FILE = os.path.join(DATA_DIR, "storage_settings.json")
@@ -1611,11 +1804,42 @@ def get_api_provider_exact(provider_id: str):
 def modelscope_provider_config():
     return get_api_provider_exact("modelscope")
 
+
+def read_legacy_modelscope_token() -> str:
+    """读取旧版 global_config.json 中的 Token，失败时返回空字符串。"""
+
+    try:
+        with open(GLOBAL_CONFIG_FILE, "r", encoding="utf-8") as config_file:
+            config = json.load(config_file)
+    except FileNotFoundError:
+        return ""
+    except (json.JSONDecodeError, UnicodeError) as exc:
+        write_diagnostic(
+            f"[CONFIG-TOKEN] {format_context()} legacy_config_invalid error={type(exc).__name__}",
+            level=logging.WARNING,
+        )
+        return ""
+    except OSError as exc:
+        write_diagnostic(
+            f"[CONFIG-TOKEN] {format_context()} legacy_config_read_failed error={type(exc).__name__}",
+            level=logging.WARNING,
+        )
+        return ""
+    if not isinstance(config, dict) or not isinstance(config.get("modelscope_token", ""), str):
+        write_diagnostic(
+            f"[CONFIG-TOKEN] {format_context()} legacy_config_invalid error=InvalidSchema",
+            level=logging.WARNING,
+        )
+        return ""
+    return config.get("modelscope_token", "")
+
+
 def modelscope_api_key(explicit_key: str = ""):
     return (
         strip_auth_scheme(explicit_key, "Bearer")
         or strip_auth_scheme(provider_env_key_value("modelscope"), "Bearer")
         or strip_auth_scheme(MODELSCOPE_API_KEY, "Bearer")
+        or strip_auth_scheme(read_legacy_modelscope_token(), "Bearer")
     )
 
 def modelscope_api_root(provider=None):
@@ -1782,8 +2006,7 @@ def sync_static_html_versions():
                     old = f.read()
                 new = versioned_static_html(re.sub(r'([?&]v=)[^"\'`\s<>)]*', rf'\g<1>{safe_version}', old))
                 if new != old:
-                    with open(path, "w", encoding="utf-8", newline="") as f:
-                        f.write(new)
+                    write_text_atomic(path, new, encoding="utf-8", newline="")
             except Exception as e:
                 write_diagnostic(
                     f"static html version sync failed scope=file error={type(e).__name__}"
@@ -2722,10 +2945,15 @@ CANVAS_TASKS: Dict[str, Dict[str, Any]] = {}
 CANVAS_TASK_LOCK = Lock()
 CANVAS_TASK_PROCESS_ID = uuid.uuid4().hex
 CANVAS_TASK_UNKNOWN = "本地任务记录已失效，远端状态未知；请勿直接重复提交。"
+CANVAS_IMAGE_REMOTE_ACCEPT_CALLBACK = ContextVar(
+    "canvas_image_remote_accept_callback", default=None
+)
 _CANVAS_TASK_PERSISTED_FIELDS = frozenset({
     "id", "type", "status", "created_at", "updated_at", "result", "error",
     "status_code", "provider_id", "model", "input_summary", "process_id",
-    "trace_id", "request_id", "upstream_task_id", "jimeng_pending", "submit_id",
+    "trace_id", "request_id", "upstream_task_id", "remote_query_mode",
+    "upstream_task_ids", "remote_query_modes", "upstream_task_statuses", "upstream_task_errors", "upstream_task_results",
+    "jimeng_pending", "submit_id",
     "kind", "queue_info", "message",
 })
 _CANVAS_RESULT_PERSISTED_FIELDS = frozenset({
@@ -3328,8 +3556,7 @@ def save_comfy_text_output(value, prefix="studio_", name=""):
         stem += ".txt"
     filename = f"{prefix}{uuid.uuid4().hex[:10]}_{stem}"
     path = output_path_for(filename, "output")
-    with open(path, "w", encoding="utf-8") as f:
-        f.write(text)
+    write_text_atomic(path, text, encoding="utf-8", newline="")
     return output_url_for(filename, "output")
 
 def comfy_text_values_from_output(node_output):
@@ -3964,6 +4191,8 @@ def text_from_chat_response(data):
         return ""
     message = choices[0].get("message") or {}
     content = message.get("content", "")
+    if content is None:
+        return ""
     if isinstance(content, str):
         return content
     if isinstance(content, list):
@@ -3973,6 +4202,16 @@ def text_from_chat_response(data):
                 parts.append(item.get("text") or item.get("content") or "")
         return "\n".join(part for part in parts if part)
     return str(content)
+
+def required_chat_response_text(data):
+    """空的上游回复是生成失败，不能写成正常助手消息。"""
+    try:
+        text = text_from_chat_response(data).strip() if isinstance(data, dict) else ""
+    except (AttributeError, TypeError, ValueError):
+        text = ""
+    if not text:
+        raise HTTPException(status_code=502, detail="上游接口返回了空回复，请稍后重试")
+    return text
 
 def text_delta_from_chat_chunk(data):
     choices = data.get("choices") or []
@@ -4718,7 +4957,7 @@ async def tudou_async_reference_images(reference_images):
             images.append(tudou_png_or_jpeg_data_url(data_url))
     return images
 
-async def generate_tudou_async_image(prompt, size, quality, model, reference_images, provider, aspect_ratio="", resolution=""):
+async def generate_tudou_async_image(prompt, size, quality, model, reference_images, provider, aspect_ratio="", resolution="", on_remote_accept=None):
     """Tudou's GPT-Image-2 async route, isolated from generic OpenAI image calls."""
     base_url = str((provider or {}).get("base_url") or "").strip().rstrip("/")
     if not base_url:
@@ -4745,6 +4984,8 @@ async def generate_tudou_async_image(prompt, size, quality, model, reference_ima
                 return extract_image(raw), raw
             except HTTPException as exc:
                 raise HTTPException(status_code=502, detail=f"土豆异步生图未返回任务标识或图片：{upstream_error_summary(raw, fallback='响应内容不完整')}") from exc
+        if on_remote_accept is not None:
+            await on_remote_accept(task_id, query_mode="http_get")
         result = await wait_for_image_task(client, task_id, provider)
         return extract_image(result), result
 
@@ -5373,7 +5614,7 @@ async def codex_chat_text(payload, history_messages=None):
         if hasattr(payload, "images"):
             image_values.extend([{"url": item} for item in (getattr(payload, "images", None) or []) if item])
         if hasattr(payload, "reference_images"):
-            image_values.extend([ref.dict() for ref in (getattr(payload, "reference_images", None) or []) if getattr(ref, "url", "")])
+            image_values.extend([model_dump_compat(ref) for ref in (getattr(payload, "reference_images", None) or []) if getattr(ref, "url", "")])
         image_paths, temp_paths = await codex_reference_paths(image_values)
         raw = await run_codex_cli(
             codex_chat_prompt(payload, history_messages),
@@ -5655,7 +5896,7 @@ def gemini_cli_chat_prompt(payload, history_messages=None):
     if hasattr(payload, "images"):
         image_values.extend([{"url": item} for item in (getattr(payload, "images", None) or []) if item])
     if hasattr(payload, "reference_images"):
-        image_values.extend([ref.dict() for ref in (getattr(payload, "reference_images", None) or []) if getattr(ref, "url", "")])
+        image_values.extend([model_dump_compat(ref) for ref in (getattr(payload, "reference_images", None) or []) if getattr(ref, "url", "")])
     refs = []
     temp_paths = []
     return "\n\n".join(part for part in parts if part).strip(), image_values
@@ -6741,9 +6982,6 @@ async def generate_jimeng_video(payload: CanvasVideoRequest, provider):
             except Exception:
                 pass
 
-IMAGE_TASK_SUCCESS_STATUSES = {"SUCCESS", "SUCCESSFUL", "SUCCEED", "SUCCEEDED", "COMPLETED", "COMPLETE", "DONE", "FINISHED", "OK", "READY"}
-IMAGE_TASK_FAILED_STATUSES = {"FAILURE", "FAILED", "FAIL", "ERROR", "ERRORED", "CANCELED", "CANCELLED", "TIMEOUT", "REJECTED", "EXPIRED"}
-
 def image_task_url_for_provider(provider, task_id):
     base_url = (provider.get("base_url") if provider else AI_BASE_URL).rstrip("/")
     if is_tudou_async_image_mode(provider):
@@ -6755,15 +6993,6 @@ def image_task_url_for_provider(provider, task_id):
     if is_apimart_provider(provider):
         return f"{base_url}/tasks/{task_id}" if base_url.endswith("/v1") else f"{base_url}/v1/tasks/{task_id}"
     return f"{base_url}/images/tasks/{task_id}" if base_url.endswith("/v1") else f"{base_url}/v1/images/tasks/{task_id}"
-
-def image_task_data(payload):
-    if isinstance(payload, dict) and isinstance(payload.get("data"), dict):
-        return payload["data"]
-    return payload if isinstance(payload, dict) else {}
-
-def image_task_status(payload):
-    task_data = image_task_data(payload)
-    return str(task_data.get("status") or task_data.get("task_status") or "").upper()
 
 def image_task_fail_reason(payload):
     task_data = image_task_data(payload)
@@ -7765,8 +7994,7 @@ def save_asset_classification_prompt(text):
     if len(value) > 20000:
         raise HTTPException(status_code=400, detail="分类规则过长")
     os.makedirs(DATA_DIR, exist_ok=True)
-    with open(ASSET_CLASSIFICATION_PROMPT_FILE, "w", encoding="utf-8") as f:
-        f.write(value)
+    write_text_atomic(ASSET_CLASSIFICATION_PROMPT_FILE, value, encoding="utf-8", newline="")
     return value
 
 ASSET_CLASSIFICATION_DIMENSION_NAMES = {
@@ -7990,6 +8218,12 @@ def make_workflow_library_item_from_bytes(raw: bytes, filename: str, name: str =
     if ext not in {".json", ".zip"}:
         safe_filename += ".zip"
         ext = ".zip"
+    if ext == ".zip" or raw[:2] == b"PK":
+        try:
+            with zipfile.ZipFile(BytesIO(raw), "r") as archive:
+                validate_workflow_zip_limits(archive)
+        except zipfile.BadZipFile as exc:
+            raise HTTPException(status_code=400, detail="无法读取工作流压缩包") from exc
     dest_name = f"workflow_{uuid.uuid4().hex[:12]}_{safe_filename}"
     dest_path = os.path.join(ASSET_LIBRARY_DIR, dest_name)
     os.makedirs(ASSET_LIBRARY_DIR, exist_ok=True)
@@ -11253,36 +11487,6 @@ def runninghub_apply_schema_defaults(body, params):
             body[key] = default
     return body
 
-def runninghub_query_status(raw):
-    if not isinstance(raw, dict):
-        return ""
-    values = [
-        raw.get("status"),
-        raw.get("state"),
-        raw.get("taskStatus"),
-        raw.get("task_status"),
-    ]
-    data = raw.get("data")
-    if isinstance(data, dict):
-        values.extend([data.get("status"), data.get("state"), data.get("taskStatus"), data.get("task_status")])
-    for value in values:
-        if value is not None:
-            return str(value).lower()
-    return ""
-
-def runninghub_extract_task_id(raw):
-    if not isinstance(raw, dict):
-        return ""
-    for key in ("taskId", "task_id", "id"):
-        if raw.get(key):
-            return str(raw[key])
-    data = raw.get("data")
-    if isinstance(data, dict):
-        for key in ("taskId", "task_id", "id"):
-            if data.get(key):
-                return str(data[key])
-    return ""
-
 def runninghub_extract_image(raw):
     if not isinstance(raw, dict):
         raise HTTPException(status_code=502, detail="RunningHub 返回格式不是 JSON 对象")
@@ -11623,7 +11827,7 @@ async def runninghub_upload_local_to_filename(client, provider, url, use_wallet=
         detail=runninghub_error_detail(runninghub_fail_reason(raw) or "RunningHub 上传素材失败", raw, endpoint=upload_url),
     )
 
-async def generate_runninghub_entry_image(prompt, size, model, reference_images, provider, entry):
+async def generate_runninghub_entry_image(prompt, size, model, reference_images, provider, entry, on_remote_accept=None):
     """运行 RunningHub 工作流 / AI 应用（与智能画布一致的运行方式），返回首张图片结果。"""
     kind = entry["kind"]
     entry_id = entry["id"]
@@ -11715,6 +11919,8 @@ async def generate_runninghub_entry_image(prompt, size, model, reference_images,
                 status_code=502,
                 detail=runninghub_error_detail("RunningHub 未返回 taskId", raw, endpoint=submit_url, entryId=entry_id),
             )
+        if on_remote_accept is not None:
+            await on_remote_accept(task_id, query_mode="runninghub_image")
 
         query_url = runninghub_endpoint_url(provider, "/task/openapi/outputs")
         deadline = time.monotonic() + 1800
@@ -11750,10 +11956,10 @@ async def generate_runninghub_entry_image(prompt, size, model, reference_images,
             detail=runninghub_error_detail("RunningHub 任务超时", last_payload, endpoint=query_url, taskId=task_id),
         )
 
-async def generate_runninghub_provider_image(prompt, size, model, reference_images=None, provider=None):
+async def generate_runninghub_provider_image(prompt, size, model, reference_images=None, provider=None, on_remote_accept=None):
     entry = runninghub_entry_config_from_model(provider, model)
     if entry:
-        return await generate_runninghub_entry_image(prompt, size, model, reference_images, provider, entry)
+        return await generate_runninghub_entry_image(prompt, size, model, reference_images, provider, entry, on_remote_accept=on_remote_accept)
     model_def = await runninghub_model_definition(provider, model)
     endpoint = runninghub_task_endpoint(provider, model_def.get("endpoint") or model)
     params = model_def.get("params") if isinstance(model_def.get("params"), list) else []
@@ -11804,6 +12010,8 @@ async def generate_runninghub_provider_image(prompt, size, model, reference_imag
                     status_code=502,
                     detail=runninghub_error_detail("RunningHub 未返回 taskId 或图片结果", raw, endpoint=endpoint),
                 )
+        if on_remote_accept is not None:
+            await on_remote_accept(task_id, query_mode="runninghub_image")
         result = await wait_for_runninghub_image_task(client, provider, task_id)
         return runninghub_extract_image(result), result
 
@@ -11919,27 +12127,42 @@ async def generate_runninghub_video(payload, provider, on_remote_accept=None):
         local_urls = [await save_remote_video_to_output(url, prefix="rh_video_") for url in urls]
         return {"videos": local_urls, "task_id": task_id, "raw": result}
 
-async def generate_ai_image(prompt, size, quality, model, reference_images=None, provider_id="comfly", aspect_ratio="", resolution=""):
+async def generate_ai_image(prompt, size, quality, model, reference_images=None, provider_id="comfly", aspect_ratio="", resolution="", on_remote_accept=None):
     provider = get_api_provider(provider_id)
-    if is_tudou_provider(provider):
+    is_tudou = is_tudou_provider(provider)
+    if is_tudou:
         model = tudou_image_model_for_request(model)
-    if provider["id"] == "modelscope":
+    dispatch = resolve_image_generation_dispatch(
+        provider,
+        model,
+        ImageGenerationDispatchContext(
+            is_codex=lambda: is_codex_provider(provider),
+            is_gemini_cli=lambda: is_gemini_cli_provider(provider),
+            is_jimeng=lambda: is_jimeng_provider(provider),
+            is_runninghub=lambda: is_runninghub_provider(provider),
+            is_gemini_protocol=lambda: effective_protocol(provider, model) == "gemini",
+            is_volcengine=lambda: is_volcengine_provider(provider),
+            is_tudou_async=lambda: is_tudou_async_image_mode(provider, model),
+            is_tudou_grok=lambda: is_tudou and is_tudou_grok_image_model(model),
+        ),
+    )
+    if dispatch.route == "modelscope":
         return await generate_modelscope_provider_image(prompt, size, model, reference_images, provider)
-    if is_codex_provider(provider):
+    if dispatch.route == "codex":
         return await generate_codex_provider_image(prompt, size, model, reference_images, provider)
-    if is_gemini_cli_provider(provider):
+    if dispatch.route == "gemini-cli":
         return await generate_gemini_cli_provider_image(prompt, size, model, reference_images, provider)
-    if is_jimeng_provider(provider):
+    if dispatch.route == "jimeng":
         return await generate_jimeng_provider_image(prompt, size, model, reference_images, provider)
-    if is_runninghub_provider(provider):
-        return await generate_runninghub_provider_image(prompt, size, model, reference_images, provider)
-    if effective_protocol(provider, model) == "gemini":
+    if dispatch.route == "runninghub":
+        return await generate_runninghub_provider_image(prompt, size, model, reference_images, provider, on_remote_accept=on_remote_accept)
+    if dispatch.route == "gemini":
         return await generate_gemini_provider_image(prompt, size, model, reference_images, provider)
-    if is_volcengine_provider(provider):
+    if dispatch.route == "volcengine":
         return await generate_volcengine_provider_image(prompt, size, model, reference_images, provider)
-    if is_tudou_async_image_mode(provider, model):
-        return await generate_tudou_async_image(prompt, size, quality, model, reference_images, provider, aspect_ratio, resolution)
-    if is_tudou_provider(provider) and is_tudou_grok_image_model(model):
+    if dispatch.route == "tudou-async":
+        return await generate_tudou_async_image(prompt, size, quality, model, reference_images, provider, aspect_ratio, resolution, on_remote_accept=on_remote_accept)
+    if dispatch.route == "tudou-grok":
         return await generate_tudou_grok_image(prompt, size, model, reference_images, provider, aspect_ratio)
     is_gpt2 = is_gpt_image_2_model(model)
     is_apimart = is_apimart_provider(provider)
@@ -12157,6 +12380,8 @@ async def generate_ai_image(prompt, size, quality, model, reference_images=None,
             task_id = extract_task_id(raw)
             if not task_id:
                 raise
+        if on_remote_accept is not None:
+            await on_remote_accept(task_id, query_mode="http_get")
         try:
             task_result = await wait_for_image_task(client, task_id, provider)
             return extract_image(task_result), task_result
@@ -12410,7 +12635,7 @@ async def build_chat_text_reply(payload, conversation):
     return {
         "id": uuid.uuid4().hex,
         "role": "assistant",
-        "content": text_from_chat_response(raw).strip() or "接口返回了空回复。",
+        "content": required_chat_response_text(raw),
         "created_at": now_ms(),
         "model": model,
         "raw_usage": public_usage(raw_data.get("usage")) if isinstance(raw_data, dict) else None,
@@ -12578,12 +12803,9 @@ async def export_minimax_timeline(payload: MiniMaxTimelineExportRequest):
 @app.post("/api/upload")
 async def upload_image(files: List[UploadFile] = File(...)):
     uploaded_files = []
-    files_content = []
+    batch_state = {"total": 0}
     for file in files:
-        content = await file.read()
-        files_content.append((file, content))
-
-    for file, content in files_content:
+        content = await read_upload_file_limited(file, batch_state=batch_state)
         success_count = 0
         last_result = None
         for addr in COMFYUI_INSTANCES:
@@ -12610,13 +12832,11 @@ async def upload_ai_reference(files: List[UploadFile] = File(...)):
     video_exts = {".mp4", ".webm", ".mov", ".m4v", ".flv"}
     audio_exts = {".mp3", ".wav", ".m4a", ".aac", ".ogg", ".flac"}
     doc_exts = {".pdf", ".txt", ".md", ".markdown", ".doc", ".docx", ".xls", ".xlsx", ".csv", ".json", ".zip", ".yaml", ".yml", ".log"}
-    max_upload_bytes = 50 * 1024 * 1024
+    batch_state = {"total": 0}
     for file in files:
-        content = await file.read()
+        content = await read_upload_file_limited(file, batch_state=batch_state)
         if not content:
             continue
-        if len(content) > max_upload_bytes:
-            raise HTTPException(status_code=413, detail=f"{file.filename or '文件'} 超过 50MB，无法上传")
         ext = os.path.splitext(file.filename or "")[1].lower()
         content_type = (file.content_type or "").lower()
         kind = "image"
@@ -12648,7 +12868,7 @@ async def upload_ai_reference(files: List[UploadFile] = File(...)):
     return {"files": uploaded}
 
 class Base64UploadRequest(BaseModel):
-    data: str = ""            # 纯 base64 或 data:URL
+    data: str = Field(default="", max_length=BASE64_UPLOAD_MAX_TEXT_LENGTH)  # 纯 base64 或 data:URL
     name: str = ""
     content_type: str = ""
 
@@ -12656,7 +12876,7 @@ class Base64UploadRequest(BaseModel):
 async def upload_ai_base64(payload: Base64UploadRequest):
     """以 base64 JSON 方式上传字节到 assets/input，返回 /assets 地址。
     给不便用 multipart/FormData 的客户端（如 PS UXP 面板）用——UXP 的 fetch+FormData 经常发不出有效 multipart。"""
-    raw = (payload.data or "").strip()
+    raw = _base64_payload_size_hint((payload.data or "").strip())
     ct = (payload.content_type or "").split(";", 1)[0].strip().lower()
     if raw.startswith("data:"):
         header, _, raw = raw.partition(",")
@@ -12668,8 +12888,8 @@ async def upload_ai_base64(payload: Base64UploadRequest):
         raise HTTPException(status_code=400, detail="数据无法解码")
     if not content:
         raise HTTPException(status_code=400, detail="内容为空")
-    if len(content) > 50 * 1024 * 1024:
-        raise HTTPException(status_code=413, detail="超过 50MB")
+    if len(content) > BASE64_UPLOAD_MAX_BYTES:
+        raise _upload_limit_error("Base64 数据")
     kind, ext = _local_upload_kind_ext(payload.name or "", ct or "image/png")
     if kind is None:
         kind, ext = "image", ".png"
@@ -12682,7 +12902,7 @@ async def upload_ai_base64(payload: Base64UploadRequest):
 @app.post("/api/comfyui/upload-base64")
 async def upload_comfyui_base64(payload: Base64UploadRequest):
     """base64 方式把图片传到 ComfyUI 各后端的 input 目录，返回 comfy 用文件名（供 UXP 做 ComfyUI 图生图）。"""
-    raw = (payload.data or "").strip()
+    raw = _base64_payload_size_hint((payload.data or "").strip())
     ct = (payload.content_type or "").split(";", 1)[0].strip().lower()
     if raw.startswith("data:"):
         header, _, raw = raw.partition(",")
@@ -12694,6 +12914,8 @@ async def upload_comfyui_base64(payload: Base64UploadRequest):
         raise HTTPException(status_code=400, detail="数据无法解码")
     if not content:
         raise HTTPException(status_code=400, detail="内容为空")
+    if len(content) > BASE64_UPLOAD_MAX_BYTES:
+        raise _upload_limit_error("Base64 数据")
     _, ext = _local_upload_kind_ext(payload.name or "", ct or "image/png")
     filename = f"dx_{uuid.uuid4().hex[:12]}{ext or '.png'}"
     comfy_name = None
@@ -12945,10 +13167,11 @@ def migrate_mislabeled_image_extensions():
 @app.post("/api/local-assets/upload")
 async def upload_local_assets(files: List[UploadFile] = File(...), folder: str = Form("")):
     uploaded = []
+    batch_state = {"total": 0}
     folder_rel, folder_abs = _local_upload_safe_folder(folder)
     os.makedirs(folder_abs, exist_ok=True)
     for file in files:
-        content = await file.read()
+        content = await read_upload_file_limited(file, batch_state=batch_state)
         if not content:
             continue
         kind, ext = _local_upload_kind_ext(file.filename, file.content_type)
@@ -12975,6 +13198,7 @@ async def import_local_assets_from_urls(payload: LocalAssetUrlImportRequest):
     results = []
     folder_rel, folder_abs = _local_upload_safe_folder(payload.folder)
     os.makedirs(folder_abs, exist_ok=True)
+    batch_state = {"total": 0}
     timeout = httpx.Timeout(connect=20.0, read=120.0, write=30.0, pool=20.0)
     async with httpx.AsyncClient(timeout=timeout, follow_redirects=True, headers={"User-Agent": "Infinite-Canvas-Asset-Importer/1.0"}) as client:
         for entry in (payload.items or [])[:200]:
@@ -12988,6 +13212,7 @@ async def import_local_assets_from_urls(payload: LocalAssetUrlImportRequest):
             try:
                 if inline_data:
                     # 插件已在网页上下文里把字节读成 base64（dataURL 形如 data:<ct>;base64,<payload>）
+                    _base64_payload_size_hint(inline_data)
                     content_type = str(entry.content_type or "").split(";", 1)[0].strip().lower()
                     b64 = inline_data
                     if inline_data.startswith("data:"):
@@ -12995,15 +13220,28 @@ async def import_local_assets_from_urls(payload: LocalAssetUrlImportRequest):
                         if not content_type:
                             content_type = header[5:].split(";", 1)[0].strip().lower()
                     try:
+                        if (len(b64.rstrip("=")) * 3) // 4 > UPLOAD_MAX_FILE_BYTES:
+                            raise _upload_limit_error("Base64 素材")
                         content = base64.b64decode(b64, validate=False)
+                    except HTTPException:
+                        raise
                     except Exception:
                         raise HTTPException(status_code=400, detail="素材数据无法解码")
+                    if len(content) > UPLOAD_MAX_FILE_BYTES:
+                        raise _upload_limit_error("Base64 素材")
+                    if batch_state["total"] + len(content) > UPLOAD_MAX_BATCH_BYTES:
+                        raise _upload_limit_error(batch=True)
+                    batch_state["total"] += len(content)
                     name_path = urllib.parse.urlparse(src_url).path
                 else:
-                    response = await client.get(src_url)
-                    response.raise_for_status()
-                    content_type = response.headers.get("Content-Type", "").split(";", 1)[0].strip().lower()
-                    content = response.content
+                    async with client.stream("GET", src_url) as response:
+                        response.raise_for_status()
+                        content_type = response.headers.get("Content-Type", "").split(";", 1)[0].strip().lower()
+                        content = await read_httpx_response_limited(
+                            response,
+                            batch_state=batch_state,
+                            filename=urllib.parse.urlparse(src_url).path.rsplit("/", 1)[-1] or "远程素材",
+                        )
                     name_path = urllib.parse.urlparse(src_url).path
                 kind, ext = _local_upload_kind_ext(name_path, content_type)
                 if kind == "image":
@@ -13039,6 +13277,8 @@ async def import_local_assets_from_urls(payload: LocalAssetUrlImportRequest):
                 uploaded.append(item)
                 result.update({"ok": True, "file": rel_name, "item": item})
             except HTTPException as exc:
+                if exc.status_code == 413:
+                    raise
                 result["error"] = public_error_detail(exc.detail, fallback="导入失败")
             except Exception as exc:
                 result["error"] = public_error_detail(exc, fallback="导入失败")
@@ -13229,8 +13469,7 @@ async def caption_local_assets(payload: LocalAssetCaptionRequest):
                 payload.ms_model,
             )
             txt_path = _local_upload_caption_path(filename)
-            with open(txt_path, "w", encoding="utf-8", newline="") as f:
-                f.write(caption)
+            write_text_atomic(txt_path, caption, encoding="utf-8", newline="")
             item.update({
                 "ok": True,
                 "name": filename,
@@ -13292,8 +13531,7 @@ async def save_local_asset_caption(payload: LocalAssetCaptionSaveRequest):
         raise HTTPException(status_code=400, detail="仅支持图片素材保存提示词")
     caption = str(payload.caption or "")[:100000]
     txt_path = _local_upload_caption_path(filename)
-    with open(txt_path, "w", encoding="utf-8", newline="") as f:
-        f.write(caption)
+    write_text_atomic(txt_path, caption, encoding="utf-8", newline="")
     return {"ok": True, "caption": caption, "caption_file": os.path.basename(txt_path)}
 
 @app.post("/api/temp-sh/upload")
@@ -14105,7 +14343,7 @@ async def save_providers(payload: List[ApiProviderPayload]):
     # 收集每个 item 的 primary 字段
     raw_primary_flags = [bool(getattr(item, "primary", False)) for item in payload]
     for item in payload:
-        provider = normalize_provider(item.dict(exclude={"api_key"}))
+        provider = normalize_provider(model_dump_compat(item, exclude={"api_key"}))
         if provider["id"] == "runninghub":
             provider = preserve_runninghub_hidden_overrides(provider)
             prune_runninghub_workflow_store_for_provider(provider)
@@ -14164,61 +14402,85 @@ async def save_providers(payload: List[ApiProviderPayload]):
 
 # --- ModelScope Token (从 env 读取，不再支持通过 UI 修改) ---
 
+def modelscope_token_response(token: str) -> JSONResponse:
+    """返回浏览器临时使用的 Token，并禁止浏览器及代理缓存机密内容。"""
+
+    return JSONResponse(
+        {"token": token},
+        headers={
+            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+            "Pragma": "no-cache",
+            "Expires": "0",
+            "Vary": "Origin",
+        },
+    )
+
+
+def modelscope_token_status_response(configured: bool) -> JSONResponse:
+    """返回 Token 是否已配置，但不把凭据交给浏览器。"""
+
+    return JSONResponse(
+        {"configured": bool(configured)},
+        headers={
+            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+            "Pragma": "no-cache",
+            "Expires": "0",
+            "Vary": "Origin",
+        },
+    )
+
+
+def same_origin_request_allowed(request: Request) -> bool:
+    """判断带 Origin 的浏览器请求是否与当前服务同源。"""
+
+    origin = request.headers.get("origin")
+    if origin is None:
+        # 保持旧版直接请求兼容；远程监听仍由 RemoteAccessMiddleware 鉴权。
+        return True
+    try:
+        source = urllib.parse.urlsplit(origin)
+        target = request.url
+        source_port = source.port if source.port is not None else (443 if source.scheme == "https" else 80)
+        target_port = target.port if target.port is not None else (443 if target.scheme == "https" else 80)
+        return (
+            source.scheme in ("http", "https")
+            and source.hostname is not None
+            and target.hostname is not None
+            and source.username is None
+            and source.password is None
+            and not (source.path or source.query or source.fragment)
+            and source.scheme == target.scheme
+            and source.hostname.lower() == target.hostname.lower()
+            and source_port == target_port
+        )
+    except ValueError:
+        return False
+
+
 @app.get("/api/config/token")
 async def get_global_token(request: Request):
     # Browser requests must come from this service's own origin. Use ASGI's
     # scheme (which a trusted proxy may set), never raw X-Forwarded-* headers.
-    origin = request.headers.get("origin")
-    if origin is not None:
-        try:
-            source = urllib.parse.urlsplit(origin)
-            target = request.url
-            source_port = source.port if source.port is not None else (443 if source.scheme == "https" else 80)
-            target_port = target.port if target.port is not None else (443 if target.scheme == "https" else 80)
-            allowed = (
-                source.scheme in ("http", "https")
-                and source.hostname is not None
-                and target.hostname is not None
-                and source.username is None
-                and source.password is None
-                and not (source.path or source.query or source.fragment)
-                and source.scheme == target.scheme
-                and source.hostname.lower() == target.hostname.lower()
-                and source_port == target_port
-            )
-        except ValueError:
-            allowed = False
-        if not allowed:
-            raise HTTPException(status_code=403, detail="跨站来源不允许读取 Token")
+    if not same_origin_request_allowed(request):
+        raise HTTPException(status_code=403, detail="跨站来源不允许读取 Token")
 
     # 优先读 env，回退到 global_config.json（兼容旧数据）
     saved_token = modelscope_api_key()
     if saved_token:
-        return {"token": saved_token}
-    try:
-        with open(GLOBAL_CONFIG_FILE, "r", encoding="utf-8") as config_file:
-            config = json.load(config_file)
-    except FileNotFoundError:
-        return {"token": ""}
-    except (json.JSONDecodeError, UnicodeError) as exc:
-        write_diagnostic(
-            f"[CONFIG-TOKEN] {format_context()} legacy_config_invalid error={type(exc).__name__}",
-            level=logging.WARNING,
-        )
-        return {"token": ""}
-    except OSError as exc:
-        write_diagnostic(
-            f"[CONFIG-TOKEN] {format_context()} legacy_config_read_failed error={type(exc).__name__}",
-            level=logging.WARNING,
-        )
-        return {"token": ""}
-    if not isinstance(config, dict) or not isinstance(config.get("modelscope_token", ""), str):
-        write_diagnostic(
-            f"[CONFIG-TOKEN] {format_context()} legacy_config_invalid error=InvalidSchema",
-            level=logging.WARNING,
-        )
-        return {"token": ""}
-    return {"token": config.get("modelscope_token", "")}
+        return modelscope_token_response(saved_token)
+    return modelscope_token_response(read_legacy_modelscope_token())
+
+
+@app.get("/api/config/token/status")
+async def get_global_token_status(request: Request):
+    """供新页面判断服务端是否有 Token，不向浏览器返回完整密钥。"""
+
+    if not same_origin_request_allowed(request):
+        raise HTTPException(status_code=403, detail="跨站来源不允许读取 Token 状态")
+    saved_token = modelscope_api_key()
+    if saved_token:
+        return modelscope_token_status_response(True)
+    return modelscope_token_status_response(bool(read_legacy_modelscope_token()))
 
 # --- 在线生图 (COMFLY) ---
 
@@ -14901,12 +15163,12 @@ async def fetch_upstream_models(provider_id: str):
         raise HTTPException(status_code=400, detail=f"{provider.get('name') or provider_id} 未配置 API Key")
     return await fetch_models_from_upstream(provider.get("base_url") or "", api_key, provider_protocol(provider), provider.get("image_request_mode") or "openai")
 
-async def build_online_image_result(payload: OnlineImageRequest):
+async def build_online_image_result(payload: OnlineImageRequest, on_remote_accept=None):
     provider = get_api_provider(payload.provider_id)
     default_model = (provider.get("image_models") or [IMAGE_MODEL])[0]
     model = selected_model(payload.model, default_model)
     request_size = snap_size_to_multiple(payload.size, 16)
-    refs = [ref.dict() for ref in payload.reference_images if ref.url]
+    refs = [model_dump_compat(ref) for ref in payload.reference_images if ref.url]
     image_refs = image_references(refs)
     count = max(1, min(8, int(payload.n or 1)))
     operation = str(payload.operation or "").strip().lower()
@@ -14923,6 +15185,7 @@ async def build_online_image_result(payload: OnlineImageRequest):
             image_data, raw_item = await generate_ai_image(
                 payload.prompt, request_size, payload.quality, model, image_refs, provider["id"],
                 payload.aspect_ratio, payload.resolution,
+                on_remote_accept=on_remote_accept or CANVAS_IMAGE_REMOTE_ACCEPT_CALLBACK.get(),
             )
         try:
             image_items = extract_images(raw_item) if isinstance(raw_item, dict) else [image_data]
@@ -15083,7 +15346,7 @@ async def midjourney_modal_mask_url(reference):
     """
     if not reference:
         return ""
-    ref = reference.dict() if isinstance(reference, AIReference) else dict(reference)
+    ref = model_dump_compat(reference) if isinstance(reference, AIReference) else dict(reference)
     value = str(ref.get("url") or "").strip()
     if value.startswith(("http://", "https://")):
         return value
@@ -15176,7 +15439,7 @@ async def submit_midjourney(payload: MidjourneySubmitRequest):
     mode = str(payload.mode or "imagine").strip().lower()
     if mode not in {"imagine", "blend", "edit"}:
         raise HTTPException(status_code=400, detail="不支持的 Midjourney 节点模式。")
-    image_urls = await midjourney_reference_urls([ref.dict() for ref in payload.reference_images if ref.url])
+    image_urls = await midjourney_reference_urls([model_dump_compat(ref) for ref in payload.reference_images if ref.url])
     prompt = str(payload.prompt or "").strip()
     if mode == "blend":
         if not 2 <= len(image_urls) <= 4:
@@ -15448,6 +15711,83 @@ def _write_canvas_task_record(task: Dict[str, Any], *, required: bool = False) -
         return False
 
 
+async def persist_canvas_image_remote_accept(
+    task_id: str,
+    remote_task_id: str,
+    *,
+    query_mode: str = "http_get",
+    batch: bool = False,
+) -> None:
+    """在图片上游返回可查询编号后立即落盘。"""
+
+    remote_id = str(remote_task_id or "").strip()
+    if (
+        not remote_id
+        or len(remote_id) > 240
+        or any(ord(char) < 0x20 for char in remote_id)
+        or any(char in remote_id for char in "?#")
+    ):
+        raise ValueError("上游返回的图片任务编号无效")
+    remote_id = remote_id[:240]
+    with CANVAS_TASK_LOCK:
+        task = CANVAS_TASKS.get(task_id)
+        if not isinstance(task, dict):
+            task = _read_canvas_task_record(task_id)
+        if not task or task.get("process_id") != CANVAS_TASK_PROCESS_ID:
+            raise OSError("图片任务记录已失效")
+        if task.get("status") in {"succeeded", "failed"}:
+            raise OSError("图片任务已结束")
+        safe_query_mode = str(query_mode or "http_get")[:40]
+        if batch:
+            remote_ids = [
+                str(item).strip()[:240]
+                for item in (task.get("upstream_task_ids") or [])
+                if str(item).strip()
+            ]
+            if not remote_ids:
+                first_id = str(task.get("upstream_task_id") or "").strip()
+                if first_id:
+                    remote_ids.append(first_id[:240])
+            if remote_id not in remote_ids:
+                if len(remote_ids) >= 8:
+                    raise ValueError("批量图片任务的上游编号超过安全上限")
+                remote_ids.append(remote_id)
+            modes = [
+                str(item or "http_get")[:40]
+                for item in (task.get("remote_query_modes") or [])
+            ]
+            if len(modes) < len(remote_ids):
+                modes.extend(["http_get"] * (len(remote_ids) - len(modes)))
+            index = remote_ids.index(remote_id)
+            modes[index] = safe_query_mode
+            statuses = task.get("upstream_task_statuses")
+            if not isinstance(statuses, dict):
+                statuses = {}
+            statuses[remote_id] = str(statuses.get(remote_id) or "running")[:32]
+            errors = task.get("upstream_task_errors")
+            if not isinstance(errors, dict):
+                errors = {}
+            errors.pop(remote_id, None)
+            task["upstream_task_ids"] = remote_ids[:8]
+            task["remote_query_modes"] = modes[:8]
+            task["upstream_task_statuses"] = statuses
+            task["upstream_task_errors"] = errors
+            # 兼容现有前端，它仍通过第一个编号判断是否可以刷新。
+            task["upstream_task_id"] = remote_ids[0]
+            task["remote_query_mode"] = modes[0]
+        else:
+            task["upstream_task_id"] = remote_id
+            task["remote_query_mode"] = safe_query_mode
+        task["updated_at"] = time.time()
+        try:
+            _write_canvas_task_record(task, required=True)
+        except (OSError, TaskRecordError) as exc:
+            # 上游已经受理，异常必须保留编号供 worker 记录 unknown，禁止调用方重提。
+            setattr(exc, "upstream_task_id", remote_id)
+            setattr(exc, "remote_accept_persist_failed", True)
+            raise
+
+
 def _load_canvas_task_for_worker(task_id: str) -> Optional[Dict[str, Any]]:
     """在 worker 开始前恢复同进程可能丢失的持久任务记录。
 
@@ -15513,6 +15853,87 @@ def _public_canvas_task(task: Dict[str, Any]) -> Dict[str, Any]:
     return {key: value for key, value in task.items() if key != "process_id"}
 
 
+def _canvas_remote_records(task: Mapping[str, Any]) -> List[Dict[str, str]]:
+    """读取新旧格式的图片上游编号，保持编号与查询方式一一对应。"""
+
+    raw_ids = task.get("upstream_task_ids")
+    if not isinstance(raw_ids, list):
+        raw_ids = []
+    remote_ids = []
+    for value in raw_ids:
+        remote_id = str(value or "").strip()
+        if remote_id and remote_id not in remote_ids:
+            remote_ids.append(remote_id[:240])
+    legacy_id = str(task.get("upstream_task_id") or "").strip()
+    if legacy_id and legacy_id not in remote_ids:
+        remote_ids.insert(0, legacy_id[:240])
+    remote_ids = remote_ids[:8]
+    raw_modes = task.get("remote_query_modes")
+    modes = raw_modes if isinstance(raw_modes, list) else []
+    legacy_mode = str(task.get("remote_query_mode") or "http_get").strip().lower() or "http_get"
+    records = []
+    for index, remote_id in enumerate(remote_ids):
+        mode = str(modes[index] if index < len(modes) else "").strip().lower() or (
+            legacy_mode if index == 0 else "http_get"
+        )
+        records.append({"id": remote_id, "mode": mode[:40]})
+    return records
+
+
+def _canvas_remote_statuses(task: Mapping[str, Any], records: List[Dict[str, str]]) -> Dict[str, str]:
+    raw = task.get("upstream_task_statuses")
+    statuses = raw if isinstance(raw, dict) else {}
+    return {
+        item["id"]: str(statuses.get(item["id"]) or "running").strip().lower()
+        for item in records
+    }
+
+
+def _canvas_remote_errors(task: Mapping[str, Any]) -> Dict[str, str]:
+    raw = task.get("upstream_task_errors")
+    return {
+        str(key): str(value or "")[:600]
+        for key, value in raw.items()
+    } if isinstance(raw, dict) else {}
+
+
+def _canvas_remote_results(task: Mapping[str, Any]) -> Dict[str, Dict[str, Any]]:
+    raw = task.get("upstream_task_results")
+    if not isinstance(raw, dict):
+        return {}
+    results = {}
+    for key, value in raw.items():
+        if not isinstance(value, dict):
+            continue
+        results[str(key)] = {
+            "images": [str(item) for item in (value.get("images") or []) if item],
+            "image_items": [item for item in (value.get("image_items") or []) if isinstance(item, dict)],
+        }
+    return results
+
+
+def _update_canvas_remote_tracking(
+    task: Dict[str, Any],
+    statuses: Mapping[str, str],
+    errors: Mapping[str, str],
+) -> None:
+    records = _canvas_remote_records(task)
+    task["upstream_task_ids"] = [item["id"] for item in records]
+    task["remote_query_modes"] = [item["mode"] for item in records]
+    task["upstream_task_statuses"] = {
+        item["id"]: str(statuses.get(item["id"]) or "running")[:32]
+        for item in records
+    }
+    task["upstream_task_errors"] = {
+        item["id"]: str(errors.get(item["id"]) or "")[:600]
+        for item in records
+        if errors.get(item["id"])
+    }
+    if records:
+        task["upstream_task_id"] = records[0]["id"]
+        task["remote_query_mode"] = records[0]["mode"]
+
+
 async def run_canvas_image_task(task_id: str, payload: OnlineImageRequest):
     async with CANVAS_IMAGE_TASK_GATE:
         await _run_canvas_image_task(task_id, payload)
@@ -15531,10 +15952,21 @@ async def _run_canvas_image_task(task_id: str, payload: OnlineImageRequest):
             _mark_canvas_worker_start_failed(task, task_id)
             return
     try:
-        result = await build_online_image_result(payload)
-        with CANVAS_TASK_LOCK:
-            task.update(task_state_update(task, "succeeded", time.time(), result=result))
-            _write_canvas_task_record(task)
+        try:
+            requested_count = max(1, min(8, int(payload.n or 1)))
+        except (TypeError, ValueError, OverflowError):
+            requested_count = 1
+        batch_mode = requested_count > 1
+        remote_accept_callback = lambda remote_id, **meta: persist_canvas_image_remote_accept(
+            task_id, remote_id, batch=batch_mode, **meta
+        )
+        callback_token = CANVAS_IMAGE_REMOTE_ACCEPT_CALLBACK.set(
+            remote_accept_callback
+        )
+        try:
+            result = await build_online_image_result(payload)
+        finally:
+            CANVAS_IMAGE_REMOTE_ACCEPT_CALLBACK.reset(callback_token)
     except JimengPendingError as exc:
         # 即梦云端还在排队：标记为 jimeng_pending，前端据 submit_id 持久续查（任务未丢失）
         info = jimeng_pending_payload(exc)
@@ -15546,14 +15978,61 @@ async def _run_canvas_image_task(task_id: str, payload: OnlineImageRequest):
                 "message": info["message"],
             }))
             _write_canvas_task_record(task)
+        return
     except Exception as exc:
         detail = public_comfy_error_detail(getattr(exc, "detail", None) or exc, fallback="图片生成失败")
         status_code = getattr(exc, "status_code", 500)
         upstream_task_id = getattr(exc, "upstream_task_id", "") or extract_task_id_from_text(detail)
         with CANVAS_TASK_LOCK:
-            task.update(task_state_update(task, "failed", time.time(),
-                error=detail, status_code=status_code, upstream_task_id=upstream_task_id))
+            records = _canvas_remote_records(task)
+            # 批量请求可能已经有其他编号被上游受理；任何一个并发分支异常时，
+            # 保留全部编号并进入 unknown，等待显式逐个查询，绝不重提整批。
+            if batch_mode and records:
+                statuses = _canvas_remote_statuses(task, records)
+                errors = _canvas_remote_errors(task)
+                if upstream_task_id and upstream_task_id in statuses:
+                    errors[upstream_task_id] = detail
+                _update_canvas_remote_tracking(task, statuses, errors)
+                task.update(task_state_update(
+                    task,
+                    "unknown",
+                    time.time(),
+                    error=CANVAS_TASK_UNKNOWN,
+                    upstream_task_id=records[0]["id"],
+                ))
+            elif getattr(exc, "remote_accept_persist_failed", False) and upstream_task_id:
+                task.update(task_state_update(
+                    task,
+                    "unknown",
+                    time.time(),
+                    error=CANVAS_TASK_UNKNOWN,
+                    upstream_task_id=upstream_task_id,
+                ))
+            else:
+                task.update(task_state_update(task, "failed", time.time(),
+                    error=detail, status_code=status_code, upstream_task_id=upstream_task_id))
             _write_canvas_task_record(task)
+        return
+
+    # 生成成功后，记录写回失败不能再把 succeeded 转成 failed；
+    # 本进程继续保留结果，重启后按磁盘运行记录保守显示 unknown。
+    with CANVAS_TASK_LOCK:
+        records = _canvas_remote_records(task)
+        if records:
+            statuses = _canvas_remote_statuses(task, records)
+            errors = _canvas_remote_errors(task)
+            for record in records:
+                statuses[record["id"]] = "succeeded"
+                errors.pop(record["id"], None)
+            _update_canvas_remote_tracking(task, statuses, errors)
+        task.update(task_state_update(task, "succeeded", time.time(), result=result))
+        try:
+            _write_canvas_task_record(task)
+        except Exception as record_exc:
+            write_diagnostic(
+                "image succeeded task record write failed "
+                f"error={type(record_exc).__name__}"
+            )
 
 @app.post("/api/canvas-image-tasks")
 async def create_canvas_image_task(payload: OnlineImageRequest, request: Request):
@@ -15601,6 +16080,164 @@ async def get_canvas_image_task(task_id: str):
     if not task:
         raise HTTPException(status_code=404, detail="画布任务不存在，可能服务已重启或任务已过期")
     return _public_canvas_task(_interrupted_canvas_task(task))
+
+
+@app.post("/api/canvas-image-tasks/{task_id}/refresh")
+async def refresh_canvas_image_task(task_id: str):
+    """显式查询已有上游编号的图片任务，不重新提交。"""
+
+    with CANVAS_TASK_LOCK:
+        recorded = dict(CANVAS_TASKS.get(task_id) or {})
+        if not recorded:
+            recorded = dict(_read_canvas_task_record(task_id) or {})
+    if not recorded:
+        raise HTTPException(status_code=404, detail="图片任务记录不存在；请勿直接重复提交")
+    current_status = str(recorded.get("status") or "").strip().lower()
+    if current_status in {"succeeded", "failed"}:
+        return _public_canvas_task(recorded)
+    if current_status == "running" and recorded.get("process_id") == CANVAS_TASK_PROCESS_ID:
+        raise HTTPException(status_code=409, detail="图片任务仍由当前进程查询中，请稍后再试")
+    remote_records = _canvas_remote_records(recorded)
+    if not remote_records:
+        raise HTTPException(status_code=409, detail="本地记录没有上游任务编号，无法安全查询；请勿重新提交")
+    provider_id = str(recorded.get("provider_id") or "").strip()
+    if not provider_id:
+        raise HTTPException(status_code=409, detail="本地记录没有图片供应商，无法安全查询")
+    try:
+        provider = get_api_provider_exact(provider_id)
+    except HTTPException as exc:
+        raise HTTPException(status_code=409, detail="原图片供应商配置不可用，无法安全查询；请恢复原配置后重试") from exc
+    statuses = _canvas_remote_statuses(recorded, remote_records)
+    errors = _canvas_remote_errors(recorded)
+    remote_results = _canvas_remote_results(recorded)
+    previous_result = recorded.get("result") if isinstance(recorded.get("result"), dict) else {}
+    merged_images = []
+    merged_items = []
+    result_template = dict(previous_result)
+    for saved in remote_results.values():
+        for image in saved.get("images") or []:
+            if image and image not in merged_images:
+                merged_images.append(image)
+        for item in saved.get("image_items") or []:
+            item_url = str(item.get("url") or "").strip()
+            if item_url and not any(str(existing.get("url") or "").strip() == item_url for existing in merged_items):
+                merged_items.append(item)
+    for image in previous_result.get("images") or []:
+        if image and image not in merged_images:
+            merged_images.append(image)
+    for item in previous_result.get("image_items") or []:
+        if isinstance(item, dict):
+            item_url = str(item.get("url") or "").strip()
+            if item_url and not any(str(existing.get("url") or "").strip() == item_url for existing in merged_items):
+                merged_items.append(item)
+    for remote_record in remote_records:
+        remote_id = remote_record["id"]
+        query_mode = remote_record["mode"]
+        if statuses.get(remote_id) in {"succeeded", "failed"}:
+            continue
+        if query_mode == "runninghub_image" and not is_runninghub_provider(provider):
+            errors[remote_id] = "原图片供应商配置已变化，无法查询 RunningHub 任务"
+            statuses[remote_id] = "unknown"
+            continue
+        if query_mode == "http_get" and is_runninghub_provider(provider):
+            errors[remote_id] = "原图片供应商配置已变化，无法查询图片任务"
+            statuses[remote_id] = "unknown"
+            continue
+        try:
+            result = await query_image_task(
+                ImageTaskQueryRequest(provider_id=provider_id, task_id=remote_id)
+            )
+        except Exception as exc:
+            statuses[remote_id] = "unknown"
+            errors[remote_id] = public_comfy_error_detail(
+                getattr(exc, "detail", None) or exc,
+                fallback="查询图片任务失败",
+            )[:600]
+            continue
+        result_status = str(result.get("status") or "running").strip().lower() if isinstance(result, dict) else "running"
+        if result_status == "succeeded":
+            statuses[remote_id] = "succeeded"
+            errors.pop(remote_id, None)
+            if isinstance(result, dict):
+                result_template.update({
+                    key: result[key]
+                    for key in ("type", "model", "provider_id", "provider_name", "timestamp")
+                    if result.get(key) is not None
+                })
+                for image in result.get("images") or []:
+                    if image and image not in merged_images:
+                        merged_images.append(image)
+                for item in result.get("image_items") or []:
+                    if not isinstance(item, dict):
+                        continue
+                    item_url = str(item.get("url") or "").strip()
+                    if item_url and not any(str(existing.get("url") or "").strip() == item_url for existing in merged_items):
+                        merged_items.append(item)
+                remote_results[remote_id] = {
+                    "images": [str(item) for item in (result.get("images") or []) if item],
+                    "image_items": [item for item in (result.get("image_items") or []) if isinstance(item, dict)],
+                }
+        elif result_status == "failed":
+            statuses[remote_id] = "failed"
+            errors[remote_id] = str(result.get("error") or "图片任务失败")[:600] if isinstance(result, dict) else "图片任务失败"
+        else:
+            statuses[remote_id] = "running"
+            errors[remote_id] = str(result.get("message") or "上游图片任务仍在生成中，请稍后再次查询")[:600] if isinstance(result, dict) else "上游图片任务仍在生成中，请稍后再次查询"
+
+    with CANVAS_TASK_LOCK:
+        latest = dict(CANVAS_TASKS.get(task_id) or {})
+        if not latest:
+            latest = dict(_read_canvas_task_record(task_id) or {})
+        if not latest:
+            raise HTTPException(status_code=404, detail="图片任务记录不存在；请勿直接重复提交")
+        if latest.get("status") in {"succeeded", "failed"}:
+            return _public_canvas_task(latest)
+        latest_records = _canvas_remote_records(latest)
+        if [item["id"] for item in latest_records] != [item["id"] for item in remote_records]:
+            raise HTTPException(status_code=409, detail="图片任务编号已变化，请刷新画布后再查询")
+        _update_canvas_remote_tracking(latest, statuses, errors)
+        latest["upstream_task_results"] = {
+            key: value
+            for key, value in remote_results.items()
+            if key in statuses
+        }
+        terminal_statuses = [statuses[item["id"]] for item in remote_records]
+        outcome = image_batch_outcome(terminal_statuses, has_images=bool(merged_images))
+        if outcome == "succeeded":
+            result_template["images"] = merged_images
+            result_template["image_items"] = merged_items
+            result_template["task_id"] = remote_records[0]["id"]
+            result_template.setdefault("provider_id", provider_id)
+            result_template.setdefault("type", "online")
+            latest.update(task_state_update(latest, "succeeded", time.time(), result=result_template))
+        elif outcome == "partial":
+            result_template["images"] = merged_images
+            result_template["image_items"] = merged_items
+            result_template["task_id"] = remote_records[0]["id"]
+            result_template.setdefault("provider_id", provider_id)
+            result_template.setdefault("type", "online")
+            failed_count = sum(status == "failed" for status in terminal_statuses)
+            latest.update(task_state_update(latest, "succeeded", time.time(), result=result_template))
+            latest["error"] = f"批量任务有 {failed_count} 个上游编号失败，已保留成功图片"
+        elif outcome == "failed":
+            latest.update(task_state_update(
+                latest,
+                "failed",
+                time.time(),
+                error="；".join(errors.get(item["id"], "图片任务失败") for item in remote_records)[:600],
+                status_code=502,
+                upstream_task_id=remote_records[0]["id"],
+            ))
+        else:
+            latest.update({
+                "status": "unknown",
+                "updated_at": time.time(),
+                "error": "；".join(errors.get(item["id"], "上游图片任务仍在生成中") for item in remote_records if statuses.get(item["id"]) not in {"succeeded", "failed"})[:600],
+                "upstream_task_id": remote_records[0]["id"],
+            })
+        CANVAS_TASKS[task_id] = latest
+        _write_canvas_task_record(latest, required=True)
+        return _public_canvas_task(latest)
 
 
 @app.get("/api/maintenance/task-records/cleanup-plan")
@@ -15676,37 +16313,28 @@ async def run_extension(extension_id: str, payload: ExtensionMediaProbeRequest):
     return result.public()
 
 async def run_canvas_comfy_task(task_id: str, payload: GenerateRequest):
-    async with CANVAS_COMFY_TASK_GATE:
-        await _run_canvas_comfy_task(task_id, payload)
+    await comfy_task_service.run_comfy_task(
+        task_id,
+        payload,
+        gate=CANVAS_COMFY_TASK_GATE,
+        worker=_run_canvas_comfy_task,
+    )
 
 
 async def _run_canvas_comfy_task(task_id: str, payload: GenerateRequest):
-    task = None
-    with CANVAS_TASK_LOCK:
-        task = _load_canvas_task_for_worker(task_id)
-        if not task or task.get("status") != "queued":
-            return
-        task.update(task_state_update(task, "running", time.time()))
-        try:
-            _write_canvas_task_record(task, required=True)
-        except (OSError, TaskRecordError):
-            _mark_canvas_worker_start_failed(task, task_id)
-            return
-    try:
-        result = await asyncio.to_thread(generate, payload)
-        if isinstance(result, dict) and result.get("error"):
-            raise RuntimeError(public_comfy_error_detail(result.get("error")))
-        with CANVAS_TASK_LOCK:
-            task.update(task_state_update(task, "succeeded", time.time(), result=result))
-            _write_canvas_task_record(task)
-    except Exception as exc:
-        detail = public_comfy_error_detail(getattr(exc, "detail", None) or exc)
-        status_code = getattr(exc, "status_code", 500)
-        write_diagnostic(f"comfy generation failed error={type(exc).__name__}")
-        with CANVAS_TASK_LOCK:
-            task.update(task_state_update(task, "failed", time.time(),
-                error=detail, status_code=status_code))
-            _write_canvas_task_record(task)
+    await comfy_task_service.run_comfy_task_worker(
+        task_id,
+        payload,
+        task_lock=CANVAS_TASK_LOCK,
+        load_task=_load_canvas_task_for_worker,
+        mark_start_failed=_mark_canvas_worker_start_failed,
+        write_record=_write_canvas_task_record,
+        generate=generate,
+        task_state_update=task_state_update,
+        public_error_detail=public_comfy_error_detail,
+        write_diagnostic=write_diagnostic,
+        record_error_types=(OSError, TaskRecordError),
+    )
 
 @app.post("/api/canvas-comfy-tasks")
 async def create_canvas_comfy_task(payload: GenerateRequest, request: Request):
@@ -18129,7 +18757,7 @@ async def canvas_video(payload: CanvasVideoRequest):
                             yuli_images.append(ref_url)
                         else:
                             # 本地/dataURL 图片转成 data URL 兜底传递
-                            data_url = reference_to_data_url(ref.dict(), max_size=1536)
+                            data_url = reference_to_data_url(model_dump_compat(ref), max_size=1536)
                             if data_url:
                                 yuli_images.append(data_url)
                     prompt_text = str(payload.prompt or "")
@@ -18152,7 +18780,7 @@ async def canvas_video(payload: CanvasVideoRequest):
                     image_payload = []
                     for ref in payload.images[:4]:
                         if ref.url:
-                            image_payload.append(reference_to_data_url(ref.dict(), max_size=1536))
+                            image_payload.append(reference_to_data_url(model_dump_compat(ref), max_size=1536))
                     body = {
                         "prompt": payload.prompt,
                         "model": selected_model(payload.model, "veo3-fast"),
@@ -18390,11 +19018,7 @@ async def canvas_llm(payload: CanvasLLMRequest):
         raise
     except Exception as exc:
         raise HTTPException(status_code=502, detail="解析上游响应失败") from exc
-    try:
-        text = text_from_chat_response(raw).strip() if isinstance(raw, dict) else ""
-        text = text or "接口返回了空回复。"
-    except Exception as exc:
-        raise HTTPException(status_code=502, detail="解析回复内容失败") from exc
+    text = required_chat_response_text(raw)
     raw_data = unwrap_apimart_response(raw) if isinstance(raw, dict) else {}
     return {"text": text, "model": model, "raw_usage": public_usage(raw_data.get("usage"))}
 
@@ -18743,8 +19367,9 @@ async def upload_asset_library_workflows(
     category_id: str = Form(""),
 ):
     uploads = []
+    batch_state = {"total": 0}
     for file in files[:100]:
-        raw = await file.read()
+        raw = await read_upload_file_limited(file, batch_state=batch_state)
         filename = file.filename or "canvas-workflow.zip"
         lower = filename.lower()
         if not (lower.endswith(".json") or lower.endswith(".zip") or raw[:2] == b"PK"):
@@ -18765,7 +19390,7 @@ async def upload_asset_library_workflows(
 
 @app.post("/api/canvas-workflows/import")
 async def import_canvas_workflow(file: UploadFile = File(...)):
-    raw = await file.read()
+    raw = await read_upload_file_limited(file)
     if not raw:
         raise HTTPException(status_code=400, detail="文件为空")
     name = str(file.filename or "").lower()
@@ -18774,6 +19399,7 @@ async def import_canvas_workflow(file: UploadFile = File(...)):
     try:
         if name.endswith(".zip") or raw[:2] == b"PK":
             with zipfile.ZipFile(BytesIO(raw), "r") as zf:
+                validate_workflow_zip_limits(zf)
                 candidates = [n for n in zf.namelist() if n.lower().endswith("workflow.json")]
                 workflow_name = "workflow.json" if "workflow.json" in zf.namelist() else (candidates[0] if candidates else "")
                 if not workflow_name:
@@ -19115,18 +19741,41 @@ async def rename_asset_library(library_id: str, payload: AssetLibraryRenameReque
     return {"library": lib, "asset_library": library}
 
 @app.delete("/api/asset-library/libraries/{library_id}")
-@serialize_asset_library_update
 async def delete_asset_library(library_id: str):
-    lib = load_asset_library()
-    libraries = lib.get("libraries") or []
-    if len(libraries) <= 1:
-        raise HTTPException(status_code=400, detail="至少保留一个资产库")
-    if not any(item.get("id") == library_id for item in libraries):
-        raise HTTPException(status_code=404, detail="资产库不存在")
-    lib["libraries"] = [item for item in libraries if item.get("id") != library_id]
-    if lib.get("active_library_id") == library_id:
-        lib["active_library_id"] = lib["libraries"][0].get("id")
-    save_asset_library(lib)
+    # 先提交索引，再清理实体文件。这样即使清理中途失败，也不会留下指向
+    # 已删除资产库条目的索引；remove_asset_library_file 会再次检查剩余引用。
+    with asset_library_index_lock():
+        lib = load_asset_library()
+        libraries = lib.get("libraries") or []
+        if len(libraries) <= 1:
+            raise HTTPException(status_code=400, detail="至少保留一个资产库")
+        removed_library = next((item for item in libraries if item.get("id") == library_id), None)
+        if not removed_library:
+            raise HTTPException(status_code=404, detail="资产库不存在")
+        removed_items = []
+        category_dirs = []
+        for category in removed_library.get("categories") or []:
+            removed_items.extend(item for item in category.get("items") or [] if isinstance(item, dict))
+            category_dir = str(category.get("dir") or "").strip("/\\").strip()
+            if category_dir:
+                category_dirs.append(category_dir)
+        # 工作流分类没有 dir，条目文件仍由 remove_asset_library_file 统一处理。
+        lib["libraries"] = [item for item in libraries if item.get("id") != library_id]
+        if lib.get("active_library_id") == library_id:
+            lib["active_library_id"] = lib["libraries"][0].get("id")
+        save_asset_library(lib)
+
+    for item in removed_items:
+        remove_asset_library_file(item)
+    for category_dir in category_dirs:
+        try:
+            target = os.path.join(ASSET_LIBRARY_DIR, category_dir)
+            if os.path.isdir(target) and os.path.abspath(target).startswith(os.path.abspath(ASSET_LIBRARY_DIR) + os.sep):
+                os.rmdir(target)  # 非空时保留仍被引用的文件和目录。
+        except OSError:
+            pass
+        except Exception as exc:
+            write_diagnostic(f"asset library category directory delete failed error={type(exc).__name__}")
     return {"library": lib}
 
 @app.post("/api/asset-library/categories")
@@ -19421,8 +20070,7 @@ async def caption_image_with_provider(abs_path, prompt, provider_id, model, ms_m
         raise
     except Exception as exc:
         raise HTTPException(status_code=502, detail="解析上游响应失败") from exc
-    text = text_from_chat_response(raw).strip() if isinstance(raw, dict) else ""
-    return text or "接口返回了空回复。", resolved_model
+    return required_chat_response_text(raw), resolved_model
 
 @app.patch("/api/asset-library/items/{item_id}")
 @serialize_asset_library_update
@@ -19908,7 +20556,7 @@ async def chat(payload: ChatRequest, request: Request, x_user_id: str = Header(d
     if not conversation.get("messages"):
         conversation["title"] = display_title(payload.message)
 
-    refs = [ref.dict() for ref in payload.reference_images if ref.url]
+    refs = [model_dump_compat(ref) for ref in payload.reference_images if ref.url]
     image_refs = image_references(refs)
     user_message = {
         "id": uuid.uuid4().hex,
@@ -20024,7 +20672,7 @@ async def chat(payload: ChatRequest, request: Request, x_user_id: str = Header(d
         assistant_message = {
             "id": uuid.uuid4().hex,
             "role": "assistant",
-            "content": text_from_chat_response(raw).strip() or "接口返回了空回复。",
+            "content": required_chat_response_text(raw),
             "created_at": now_ms(),
             "model": model,
             "raw_usage": public_usage(raw_data.get("usage")) if isinstance(raw_data, dict) else None,
@@ -20046,7 +20694,7 @@ async def chat_agent(payload: ChatRequest, request: Request, x_user_id: str = He
     if not conversation.get("messages"):
         conversation["title"] = display_title(payload.message)
 
-    refs = [ref.dict() for ref in payload.reference_images if ref.url]
+    refs = [model_dump_compat(ref) for ref in payload.reference_images if ref.url]
     image_refs = image_references(refs)
     user_message = {
         "id": uuid.uuid4().hex,
@@ -20144,7 +20792,7 @@ async def chat_stream(payload: ChatRequest, request: Request, x_user_id: str = H
     if not conversation.get("messages"):
         conversation["title"] = display_title(payload.message)
 
-    refs = [ref.dict() for ref in payload.reference_images if ref.url]
+    refs = [model_dump_compat(ref) for ref in payload.reference_images if ref.url]
     user_message = {
         "id": uuid.uuid4().hex,
         "role": "user",
@@ -20261,10 +20909,15 @@ async def chat_stream(payload: ChatRequest, request: Request, x_user_id: str = H
             yield sse_event({"type": "error", "detail": safe_upstream_transport_detail(exc)})
             return
 
+        text = "".join(content_parts).strip()
+        if not text:
+            yield sse_event({"type": "error", "detail": "上游接口返回了空回复，请稍后重试"})
+            return
+
         assistant_message = {
             "id": uuid.uuid4().hex,
             "role": "assistant",
-            "content": "".join(content_parts).strip() or "接口返回了空回复。",
+            "content": text,
             "created_at": now_ms(),
             "model": model,
             "raw_usage": raw_usage,
@@ -21357,7 +22010,7 @@ def runninghub_workflow_store_key(workflow_id: str) -> str:
 def runninghub_normalize_field(raw, fallback=None):
     fallback = fallback or {}
     if hasattr(raw, "dict"):
-        raw = raw.dict()
+        raw = model_dump_compat(raw)
     if not isinstance(raw, dict):
         raw = {}
     options = raw.get("options", fallback.get("options", []))
@@ -21582,7 +22235,8 @@ def save_workflow_config(name: str, payload: WorkflowConfig):
     if not os.path.exists(workflow_path):
         raise HTTPException(status_code=404, detail="Workflow not found")
     cfg_path = workflow_config_path(name)
-    config = payload.dict()
+    # Pydantic 2 推荐 model_dump；保留旧方法回退以兼容 Pydantic 1。
+    config = model_dump_compat(payload)
     _save_workflow_json_or_raise(cfg_path, config, "工作流配置")
     return {"config": config}
 
@@ -21643,12 +22297,38 @@ def run_workflow(name: str, payload: WorkflowRunRequest):
     )
     return generate(req)
 
-if __name__ == "__main__":
+def run_application_server():
+    """启动单个服务实例，避免多进程各自计数而重复提交任务。"""
     import uvicorn
+
     # 关闭服务端协议级 WebSocket ping：部分客户端（如 PS UXP 面板）不会自动回 pong，
     # 默认 20s ping/20s 超时会把这些连接每隔一会儿就踢掉造成"频繁断连"。
     # 客户端有自己的应用层心跳 + 断线重连兜底，这里禁用协议 ping 更稳。
     # 默认只供本机使用；需要局域网访问时须显式配置监听地址。
-    bind_host = os.getenv("NADOU_BIND_HOST", "").strip() or "127.0.0.1"
-    uvicorn.run(app, host=bind_host, port=3000,
-                ws_ping_interval=None, ws_ping_timeout=None)
+    bind_host = configured_bind_host()
+    if bind_host_requires_access_control(bind_host) and not configured_access_token():
+        print("NADOU_BIND_HOST 为非本机地址时必须配置 NADOU_ACCESS_TOKEN。", flush=True)
+        raise SystemExit(2)
+    allow_multi = str(os.getenv("NADOU_ALLOW_MULTI_INSTANCE", "")).strip().lower() in {
+        "1", "true", "yes", "on"
+    }
+    settings = {
+        "host": bind_host,
+        "port": 3000,
+        "ws_ping_interval": None,
+        "ws_ping_timeout": None,
+    }
+    if allow_multi:
+        uvicorn.run(app, **settings)
+        return
+    lock_path = os.path.join(DATA_DIR, ".service-instance")
+    try:
+        with interprocess_file_lock(lock_path, timeout=0):
+            uvicorn.run(app, **settings)
+    except TimeoutError as exc:
+        print("已有 nadou ai 服务实例正在运行；如确需多实例，请设置 NADOU_ALLOW_MULTI_INSTANCE=1。", flush=True)
+        raise SystemExit(2) from exc
+
+
+if __name__ == "__main__":
+    run_application_server()

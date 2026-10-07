@@ -17,6 +17,18 @@ if not exist "%PYEXE%" (
     set "PYEXE=python"
 )
 
+rem Install dependencies on the first launch or after the lock file/Python changes.
+"%PYEXE%" tools\dependency_marker.py --check >nul 2>&1
+if errorlevel 1 (
+    echo First launch: installing Python dependencies...
+    call "%~dp0安装依赖.bat" --no-pause
+    if errorlevel 1 (
+        echo Dependency installation failed. Run 安装依赖.bat to see the full error.
+        pause
+        exit /b 1
+    )
+)
+
 "%PYEXE%" tools\check-environment.py
 if errorlevel 1 (
     echo Environment check failed. Fix the message above and try again.

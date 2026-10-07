@@ -40,13 +40,13 @@ const SIDEPANEL_PREVIEW_POSITION_STORAGE_KEY = 'webPreviewPositionSidePanel';
 const isSidePanelView = location.pathname.endsWith('/sidepanel.html');
 function apiBase(){
   let value = String(els.server.value || '').trim();
-  if(!value) value = '127.0.0.1:8767';
+  if(!value) value = '127.0.0.1:3000';
   if(!/^https?:\/\//i.test(value)) value = `http://${value}`;
   try {
     const parsed = new URL(value);
     return `${parsed.protocol}//${parsed.host}`;
   } catch {
-    return 'http://127.0.0.1:8767';
+    return 'http://127.0.0.1:3000';
   }
 }
 
@@ -531,7 +531,7 @@ async function saveSettings(){
 
 function getSettingsPayload(){
   return {
-    server: els.server.value || '127.0.0.1:8767',
+    server: els.server.value || '127.0.0.1:3000',
     folder: els.folder.value || '网页采集',
     classify: Boolean(els.classify.checked),
     autoScroll: Boolean(els.autoScroll.checked),
@@ -545,7 +545,7 @@ function getSettingsPayload(){
 
 async function loadSettings(){
   const data = await chrome.storage.local.get(['server', 'port', 'folder', 'classify', 'autoScroll', 'filterLowRes', 'provider', 'model', 'prompt', 'settingsCollapsed']);
-  els.server.value = data.server || (data.port ? `127.0.0.1:${data.port}` : '127.0.0.1:8767');
+  els.server.value = data.server || (data.port ? `127.0.0.1:${data.port}` : '127.0.0.1:3000');
   els.folder.value = data.folder || '网页采集';
   els.classify.checked = data.classify !== false;
   els.autoScroll.checked = Boolean(data.autoScroll);

@@ -33,6 +33,13 @@ ISOLATED_CHECK = textwrap.dedent(r"""
             # An environment key wins over the old file and remains usable by old pages.
             response = await client.get("/api/config/token")
             assert response.status_code == 200 and response.json() == {"token": "fake-env-secret"}
+            assert response.headers["cache-control"] == "no-store, no-cache, must-revalidate, max-age=0"
+            assert response.headers["pragma"] == "no-cache"
+            assert response.headers["expires"] == "0"
+            assert "Origin" in response.headers["vary"]
+            response = await client.get("/api/config/token/status")
+            assert response.status_code == 200 and response.json() == {"configured": True}
+            assert response.headers["cache-control"] == "no-store, no-cache, must-revalidate, max-age=0"
             response = await client.get("/api/config/token", headers={"Origin": "http://isolated.test"})
             assert response.status_code == 200 and response.json() == {"token": "fake-env-secret"}
             response = await client.get("/api/config/token", headers={"Origin": "http://isolated.test:80"})
@@ -49,13 +56,19 @@ ISOLATED_CHECK = textwrap.dedent(r"""
                 response = await client.get("/api/config/token", headers=headers)
                 assert response.status_code == 403, (headers, response.status_code)
                 assert "fake-env-secret" not in response.text
+                response = await client.get("/api/config/token/status", headers=headers)
+                assert response.status_code == 403, (headers, response.status_code)
+                assert "fake-env-secret" not in response.text
 
             # Remove the synthetic environment key and exercise the actual fallback.
             (Path(main.API_ENV_FILE)).unlink()
             os.environ.pop("MODELSCOPE_API_KEY", None)
             main.MODELSCOPE_API_KEY = ""
+            assert main.modelscope_api_key() == "fake-legacy-secret"
             response = await client.get("/api/config/token", headers={"Origin": "http://isolated.test"})
             assert response.status_code == 200 and response.json() == {"token": "fake-legacy-secret"}
+            response = await client.get("/api/config/token/status", headers={"Origin": "http://isolated.test"})
+            assert response.status_code == 200 and response.json() == {"configured": True}
 
             messages = []
             with patch.object(main, "write_diagnostic", side_effect=lambda message, **kw: messages.append(message)):
@@ -64,6 +77,8 @@ ISOLATED_CHECK = textwrap.dedent(r"""
                 assert response.status_code == 200 and response.json() == {"token": ""}
                 assert "legacy_config_invalid" in messages[-1]
                 assert "request_id=synthetic-request" in messages[-1]
+                response = await client.get("/api/config/token/status")
+                assert response.status_code == 200 and response.json() == {"configured": False}
 
                 legacy_path.write_text('["wrong shape"]', encoding="utf-8")
                 response = await client.get("/api/config/token")

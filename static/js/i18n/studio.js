@@ -1,7 +1,11 @@
 (function(){
     if(!window.StudioI18n) return;
     window.StudioI18n.register({
-        "studio.ready": { zh: "系统就绪", en: "System Ready" },
+        "studio.ready": { zh: "队列空闲", en: "Queue idle" },
+        "studio.queueStatus": { zh: "队列状态", en: "Queue status" },
+        "studio.queueUnavailable": { zh: "队列状态未知", en: "Queue status unavailable" },
+        "studio.queueing": { zh: "排队中", en: "Queueing" },
+        "studio.localRenderFailed": { zh: "本地生成失败，请检查 ComfyUI 是否已启动及工作流设置。", en: "Local generation failed. Check ComfyUI and the workflow settings." },
         "studio.unifiedConsole": { zh: "统一创作控制台", en: "Unified Art Console" },
         "studio.describeVision": { zh: "描述你想生成的画面...", en: "Describe your vision..." },
         "studio.engineSource": { zh: "引擎来源", en: "Engine Source" },
@@ -86,6 +90,8 @@
         "online.onlineImageFallback": { zh: "在线生图", en: "Online Image" },
         "online.deleteConfirm": { zh: "删除这条记录？", en: "Delete this archive item?" },
         "online.promptRequired": { zh: "请输入提示词", en: "Please enter a prompt" },
+        "online.uploadFailed": { zh: "参考图上传失败", en: "Failed to upload reference image" },
+        "online.uploadPending": { zh: "参考图仍在上传，请稍候", en: "Reference image is still uploading. Please wait." },
         "online.quality": { zh: "质量", en: "Quality" },
         "online.qualityAuto": { zh: "自动", en: "Auto" },
         "online.qualityLow": { zh: "低", en: "Low" },

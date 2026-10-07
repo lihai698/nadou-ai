@@ -6,6 +6,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from backend.remote_task_protocol import (
+    IMAGE_TASK_FAILED_STATUSES,
+    IMAGE_TASK_SUCCESS_STATUSES,
     REMOTE_CANCELLED,
     REMOTE_FAILED,
     REMOTE_PENDING,
@@ -21,10 +23,22 @@ from backend.remote_task_protocol import (
     remote_status_from_payload,
     remote_task_decision,
     submission_summary,
+    image_task_data,
+    image_task_status,
 )
 
 
 class RemoteTaskProtocolTests(unittest.TestCase):
+    def test_image_task_status_parser_preserves_legacy_shapes(self):
+        self.assertEqual(image_task_data({"data": {"status": "queued"}})["status"], "queued")
+        self.assertEqual(image_task_data({"status": "running"})["status"], "running")
+        self.assertEqual(image_task_data([]), {})
+        self.assertEqual(image_task_status({"data": {"task_status": "processing"}}), "PROCESSING")
+        self.assertEqual(image_task_status({"data": {"status": "provider-new-state"}}), "PROVIDER-NEW-STATE")
+        self.assertEqual(image_task_status({}), "")
+        self.assertIn("SUCCEEDED", IMAGE_TASK_SUCCESS_STATUSES)
+        self.assertIn("FAILED", IMAGE_TASK_FAILED_STATUSES)
+
     def test_normalizes_common_image_video_and_comfy_statuses(self):
         for value, expected in {
             "queued": REMOTE_PENDING,

@@ -3,6 +3,8 @@
 import argparse
 import importlib
 import importlib.metadata
+import ipaddress
+import os
 import json
 import math
 import re
@@ -95,6 +97,7 @@ def check_env_config(path, problems, notices):
         problems.append("API/.env 无法读取，请检查文件权限和 UTF-8 编码。")
         return
     seen = set()
+    values = {}
     for line_number, raw_line in enumerate(lines, 1):
         line = raw_line.strip()
         if not line or line.startswith("#"):
@@ -119,6 +122,7 @@ def check_env_config(path, problems, notices):
         # main.py trims matching outer quotes when it loads API/.env.
         if len(value) >= 2 and value[0] in {'"', "'"} and value[-1] == value[0]:
             value = value[1:-1]
+        values[key] = value
         if key in NUMERIC_ENV:
             try:
                 number = NUMERIC_ENV[key](value)
@@ -137,6 +141,16 @@ def check_env_config(path, problems, notices):
         elif key in {"COMFLY_BASE_URL", "PUBLIC_BASE_URL", "PUBLIC_MEDIA_BASE_URL"}:
             if value and not value.startswith(("http://", "https://")):
                 problems.append(f"API/.env 第 {line_number} 行的 {key} 应以 http:// 或 https:// 开头。")
+    bind_host = str(os.environ.get("NADOU_BIND_HOST") or values.get("NADOU_BIND_HOST") or "127.0.0.1").strip().strip("[]").lower()
+    requires_token = bind_host not in {"localhost", "127.0.0.1", "::1"}
+    if requires_token:
+        try:
+            requires_token = not ipaddress.ip_address(bind_host).is_loopback
+        except ValueError:
+            requires_token = True
+    access_token = str(os.environ.get("NADOU_ACCESS_TOKEN") or values.get("NADOU_ACCESS_TOKEN") or "").strip()
+    if requires_token and not access_token:
+        problems.append("NADOU_BIND_HOST 为非本机地址时必须配置 NADOU_ACCESS_TOKEN。")
 
 
 def check_provider_config(path, problems, notices):

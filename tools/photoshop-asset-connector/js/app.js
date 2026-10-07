@@ -406,7 +406,7 @@
 
   /* ---------- 初始化 ---------- */
   (function init() {
-    els.server.value = localStorage.getItem(DX.LS.host) || '127.0.0.1:8767';
+    els.server.value = localStorage.getItem(DX.LS.host) || '127.0.0.1:3000';
     state.exportLayer = localStorage.getItem(DX.LS.exportLayer) === '1';
     els.exportLayer.checked = state.exportLayer;
     const savedSource = localStorage.getItem(DX.LS.source);

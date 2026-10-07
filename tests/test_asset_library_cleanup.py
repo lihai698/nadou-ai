@@ -120,6 +120,50 @@ class AssetLibraryCleanupTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(shared.read_bytes(), b"shared")
         self.assertFalse(free.exists())
 
+    async def test_library_deletion_cleans_unreferenced_files_and_keeps_shared_files(self):
+        other_dir = self.library_dir / "other"
+        other_dir.mkdir()
+        shared = other_dir / "shared.png"
+        free = other_dir / "free.png"
+        workflow = self.library_dir / "workflow_other.zip"
+        shared.write_bytes(b"shared")
+        free.write_bytes(b"free")
+        workflow.write_bytes(b"workflow")
+        other = {
+            "id": "other",
+            "name": "其他资产库",
+            "type": "asset",
+            "categories": [
+                {
+                    "id": "other-images",
+                    "name": "图片",
+                    "type": "image",
+                    "dir": "other",
+                    "items": [
+                        {"id": "shared", "url": "/assets/library/other/shared.png", "kind": "image"},
+                        {"id": "free", "url": "/assets/library/other/free.png", "kind": "image"},
+                    ],
+                },
+                {
+                    "id": "other-workflows",
+                    "name": "工作流",
+                    "type": "workflow",
+                    "items": [{"id": "workflow", "url": "/assets/library/workflow_other.zip", "kind": "workflow"}],
+                },
+            ],
+        }
+        self.lib["libraries"].append(other)
+        main.save_asset_library(self.lib)
+        self.add_canvas_reference("/assets/library/other/shared.png")
+
+        result = await main.delete_asset_library("other")
+
+        self.assertNotIn("other", {item["id"] for item in result["library"]["libraries"]})
+        self.assertTrue(shared.exists())
+        self.assertFalse(free.exists())
+        self.assertFalse(workflow.exists())
+        self.assertTrue(other_dir.exists())  # 被引用文件仍在，目录不能误删
+
 
 if __name__ == "__main__":
     unittest.main()

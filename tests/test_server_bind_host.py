@@ -46,6 +46,9 @@ class ServerBindHostTests(unittest.TestCase):
                     current = environment.copy()
                     if configured is not None:
                         current["NADOU_BIND_HOST"] = configured
+                        current["NADOU_ACCESS_TOKEN"] = "test-token"
+                    else:
+                        current.pop("NADOU_ACCESS_TOKEN", None)
                     result = subprocess.run(
                         [sys.executable, "-c", CHECK], cwd=isolated, env=current,
                         capture_output=True, text=True, encoding="utf-8", errors="replace",

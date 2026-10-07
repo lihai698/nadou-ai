@@ -135,6 +135,7 @@ let isBuiltin = false;
 let previewValues = {};         // field_id -> 发给后端的值（图片：comfy 文件名）
 let previewRandomActive = {};   // field_id -> 筛子运行时是否激活；未设置时默认激活
 let previewImageUrls = {};      // field_id -> 浏览器可显示的本地 URL（仅图片字段）
+const previewUploadVersion = {};
 let runResult = null;           // url 或 null
 let workspaceMode = 'graph';
 let miniView = { k: 1, x: 0, y: 0 };
@@ -1154,16 +1155,27 @@ async function pickMiniImage(nodeId){
         const file = input.files[0];
         if(!file) return;
         if(!node) return;
+        const version = (previewUploadVersion[`node:${nodeId}`] || 0) + 1;
+        previewUploadVersion[`node:${nodeId}`] = version;
         if(node.url && node.url.startsWith('blob:')) URL.revokeObjectURL(node.url);
+        node.value = '';
         node.url = URL.createObjectURL(file);
         node.name = file.name;
         renderWorkspaceView();
         const form = new FormData();
         form.append('files', file);
         try {
-            const data = await fetch('/api/upload', { method:'POST', body:form }).then(r=>r.json());
-            node.value = data.files?.[0]?.comfy_name || data.files?.[0]?.filename || file.name;
-        } catch(e){ alert(mediaUploadFailedText(node.type)); }
+            const response = await fetch('/api/upload', { method:'POST', body:form });
+            const data = await response.json().catch(() => ({}));
+            if(!response.ok) throw new Error(data.detail || mediaUploadFailedText(node.type));
+            const name = data.files?.[0]?.comfy_name;
+            if(!name) throw new Error(mediaUploadFailedText(node.type));
+            if(previewUploadVersion[`node:${nodeId}`] !== version) return;
+            node.value = name;
+        } catch(e){
+            if(previewUploadVersion[`node:${nodeId}`] !== version) return;
+            node.value = ''; renderWorkspaceView(); alert(e.message || mediaUploadFailedText(node.type));
+        }
     };
     input.click();
 }
@@ -1239,6 +1251,9 @@ async function pickImage(fieldId){
     input.onchange = async () => {
         const file = input.files[0];
         if(!file) return;
+        const version = (previewUploadVersion[`field:${fieldId}`] || 0) + 1;
+        previewUploadVersion[`field:${fieldId}`] = version;
+        previewValues[fieldId] = '';
         // 先用本地 blob URL 立即显示缩略图
         if(previewImageUrls[fieldId]) URL.revokeObjectURL(previewImageUrls[fieldId]);
         previewImageUrls[fieldId] = URL.createObjectURL(file);
@@ -1247,10 +1262,17 @@ async function pickImage(fieldId){
         const form = new FormData();
         form.append('files', file);
         try {
-            const data = await fetch('/api/upload', { method:'POST', body:form }).then(r=>r.json());
-            const filename = data.files?.[0]?.comfy_name || data.files?.[0]?.filename || file.name;
+            const response = await fetch('/api/upload', { method:'POST', body:form });
+            const data = await response.json().catch(() => ({}));
+            if(!response.ok) throw new Error(data.detail || mediaUploadFailedText(kind));
+            const filename = data.files?.[0]?.comfy_name;
+            if(!filename) throw new Error(mediaUploadFailedText(kind));
+            if(previewUploadVersion[`field:${fieldId}`] !== version) return;
             previewValues[fieldId] = filename;
-        } catch(e){ alert(mediaUploadFailedText(kind)); }
+        } catch(e){
+            if(previewUploadVersion[`field:${fieldId}`] !== version) return;
+            previewValues[fieldId] = ''; renderPreview(); alert(e.message || mediaUploadFailedText(kind));
+        }
     };
     input.click();
 }

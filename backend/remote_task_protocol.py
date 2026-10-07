@@ -84,6 +84,15 @@ _RUNNING_STATUSES = frozenset(
     }
 )
 
+# 图片查询接口仍需要保留供应商原始的大写状态，以兼容现有轮询器。
+# 这些集合只描述状态，不执行请求，也不决定本地任务是否终态。
+IMAGE_TASK_SUCCESS_STATUSES = frozenset(
+    {"SUCCESS", "SUCCESSFUL", "SUCCEED", "SUCCEEDED", "COMPLETED", "COMPLETE", "DONE", "FINISHED", "OK", "READY"}
+)
+IMAGE_TASK_FAILED_STATUSES = frozenset(
+    {"FAILURE", "FAILED", "FAIL", "ERROR", "ERRORED", "CANCELED", "CANCELLED", "TIMEOUT", "REJECTED", "EXPIRED"}
+)
+
 _TRANSIENT_HTTP_STATUSES = frozenset({408, 425, 429, 500, 502, 503, 504, 520, 522, 524})
 _MEDIA_KEYS = frozenset(
     {
@@ -113,6 +122,21 @@ _TASK_ID_KEYS = (
 
 class RemoteTaskProtocolError(ValueError):
     """提交或观察结果不符合最小远端任务协议。"""
+
+
+def image_task_data(payload: Any) -> dict:
+    """读取图片任务回包的 ``data`` 包装；非法形状返回空对象。"""
+
+    if isinstance(payload, dict) and isinstance(payload.get("data"), dict):
+        return payload["data"]
+    return payload if isinstance(payload, dict) else {}
+
+
+def image_task_status(payload: Any) -> str:
+    """提取图片任务状态并统一为大写，保留未知文字供上层决定。"""
+
+    task_data = image_task_data(payload)
+    return str(task_data.get("status") or task_data.get("task_status") or "").upper()
 
 
 @dataclass(frozen=True)

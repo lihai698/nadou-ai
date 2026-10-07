@@ -147,3 +147,30 @@ class CanvasTaskLifecycleTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(response.status_code, 500)
         self.assertNotIn('secret', json.dumps(response.json(), ensure_ascii=False))
+
+    async def test_batch_worker_keeps_all_remote_ids_when_one_branch_fails(self):
+        task_id = 'canvas_img_batch_worker_123456789'
+        task = {
+            'id': task_id, 'type': 'online-image', 'status': 'queued',
+            'created_at': 1.0, 'updated_at': 1.0, 'result': None, 'error': '',
+            'provider_id': 'test-only', 'model': 'image-model',
+            'input_summary': {'prompt_length': 3},
+            'process_id': main.CANVAS_TASK_PROCESS_ID,
+        }
+        main.CANVAS_TASKS[task_id] = task
+        payload = main.OnlineImageRequest(prompt='批量恢复测试', provider_id='test-only', n=2)
+
+        async def generator(_payload):
+            callback = main.CANVAS_IMAGE_REMOTE_ACCEPT_CALLBACK.get()
+            await callback('remote-image-1')
+            await callback('remote-image-2')
+            error = main.HTTPException(status_code=504, detail='其中一个批次超时')
+            error.upstream_task_id = 'remote-image-2'
+            raise error
+
+        with patch.object(main, 'build_online_image_result', side_effect=generator):
+            await main._run_canvas_image_task(task_id, payload)
+        self.assertEqual(main.CANVAS_TASKS[task_id]['status'], 'unknown')
+        self.assertEqual(main.CANVAS_TASKS[task_id]['upstream_task_ids'], [
+            'remote-image-1', 'remote-image-2'
+        ])

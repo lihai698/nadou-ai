@@ -148,6 +148,7 @@ function applyCliProtocolDefaults(item, protocol){
     }
 }
 let rhWorkflowEditorState = { open:false, index:-1, entry:null, config:null, expanded:{}, activeNodeId:'', graph:{ k:1, x:0, y:0, w:0, h:0 }, pan:null, bound:false, previewParams:{}, previewRunning:false, previewStatus:'', previewOutputs:[] };
+const rhPreviewUploadVersion = {};
 let rhEditorMode = 'workflow';
 let recommendInlineOpen = false;
 let providerDragId = '';
@@ -1523,6 +1524,8 @@ async function pickRhPreviewMedia(key, kind){
     input.onchange = async () => {
         const file = input.files?.[0];
         if(!file) return;
+        const version = (rhPreviewUploadVersion[key] || 0) + 1;
+        rhPreviewUploadVersion[key] = version;
         const localUrl = URL.createObjectURL(file);
         rhWorkflowEditorState.previewParams[key] = {...(rhWorkflowEditorState.previewParams[key] || {}), url:localUrl, name:file.name, uploading:true};
         renderRhMappedPreview();
@@ -1535,16 +1538,23 @@ async function pickRhPreviewMedia(key, kind){
                 return json;
             });
             const uploaded = data.files?.[0];
+            if(!uploaded?.url) throw new Error('上传失败');
+            if(rhPreviewUploadVersion[key] !== version) {
+                try { URL.revokeObjectURL(localUrl); } catch (_) {}
+                return;
+            }
             rhWorkflowEditorState.previewParams[key] = {
                 ...(rhWorkflowEditorState.previewParams[key] || {}),
-                url:uploaded?.url || localUrl,
-                name:uploaded?.name || file.name,
+                url:uploaded.url,
+                name:uploaded.name || file.name,
                 kind:uploaded?.kind || kind.toLowerCase(),
                 uploading:false
             };
             withRhEditorScrollPreserved(() => renderRhMappedPreview());
         } catch(err) {
-            rhWorkflowEditorState.previewParams[key] = {...(rhWorkflowEditorState.previewParams[key] || {}), uploading:false};
+            try { URL.revokeObjectURL(localUrl); } catch (_) {}
+            if(rhPreviewUploadVersion[key] !== version) return;
+            rhWorkflowEditorState.previewParams[key] = {...(rhWorkflowEditorState.previewParams[key] || {}), url:'', name:'', uploading:false};
             withRhEditorScrollPreserved(() => renderRhMappedPreview());
             alert(err.message || '上传失败');
         }

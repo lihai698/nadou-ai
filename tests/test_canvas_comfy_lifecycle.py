@@ -108,6 +108,31 @@ class CanvasComfyLifecycleTests(unittest.IsolatedAsyncioTestCase):
                 self.assertIn(expected, task["error"])
                 self.assertIsNone(task["result"])
 
+    async def test_foreign_running_task_becomes_unknown_without_generation(self):
+        task_id = "canvas_comfy_restart_unknown_123456789"
+        main._write_canvas_task_record(
+            {
+                "id": task_id,
+                "type": "comfy",
+                "status": "running",
+                "created_at": 1.0,
+                "updated_at": 1.0,
+                "result": None,
+                "error": "",
+                "workflow_json": "test-only.json",
+                "input_summary": {"workflow_length": 14},
+                "process_id": "previous-process",
+            },
+            required=True,
+        )
+        with patch.object(main, "generate", side_effect=AssertionError("restart must not submit")):
+            response = await self.client.get(f"/api/canvas-comfy-tasks/{task_id}")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["status"], "unknown")
+        self.assertIn("远端状态未知", response.json()["error"])
+        saved = json.loads(Path(self.task_dir.name, f"{task_id}.json").read_text(encoding="utf-8"))
+        self.assertEqual(saved["status"], "unknown")
+
 
 if __name__ == "__main__":
     unittest.main()

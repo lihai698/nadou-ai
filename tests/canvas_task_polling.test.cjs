@@ -27,7 +27,35 @@ function editor(responses){
     vm.runInContext(source.slice(start,end),context);
     return {pending,out,gen,calls,delays,completed,failed,run:()=>vm.runInContext("pollCanvasImageTask('same-id')",context)};
 }
+function imageRefreshEditor(response){
+    const pending={id:'p',canvasTaskId:'same-id',taskLost:true,failed:true,remoteRefreshable:true,run:{node:{id:'gen'}}};
+    const out={_pending:[pending]};
+    const gen={id:'gen'};
+    const calls=[],completed=[];
+    const context=vm.createContext({
+        nodes:[gen,out],findPendingTask:()=>({out,pending}),pendingById:()=>out._pending.find(item=>item.id==='p'),
+        cascadeTargetIdFromOptions:o=>o?.cascadeTargetId || '',cascadeFetch:async(url,init)=>{calls.push({url,init});return {ok:true,status:200,json:async()=>response};},
+        responseErrorMessage:async()=> 'refresh failed',refreshRunNodes:()=>{},scheduleSave:()=>{},
+        completeCanvasImageTask:(id,result)=>{completed.push(result);out._pending=[];},
+        failCanvasImageTask:()=>{},tr:k=>k,pending,
+    });
+    const start=source.indexOf('async function refreshCanvasImageTaskOnce(');
+    const end=source.indexOf('async function waitCanvasVideoTaskResult(',start);
+    assert.ok(start>=0 && end>start);
+    vm.runInContext(source.slice(start,end),context);
+    return {pending,out,calls,completed,run:()=>vm.runInContext("refreshCanvasImagePending(pending)",context)};
+}
 const success=()=>({status:200,data:{status:'succeeded',result:{images:['test.png']}}});
+
+test('restart-lost image with a durable upstream ID can refresh without resubmitting',async()=>{
+    const e=imageRefreshEditor({status:'succeeded',result:{images:['recovered.png']}});
+    await e.run();
+    assert.equal(e.calls.length,1);
+    assert.equal(e.calls[0].url,'/api/canvas-image-tasks/same-id/refresh');
+    assert.equal(e.calls[0].init.method,'POST');
+    assert.deepEqual(e.completed,[{images:['recovered.png']}]);
+    assert.equal(e.out._pending.length,0);
+});
 
 function directBatch(results){
     const gen={id:'gen',type:'generator',x:100,y:100},next={id:'next',type:'generator'};

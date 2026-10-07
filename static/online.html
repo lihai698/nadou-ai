@@ -16,15 +16,15 @@
             } catch(e) {}
         })();
     </script>
-    <script src="/static/vendor/js/tailwindcss-cdn.js?v=2026.10.05.1790740572"></script>
-    <script src="/static/vendor/js/lucide.js?v=2026.10.05.1790740572"></script>
-    <script src="/static/js/theme.js?v=2026.10.05.1790740572"></script>
-    <script src="/static/js/i18n.js?v=2026.10.05.1791022416"></script>
-    <script src="/static/js/image-preview.js?v=2026.10.05.1791101490"></script>
-    <script src="/static/js/history-bulk-manager.js?v=2026.10.05.1790740572"></script>
-    <script src="/static/js/online-image-size-rules.js?v=2026.10.05.1791055380"></script>
+    <script src="/static/vendor/js/tailwindcss-cdn.js?v=2026.10.06.1790740572"></script>
+    <script src="/static/vendor/js/lucide.js?v=2026.10.06.1790740572"></script>
+    <script src="/static/js/theme.js?v=2026.10.06.1790740572"></script>
+    <script src="/static/js/i18n.js?v=2026.10.06.1791325378"></script>
+    <script src="/static/js/image-preview.js?v=2026.10.06.1791101490"></script>
+    <script src="/static/js/history-bulk-manager.js?v=2026.10.06.1790740572"></script>
+    <script src="/static/js/online-image-size-rules.js?v=2026.10.06.1791055380"></script>
     <style>
-        @import url('/static/vendor/css/fonts.css?v=2026.10.05.1790740572');
+        @import url('/static/vendor/css/fonts.css?v=2026.10.06.1790740572');
         :root { --accent:#111827; --bg:#f9fafb; --card:#fff; --easing:cubic-bezier(0.4,0,0.2,1); }
         body { background:var(--bg); font-family:'Inter',-apple-system,sans-serif; color:var(--accent); -webkit-font-smoothing:antialiased; }
         .container-box { max-width:1280px; margin:0 auto; padding:0 40px; margin-top:50px; }
@@ -64,7 +64,7 @@
         .gallery-lightbox { background:rgba(255,255,255,.99); backdrop-filter:blur(22px) saturate(1.05); }
         @keyframes fadeIn { from{opacity:0} to{opacity:1} }
     </style>
-    <link rel="stylesheet" href="/static/css/theme.css?v=2026.10.05.1790740572">
+    <link rel="stylesheet" href="/static/css/theme.css?v=2026.10.06.1790740572">
     <style>
         html:not(.studio-theme-dark) body:not(.studio-theme-dark) #lightbox.gallery-lightbox {
             background: rgba(255,255,255,.99) !important;
@@ -254,6 +254,8 @@
         });
         let refs = {1:null,2:null,3:null};
         let refDims = {1:null,2:null,3:null};
+        let refUploadVersion = {1:0,2:0,3:0};
+        let refUploadPending = {1:false,2:false,3:false};
         let provider = 'comfly';
         let selectedModel = 'gpt-image-2';
         let apiProviders = [];
@@ -522,36 +524,66 @@
             const item = [...(e.clipboardData?.items || [])].find(x => x.kind === 'file' && x.type.startsWith('image/'));
             if (item) handleFile(item.getAsFile(), firstEmptySlot());
         });
-        function firstEmptySlot(){ return [1,2,3].find(id => !refs[id]) || 1; }
+        function firstEmptySlot(){ return [1,2,3].find(id => !refs[id] && !refUploadPending[id]) || 1; }
 
         async function handleFile(file, index){
             if(!file) return;
+            const version = ++refUploadVersion[index];
+            refs[index] = null;
+            refDims[index] = null;
+            refUploadPending[index] = true;
             const reader = new FileReader();
             reader.onload = e => {
+                if(version !== refUploadVersion[index]) return;
                 const prev = document.getElementById(`prev${index}`);
                 prev.src = e.target.result; prev.classList.remove('hidden');
                 document.getElementById(`del${index}`).classList.remove('hidden');
                 getImageDimensions(e.target.result).then(dim => {
+                    if(version !== refUploadVersion[index]) return;
                     refDims[index] = dim;
                     updateSizeUI();
                 }).catch(() => {});
             };
+            reader.onerror = () => {
+                if(version !== refUploadVersion[index]) return;
+                clearSlot(index);
+                alert(tr('online.uploadFailed'));
+            };
             reader.readAsDataURL(file);
             const form = new FormData();
             form.append('files', file);
-            const data = await fetch('/api/ai/upload', {method:'POST', body:form}).then(r=>r.json());
-            refs[index] = data.files[0];
+            try {
+                const response = await fetch('/api/ai/upload', {method:'POST', body:form});
+                const data = await response.json();
+                if(!response.ok) throw new Error(data.detail || tr('online.uploadFailed'));
+                if(!data.files?.[0]) throw new Error(tr('online.uploadFailed'));
+                if(version !== refUploadVersion[index]) return;
+                refs[index] = data.files[0];
+                refUploadPending[index] = false;
+            } catch(err) {
+                if(version !== refUploadVersion[index]) return;
+                clearSlot(index);
+                alert(err.message || tr('online.uploadFailed'));
+            }
         }
         function clearSlot(index, ev){
             if(ev) ev.stopPropagation();
+            refUploadVersion[index]++;
+            refUploadPending[index] = false;
             refs[index] = null;
             refDims[index] = null;
             document.getElementById(`prev${index}`).src = '';
             document.getElementById(`prev${index}`).classList.add('hidden');
             document.getElementById(`del${index}`).classList.add('hidden');
+            document.getElementById(`file${index}`).value = '';
+            updateSizeUI();
         }
 
         async function submitImage(){
+            if(Object.values(refUploadPending).some(Boolean)){
+                alert(tr('online.uploadPending'));
+                return;
+            }
             const prompt = document.getElementById('promptInput').value.trim();
             if(!prompt){ alert(tr('online.promptRequired')); return; }
             const btn = document.getElementById('genBtn'), loader = document.getElementById('loader'), placeholder = document.getElementById('placeholder'), out = document.getElementById('outputImg'), dl = document.getElementById('downloadBtn');
@@ -647,6 +679,7 @@
                 refs[i+1] = ref; const prev = document.getElementById(`prev${i+1}`);
                 prev.src = ref.url; prev.classList.remove('hidden'); document.getElementById(`del${i+1}`).classList.remove('hidden');
                 getImageDimensions(ref.url).then(dim => {
+                    if(refs[i+1] !== ref) return;
                     refDims[i+1] = dim;
                     updateSizeUI();
                 }).catch(() => {});

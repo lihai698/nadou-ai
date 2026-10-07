@@ -6,6 +6,8 @@ function trf(key, values={}){
 }
 function langIsEn(){ return window.StudioI18n?.lang?.() === 'en'; }
 const CANVAS_UPLOAD_MAX = 20;
+const CANVAS_UPLOAD_MAX_FILE_BYTES = 100 * 1024 * 1024;
+const CANVAS_UPLOAD_MAX_BATCH_BYTES = 500 * 1024 * 1024;
 const CANVAS_REFERENCE_IMAGE_MAX = 20;
 const CANVAS_MINIMAX_REF_IMAGE_MAX = 9;
 const CANVAS_MINIMAX_REF_VIDEO_MAX = 3;
@@ -3995,9 +3997,18 @@ async function uploadMediaFiles(files, point, onlyImages=false, opts={}){
         return onlyImages ? kind === 'image' : ['image','video','audio'].includes(kind);
     }).slice(0, CANVAS_UPLOAD_MAX);
     if(!supported.length) return [];
+    const totalBytes = supported.reduce((sum, file) => sum + Number(file.size || 0), 0);
+    const oversized = supported.find(file => Number(file.size || 0) > CANVAS_UPLOAD_MAX_FILE_BYTES);
+    if(oversized) throw new Error(langIsEn() ? `${oversized.name || 'File'} exceeds 100MB` : `${oversized.name || '文件'}超过 100MB，无法上传`);
+    if(totalBytes > CANVAS_UPLOAD_MAX_BATCH_BYTES) throw new Error(langIsEn() ? 'This upload exceeds the 500MB batch limit' : '本次上传总大小超过 500MB');
     const form = new FormData();
     supported.forEach(file => form.append('files', file));
-    const data = await fetch('/api/ai/upload', {method:'POST', body:form}).then(r=>r.json());
+    const response = await fetch('/api/ai/upload', {method:'POST', body:form});
+    const data = await response.json().catch(() => ({}));
+    if(!response.ok) throw new Error(data.detail || (langIsEn() ? 'Upload failed' : '上传失败'));
+    if(!Array.isArray(data.files) || data.files.length !== supported.length || data.files.some(file => !file?.url)){
+        throw new Error(langIsEn() ? 'Upload was incomplete. Please try again.' : '上传不完整，请重试');
+    }
     const base = point || screenToWorld(window.innerWidth / 2, window.innerHeight / 2);
     const created = [];
     (data.files || []).forEach((file, i) => {
@@ -4164,8 +4175,11 @@ async function fillImageNode(nodeId, files, opts={}){
     }
     const form = new FormData();
     form.append('files', imgs[0]);
-    const data = await fetch('/api/ai/upload', {method:'POST', body:form}).then(r=>r.json());
+    const response = await fetch('/api/ai/upload', {method:'POST', body:form});
+    const data = await response.json().catch(() => ({}));
+    if(!response.ok) throw new Error(data.detail || '上传失败');
     const file = data.files?.[0];
+    if(!file?.url) throw new Error('上传失败，请重试');
     const node = nodes.find(n => n.id === nodeId);
     if(file && node){
         node.url = file.url;
@@ -5626,16 +5640,25 @@ window.addEventListener('mousemove', event => {
 });
 window.addEventListener('mouseup', () => { cropDrag = null; document.getElementById('cropCanvas')?.classList.remove('dragging-image'); });
 async function uploadCroppedBlob(blob, name){
-    const form = new FormData();
-    form.append('files', blob, name);
-    const data = await fetch('/api/ai/upload', {method:'POST', body:form}).then(r=>r.json());
-    return data.files?.[0];
+    const files = await uploadImageBlobs([{blob, name}]);
+    return files[0];
 }
 async function uploadImageBlobs(blobs){
+    if(!blobs.length) return [];
     const form = new FormData();
     blobs.forEach(item => form.append('files', item.blob, item.name));
-    const data = await fetch('/api/ai/upload', {method:'POST', body:form}).then(r=>r.json());
-    return data.files || [];
+    try {
+        const response = await fetch('/api/ai/upload', {method:'POST', body:form});
+        const data = await response.json().catch(() => ({}));
+        if(!response.ok) throw new Error(data.detail || '上传失败');
+        if(!Array.isArray(data.files) || data.files.length !== blobs.length || data.files.some(file => !file?.url)){
+            throw new Error('图片上传不完整，请重试');
+        }
+        return data.files;
+    } catch(err) {
+        showErrorModal(err.message || '上传失败，请重试', '上传失败');
+        return [];
+    }
 }
 async function applyImageCrop(){
     if(!cropState) return;
@@ -6048,7 +6071,7 @@ function renderPendingOutput(pending){
     if(pending?.failed || pending?.queryPaused){
         const taskId = pending.taskLost ? pending.canvasTaskId : pending.queryPaused ? pending.canvasTaskId : pending.recoverTaskId || '';
         const querying = Boolean(pending.querying);
-        const remoteRefreshable = Boolean(pending.remoteRefreshable && pending.canvasTaskType === 'video' && pending.canvasTaskId);
+        const remoteRefreshable = Boolean(pending.remoteRefreshable && pending.canvasTaskId);
         const msg = pending.error || tr('canvas.generationFailed');
         const sub = taskId ? `任务 ID：${escapeHtml(taskId)}` : '没有任务 ID，无法查询';
         return `<div class="output-img-wrap loading-wrap recoverable" data-pending-id="${escapeAttr(pending.id)}"${pendingOutputStyle(pending)}>
@@ -6441,6 +6464,8 @@ function bindOutputWrap(wrap, node){
             const pending = pendingById(node, pid);
             if(pending?.canvasTaskType === 'video' && pending.canvasTaskId && (pending.queryPaused || pending.remoteRefreshable)){
                 saveAndQueryCanvasPendingTask(pending);
+            } else if(pending?.canvasTaskType === 'online-image' && pending.canvasTaskId && pending.remoteRefreshable){
+                refreshCanvasImagePending(pending);
             } else if(pid) queryRecoverPendingOutput(pid);
         };
     }
@@ -7019,16 +7044,28 @@ async function addUrlToCanvasAssetLibrary(url, name=''){
     setStatus('已保存到资产库');
 }
 async function uploadFilesToLibrary(files, libraryId, categoryId){
+    const selected = [...files];
+    if(!selected.length) return null;
     const form = new FormData();
-    [...files].forEach(file => form.append('files', file));
-    const uploaded = await fetch('/api/ai/upload', {method:'POST', body:form}).then(r => r.json());
-    const items = (uploaded.files || []).filter(file => file?.url).map(file => ({library_id:libraryId, category_id:categoryId, url:file.url, name:file.name || 'asset'}));
-    if(!items.length) return null;
-    return fetch('/api/asset-library/items/batch', {
+    selected.forEach(file => form.append('files', file));
+    const uploadResponse = await fetch('/api/ai/upload', {method:'POST', body:form});
+    const uploaded = await uploadResponse.json().catch(() => ({}));
+    if(!uploadResponse.ok) throw new Error(uploaded.detail || '上传失败');
+    if(!Array.isArray(uploaded.files) || uploaded.files.length !== selected.length || uploaded.files.some(file => !file?.url)){
+        throw new Error('素材上传不完整，请重试');
+    }
+    const items = uploaded.files.map(file => ({library_id:libraryId, category_id:categoryId, url:file.url, name:file.name || 'asset'}));
+    const response = await fetch('/api/asset-library/items/batch', {
         method:'POST',
         headers:{'Content-Type':'application/json'},
         body:JSON.stringify({library_id:libraryId, category_id:categoryId, items})
-    }).then(r => r.json());
+    });
+    const data = await response.json().catch(() => ({}));
+    if(!response.ok || !data.library) throw new Error(data.detail || '保存素材失败');
+    if(!Array.isArray(data.items) || data.items.length !== items.length){
+        throw new Error('部分素材未保存，请刷新素材库后检查');
+    }
+    return data;
 }
 function openAssetManager(){
     assetManagerModal?.classList.add('open');
@@ -7099,11 +7136,17 @@ function renderImageAssetManager(){
     const upload = document.getElementById('managerAssetUpload');
     upload?.addEventListener('change', async () => {
         if(!upload.files?.length || !cat) return;
-        const data = await uploadFilesToLibrary(upload.files, library.id, cat.id);
-        if(data?.library) canvasAssetLibrary = data.library;
-        managerSelectedAssetIds.clear();
-        renderAssetManager();
-        renderCanvasAssetLibrary();
+        try {
+            const data = await uploadFilesToLibrary(upload.files, library.id, cat.id);
+            if(data?.library) canvasAssetLibrary = data.library;
+            managerSelectedAssetIds.clear();
+            renderAssetManager();
+            renderCanvasAssetLibrary();
+        } catch(err) {
+            showErrorModal(err.message || '保存素材失败', '保存素材失败');
+        } finally {
+            upload.value = '';
+        }
     });
 }
 function workflowAssetThumbHtml(item){
@@ -11625,6 +11668,56 @@ async function createCanvasVideoTask(payload, pending){
     if(!task.task_id) throw new Error('视频任务未返回本地编号，未继续提交');
     return task;
 }
+async function refreshCanvasImageTaskOnce(taskId, options={}){
+    const cascadeTargetId = cascadeTargetIdFromOptions(options);
+    const response = await cascadeFetch(`/api/canvas-image-tasks/${encodeURIComponent(taskId)}/refresh`, {
+        method:'POST'
+    }, {cascadeTargetId});
+    if(!response.ok){
+        const error = new Error(await responseErrorMessage(response, '图片任务刷新失败'));
+        error.imageTaskRefreshUnavailable = response.status === 404 || response.status === 409;
+        if(response.status === 408 || response.status === 429 || response.status >= 500){
+            error.retryableQuery = true;
+            error.queryPaused = true;
+        }
+        throw error;
+    }
+    return response.json();
+}
+async function refreshCanvasImagePending(pending){
+    if(!pending?.canvasTaskId || pending.querying) return;
+    const found = findPendingTask(pending.canvasTaskId);
+    if(!found || found.pending !== pending) return;
+    pending.querying = true;
+    refreshRunNodes(nodes.find(n => n.id === pending.run?.node?.id), found.out);
+    try {
+        const data = await refreshCanvasImageTaskOnce(pending.canvasTaskId, {cascadeTargetId:pending.cascadeTargetId});
+        if(data.status === 'succeeded'){
+            completeCanvasImageTask(pending.canvasTaskId, data.result || {});
+            return;
+        }
+        if(data.status === 'failed'){
+            failCanvasImageTask(pending.canvasTaskId, data.error || tr('canvas.generationFailed'), data);
+            return;
+        }
+        pending.error = data.error || data.message || '远端任务仍在生成中，请稍后再次刷新';
+        pending.taskLost = true;
+        pending.failed = true;
+        pending.remoteRefreshable = Boolean(data.upstream_task_id);
+    } catch(error){
+        pending.error = error.message || '图片任务刷新失败';
+        pending.taskLost = true;
+        pending.failed = true;
+        pending.remoteRefreshable = !error.imageTaskRefreshUnavailable;
+    } finally {
+        const latest = pendingById(found.out, pending.id);
+        if(latest){
+            latest.querying = false;
+            refreshRunNodes(nodes.find(n => n.id === latest.run?.node?.id), found.out);
+            scheduleSave();
+        }
+    }
+}
 async function refreshCanvasVideoTaskOnce(taskId, options={}){
     const cascadeTargetId = cascadeTargetIdFromOptions(options);
     const response = await cascadeFetch(`/api/canvas-video-tasks/${encodeURIComponent(taskId)}/refresh`, {
@@ -12145,7 +12238,9 @@ async function uploadCanvasUrlToComfy(url){
         if(!r.ok) throw new Error(await responseErrorMessage(r, langIsEn() ? 'Image upload to ComfyUI failed' : '图片上传到 ComfyUI 失败'));
         return r.json();
     });
-    return data.files?.[0]?.comfy_name || filename;
+    const comfyName = String(data.files?.[0]?.comfy_name || '').trim();
+    if(!comfyName) throw new Error(langIsEn() ? 'ComfyUI upload failed' : 'ComfyUI 上传失败');
+    return comfyName;
 }
 async function comfyNameForRef(ref){
     if(ref.comfy_name) return ref.comfy_name;
@@ -14117,6 +14212,7 @@ async function waitCanvasComfyTaskResult(taskId, options={}){
             const error = new Error(data.error || '本地任务记录已失效，远端状态未知，请勿直接重新提交');
             error.restartLost = true;
             error.taskLost = true;
+            error.remoteRefreshable = Boolean(data.upstream_task_id);
             error.taskData = data;
             throw error;
         }
@@ -14378,6 +14474,7 @@ async function pollCanvasImageTask(taskId, options={}){
                 const error = new Error(data.error || '本地任务记录已失效，远端状态未知，请勿直接重新提交');
                 error.restartLost = true;
                 error.taskLost = true;
+                error.remoteRefreshable = Boolean(data.upstream_task_id);
                 error.taskData = data;
                 throw error;
             }
@@ -14400,6 +14497,7 @@ async function pollCanvasImageTask(taskId, options={}){
                 current.pending.querying = false;
                 current.pending.queryRecoverable = true;
                 current.pending.canvasTaskStatus = 'unknown';
+                current.pending.remoteRefreshable = Boolean(err.remoteRefreshable || err.taskData?.upstream_task_id);
                 current.pending.error = lostMessage;
                 const gen = nodes.find(n => n.id === current.pending.run?.node?.id);
                 if(gen){
@@ -14534,6 +14632,7 @@ async function waitCanvasDirectTasks(node, taskInfos, run, options={}){
                 found.pending.querying = false;
                 found.pending.queryRecoverable = true;
                 found.pending.canvasTaskStatus = 'unknown';
+                found.pending.remoteRefreshable = Boolean(item.reason?.remoteRefreshable || item.reason?.taskData?.upstream_task_id);
                 found.pending.error = message;
                 const gen = nodes.find(n => n.id === found.pending.run?.node?.id);
                 if(gen){ gen.running = false; gen.runStatus = 'task-lost'; gen.runError = message; }

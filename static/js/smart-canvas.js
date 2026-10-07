@@ -17,6 +17,8 @@ const fileInput = document.getElementById('fileInput');
 const apiKindToggle = document.getElementById('apiKindToggle');
 const inputThumbsRow = document.getElementById('inputThumbsRow');
 const SMART_UPLOAD_MAX = 20;
+const SMART_UPLOAD_MAX_FILE_BYTES = 100 * 1024 * 1024;
+const SMART_UPLOAD_MAX_BATCH_BYTES = 500 * 1024 * 1024;
 const SMART_REFERENCE_IMAGE_MAX = 20;
 // Keep these limits aligned with ComfyUI's MiniMaxH3ReferenceToVideo schema.
 const SMART_MINIMAX_REF_IMAGE_MAX = 9;
@@ -8375,7 +8377,7 @@ function imageTaskRecoverBodyHtml(node, task, layout){
     const querying = Boolean(task.querying);
     const failedCount = smartPendingTasks(node).filter(item => item.failed && item.recoverTaskId).length;
     const taskLost = Boolean(task.taskLost);
-    const remoteRefreshable = Boolean(task.remoteRefreshable && task.kind === 'video' && task.taskId);
+    const remoteRefreshable = Boolean(task.remoteRefreshable && task.taskId);
     const title = querying ? '查询中' : remoteRefreshable ? '远端状态未知' : taskLost ? '本地任务记录已失效' : task.queryPaused ? '查询暂停，任务未丢失' : '任务未丢失';
     const sub = taskLost ? (task.error || '远端状态未知，请勿直接重新提交') : failedCount > 1 ? `还有 ${failedCount} 个任务可查询` : `任务 ID：${task.queryPaused ? task.taskId : task.recoverTaskId || task.taskId || ''}`;
     return `<div class="jimeng-pending-cell loading-cell single" style="width:${layout.width}px;height:${layout.height}px">
@@ -12863,16 +12865,25 @@ function resizeCropFromDrag(dx, dy){
     cropState.h = Math.round(next.h);
 }
 async function uploadCroppedBlob(blob, name){
-    const form = new FormData();
-    form.append('files', blob, name);
-    const data = await fetch('/api/ai/upload', {method:'POST', body:form}).then(r => r.json());
-    return data.files?.[0];
+    const files = await uploadImageBlobs([{blob, name}]);
+    return files[0];
 }
 async function uploadImageBlobs(blobs){
+    if(!blobs.length) return [];
     const form = new FormData();
     blobs.forEach(item => form.append('files', item.blob, item.name));
-    const data = await fetch('/api/ai/upload', {method:'POST', body:form}).then(r => r.json());
-    return data.files || [];
+    try {
+        const response = await fetch('/api/ai/upload', {method:'POST', body:form});
+        const data = await response.json().catch(() => ({}));
+        if(!response.ok) throw new Error(data.detail || tr('smart.toastUploadFail'));
+        if(!Array.isArray(data.files) || data.files.length !== blobs.length || data.files.some(file => !file?.url)){
+            throw new Error(tr('smart.toastUploadFail'));
+        }
+        return data.files;
+    } catch(err) {
+        toast(err.message || tr('smart.toastUploadFail'));
+        return [];
+    }
 }
 function replaceEditedImage(file, extra={}){
     const {node, index} = currentEditImage();
@@ -13765,13 +13776,20 @@ function setSmartDropCopyEffect(e, includeAsset=false){
 async function uploadFiles(files){
     const supported = [...(files || [])].filter(isSupportedUploadFile).slice(0, SMART_UPLOAD_MAX);
     if(!supported.length) return [];
+    const totalBytes = supported.reduce((sum, file) => sum + Number(file.size || 0), 0);
+    const oversized = supported.find(file => Number(file.size || 0) > SMART_UPLOAD_MAX_FILE_BYTES);
+    if(oversized) throw new Error(langIsEn() ? `${oversized.name || 'File'} exceeds 100MB` : `${oversized.name || '文件'}超过 100MB，无法上传`);
+    if(totalBytes > SMART_UPLOAD_MAX_BATCH_BYTES) throw new Error(langIsEn() ? 'This upload exceeds the 500MB batch limit' : '本次上传总大小超过 500MB');
     const form = new FormData();
     supported.forEach(file => form.append('files', file, file.name || 'media'));
     const data = await fetch('/api/ai/upload', {method:'POST', body:form}).then(async r => {
         if(!r.ok) throw new Error((await r.text()) || tr('smart.toastUploadFail'));
         return r.json();
     });
-    return (data.files || []).map((file, index) => ({
+    if(!Array.isArray(data.files) || data.files.length !== supported.length || data.files.some(file => !file?.url)){
+        throw new Error(tr('smart.toastUploadFail'));
+    }
+    return data.files.map((file, index) => ({
         ...file,
         kind:file.kind || mediaKindForFile(supported[index])
     }));
@@ -17691,6 +17709,42 @@ async function querySmartImageTaskNow(nodeId, localTaskId){
             catch(e) { toast((e.message || tr('smart.errRunFailed')).slice(0, 160)); }
             return;
         }
+        if(task.kind === 'image' && task.remoteRefreshable && task.taskId){
+            task.querying = true;
+            render();
+            try {
+                const response = await fetch(`/api/canvas-image-tasks/${encodeURIComponent(task.taskId)}/refresh`, {method:'POST'});
+                if(!response.ok) throw new Error(await responseErrorMessage(response, '图片任务刷新失败'));
+                const data = await response.json();
+                if(data.status === 'succeeded'){
+                    task.failed = false;
+                    task.querying = false;
+                    const result = data.result || {};
+                    finalizeSmartPendingTask(node, task.taskId, resultMediaUrls(result.image_items?.length ? result.image_items : (result.images || result)), 'image');
+                    render();
+                    scheduleSave();
+                    return;
+                }
+                if(data.status === 'failed'){
+                    task.error = data.error || tr('smart.errRunFailed');
+                    task.remoteRefreshable = false;
+                    toast(task.error.slice(0, 160));
+                } else {
+                    task.error = data.error || data.message || '远端任务仍在生成中，请稍后再次刷新';
+                    task.remoteRefreshable = Boolean(data.upstream_task_id);
+                    toast(task.error.slice(0, 160));
+                }
+            } catch(e){
+                task.error = e.message || '图片任务刷新失败';
+                toast(task.error.slice(0, 160));
+            } finally {
+                const latest = smartPendingTasks(node).find(item => item.taskId === localTaskId);
+                if(latest) latest.querying = false;
+                render();
+                scheduleSave();
+            }
+            return;
+        }
         toast(task.error || '本地任务记录已失效，远端状态未知，请勿直接重新提交');
         return;
     }
@@ -17807,6 +17861,7 @@ async function pollSmartCanvasTask(taskId){
                 const error = new Error(task.error || '本地任务记录已失效，远端状态未知，请勿直接重新提交');
                 error.restartLost = true;
                 error.taskLost = true;
+                error.remoteRefreshable = Boolean(task.upstream_task_id);
                 error.taskData = task;
                 throw error;
             }
@@ -18071,6 +18126,7 @@ async function resumeSmartPendingNode(node, logContext={}, onlyTaskId=''){
                 task.failed = true;
                 task.taskLost = true;
                 task.queryPaused = false;
+                task.remoteRefreshable = Boolean(e.remoteRefreshable || e.taskData?.upstream_task_id);
                 task.error = `${e.message || '本地任务记录已失效'}；远端是否仍在生成未知，请勿直接重复提交。`;
                 node.taskFailureNotice = task.error;
                 node.running = false;

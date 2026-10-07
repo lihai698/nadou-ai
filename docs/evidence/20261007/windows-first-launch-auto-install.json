@@ -1,0 +1,20 @@
+{
+  "date": "2026-10-07",
+  "scope": "Windows clean release first launch",
+  "archive": "output/release/nadou-ai-2026.10.06.zip",
+  "installation": "offline requirements.lock install in isolated extraction",
+  "dependency_check": "exit 0",
+  "automatic_start": "run.bat without marker installed dependencies, created marker, and served HTTP 200 on 127.0.0.1:3000",
+  "python": "3.10.11",
+  "batch_line_endings": "all tracked Windows .bat files use CRLF",
+  "core_regression": {
+    "python": 441,
+    "javascript": 198
+  },
+  "notes": [
+    "No private API/.env or user data was copied into the isolated directory.",
+    "The temporary process was terminated after the HTTP check."
+  ],
+  "public_file_count": 473,
+  "marker_contract": "marker stores Python version and requirements.lock SHA-256; changes trigger reinstallation"
+}

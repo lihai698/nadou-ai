@@ -1,6 +1,9 @@
 @echo off
 cd /d "%~dp0"
 
+set "NO_PAUSE=0"
+if /i "%~1"=="--no-pause" set "NO_PAUSE=1"
+
 echo ============================================
 echo   Install Dependencies
 echo ============================================
@@ -16,7 +19,7 @@ if exist "%PYEXE%" (
     if errorlevel 1 (
         echo [ERROR] Python not found.
         echo Please put the extracted python folder in the same directory.
-        pause
+        if "%NO_PAUSE%"=="0" pause
         exit /b 1
     )
     set "PYEXE=python"
@@ -33,14 +36,14 @@ if errorlevel 1 (
         powershell -Command "Invoke-WebRequest -Uri 'https://bootstrap.pypa.io/get-pip.py' -OutFile '%~dp0get-pip.py'" 2>nul
         if not exist "%~dp0get-pip.py" (
             echo [ERROR] Failed to download get-pip.py. Check network connection.
-            pause
+            if "%NO_PAUSE%"=="0" pause
             exit /b 1
         )
     )
     "%PYEXE%" "%~dp0get-pip.py" --quiet
     if errorlevel 1 (
         echo [ERROR] Failed to install pip.
-        pause
+        if "%NO_PAUSE%"=="0" pause
         exit /b 1
     )
     echo [OK] pip installed.
@@ -60,13 +63,19 @@ echo [3/3] Offline failed, trying online install...
 if errorlevel 1 (
     echo.
     echo [ERROR] Install failed. Check your network connection.
-    pause
+    if "%NO_PAUSE%"=="0" pause
     exit /b 1
 )
 
 :done
+"%PYEXE%" "%~dp0tools\dependency_marker.py" --write
+if errorlevel 1 (
+    echo [ERROR] Failed to write the dependency installation marker.
+    if "%NO_PAUSE%"=="0" pause
+    exit /b 1
+)
 echo.
 echo ============================================
 echo   Done. Run run.bat to launch the server.
 echo ============================================
-pause
+if "%NO_PAUSE%"=="0" pause

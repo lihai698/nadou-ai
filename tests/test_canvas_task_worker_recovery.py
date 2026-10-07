@@ -100,6 +100,61 @@ class CanvasTaskWorkerRecoveryTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(main.CANVAS_TASKS[task_id]["status"], "failed")
         self.assertIn("运行状态无法保存", main.CANVAS_TASKS[task_id]["error"])
 
+    async def test_comfy_result_stays_available_when_final_record_write_raises(self):
+        task_id = "canvas_comfy_worker_final_write_fail_123456789"
+        task = self._record(task_id, "comfy")
+        payload = main.GenerateRequest(prompt="测试", workflow_json="test-only.json")
+        writes = []
+        real_write = main._write_canvas_task_record
+
+        def fail_final_write(value, *, required=False):
+            writes.append(value.get("status"))
+            if value.get("status") == "succeeded":
+                raise OSError("模拟最终记录写入失败")
+            return real_write(value, required=required)
+
+        with patch.object(main, "_write_canvas_task_record", side_effect=fail_final_write), patch.object(
+            main, "generate", return_value={"images": ["/assets/output/recovered.png"]}
+        ):
+            await main._run_canvas_comfy_task(task_id, payload)
+
+        self.assertEqual(writes, ["running", "succeeded"])
+        self.assertEqual(main.CANVAS_TASKS[task_id]["status"], "succeeded")
+        self.assertEqual(
+            main.CANVAS_TASKS[task_id]["result"]["images"],
+            ["/assets/output/recovered.png"],
+        )
+        saved = json.loads(Path(self.temp.name, f"{task_id}.json").read_text(encoding="utf-8"))
+        self.assertEqual(saved["status"], "running")
+
+    async def test_image_result_stays_available_when_final_record_write_raises(self):
+        task_id = "canvas_img_worker_final_write_fail_123456789"
+        self._record(task_id, "online-image")
+        payload = main.OnlineImageRequest(prompt="测试", provider_id="test-only")
+        writes = []
+        real_write = main._write_canvas_task_record
+
+        def fail_final_write(value, *, required=False):
+            writes.append(value.get("status"))
+            if value.get("status") == "succeeded":
+                raise OSError("模拟最终记录写入失败")
+            return real_write(value, required=required)
+
+        with patch.object(main, "_write_canvas_task_record", side_effect=fail_final_write), patch.object(
+            main, "build_online_image_result", return_value={"images": ["/assets/output/recovered.png"]}
+        ) as generate:
+            await main._run_canvas_image_task(task_id, payload)
+
+        generate.assert_called_once()
+        self.assertEqual(writes, ["running", "succeeded"])
+        self.assertEqual(main.CANVAS_TASKS[task_id]["status"], "succeeded")
+        self.assertEqual(
+            main.CANVAS_TASKS[task_id]["result"]["images"],
+            ["/assets/output/recovered.png"],
+        )
+        saved = json.loads(Path(self.temp.name, f"{task_id}.json").read_text(encoding="utf-8"))
+        self.assertEqual(saved["status"], "running")
+
 
 if __name__ == "__main__":
     unittest.main()

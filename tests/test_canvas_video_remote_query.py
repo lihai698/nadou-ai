@@ -119,6 +119,45 @@ class CanvasVideoRemoteQueryTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(body["remote"]["task_id"], "rh-remote-123")
         self.assertTrue(body["remote"]["query_supported"])
 
+    async def test_refresh_explicit_remote_failure_persists_failed_without_resubmission(self):
+        task_id = "canvas_video_refresh_failed_123456"
+        main.write_canvas_video_task(self.task(task_id))
+        observation = main.observe_remote_task(
+            {"status": "FAILED", "task_id": "rh-remote-123", "error": "上游拒绝生成"},
+            operation="query",
+        )
+        with patch.object(main, "get_api_provider_exact", return_value={"id": "runninghub"}), patch.object(
+            main,
+            "query_runninghub_video_task_once",
+            new=AsyncMock(return_value=(observation, [])),
+        ), patch.object(main, "canvas_video", new=AsyncMock(side_effect=AssertionError("must not submit"))):
+            response = await self.client.post(f"/api/canvas-video-tasks/{task_id}/refresh")
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["status"], "failed")
+        self.assertIn("上游拒绝生成", body["error"])
+        self.assertEqual(body["remote"]["task_id"], "rh-remote-123")
+        self.assertTrue(body["remote"]["remote_confirmed"])
+
+    async def test_refresh_save_failure_keeps_unknown_record_and_remote_id(self):
+        task_id = "canvas_video_refresh_savefail_123456"
+        main.write_canvas_video_task(self.task(task_id))
+        observation = main.observe_remote_task(
+            {"status": "COMPLETED", "task_id": "rh-remote-123", "videos": ["/output/safe.mp4"]},
+            operation="query",
+        )
+        with patch.object(main, "get_api_provider_exact", return_value={"id": "runninghub"}), patch.object(
+            main,
+            "query_runninghub_video_task_once",
+            new=AsyncMock(return_value=(observation, ["/output/safe.mp4"])),
+        ), patch.object(main, "write_canvas_video_task", side_effect=OSError("synthetic disk failure")):
+            response = await self.client.post(f"/api/canvas-video-tasks/{task_id}/refresh")
+        self.assertEqual(response.status_code, 503)
+        saved = main.read_canvas_video_task(task_id)
+        self.assertEqual(saved["status"], "unknown")
+        self.assertEqual(saved["remote"]["task_id"], "rh-remote-123")
+        self.assertIsNone(saved["result"])
+
     async def test_refresh_without_remote_id_returns_conflict(self):
         task_id = "canvas_video_refresh_noid_1234567"
         record = self.task(task_id)

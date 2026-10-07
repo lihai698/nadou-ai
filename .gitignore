@@ -5,6 +5,7 @@
 /data/
 /assets/
 /output/
+.nadou-dependencies.ok
 /history.json
 __pycache__/
 *.py[cod]

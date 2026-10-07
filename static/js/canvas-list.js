@@ -59,6 +59,9 @@ const trashBadge = document.getElementById('trashBadge');
 const trashPanel = document.getElementById('trashPanel');
 const trashListEl = document.getElementById('trashList');
 const trashCloseBtn = document.getElementById('trashClose');
+const trashSelectAll = document.getElementById('trashSelectAll');
+const trashRestoreSelectedBtn = document.getElementById('trashRestoreSelected');
+const trashRestoreSelectedLabel = document.getElementById('trashRestoreSelectedLabel');
 const newProjectBtn = document.getElementById('newProjectBtn');
 const newProjectRow = document.getElementById('newProjectRow');
 const newProjectInput = document.getElementById('newProjectInput');
@@ -75,6 +78,8 @@ const statusEl = document.getElementById('boardStatus');
 let projects = [];
 let canvases = [];          // all canvases across projects
 let deletedCanvases = [];
+const selectedTrashIds = new Set();
+let trashBusy = false;
 let currentProjectId = rememberedProjectId();
 let pendingDeleteProjectId = null;
 let statusTimer = null;
@@ -136,9 +141,11 @@ async function loadAll(){
         renderBoard();
         resetView();
         refreshTrashCount();
+        return true;
     } catch(e){
         console.error(e);
         setStatus(L('加载失败','Load failed'));
+        return false;
     }
 }
 
@@ -649,23 +656,39 @@ async function openTrashView(){
     await loadTrash();
 }
 function closeTrashView(){
+    if(trashBusy) return;
     trashEntryBtn.classList.remove('active');
     trashPanel.classList.remove('active');
+    selectedTrashIds.clear();
+    syncTrashSelectionControls();
 }
 async function loadTrash(){
     try {
         const res = await fetch('/api/canvases/trash');
         if(!res.ok) throw new Error('trash load failed');
         const data = await res.json();
-        deletedCanvases = data.canvases || [];
+        if(!Array.isArray(data.canvases)) throw new Error('trash load returned invalid data');
+        deletedCanvases = data.canvases;
+        const currentIds = new Set(deletedCanvases.map(c => c.id));
+        for(const id of selectedTrashIds) if(!currentIds.has(id)) selectedTrashIds.delete(id);
         renderTrash();
         const n = deletedCanvases.length;
         trashBadge.textContent = String(n);
         trashBadge.classList.toggle('visible', n > 0);
-    } catch(e){ console.error(e); setStatus(L('加载回收站失败','Load trash failed')); }
+        return true;
+    } catch(e){ console.error(e); setStatus(L('加载回收站失败','Load trash failed')); return false; }
+}
+function syncTrashSelectionControls(){
+    const count = selectedTrashIds.size;
+    trashSelectAll.checked = !!deletedCanvases.length && count === deletedCanvases.length;
+    trashSelectAll.indeterminate = count > 0 && count < deletedCanvases.length;
+    trashSelectAll.disabled = trashBusy || !deletedCanvases.length;
+    trashRestoreSelectedBtn.disabled = trashBusy || !count;
+    trashRestoreSelectedLabel.textContent = `${L('恢复所选','Restore selected')} (${count})`;
 }
 function renderTrash(){
     trashListEl.innerHTML = '';
+    syncTrashSelectionControls();
     if(!deletedCanvases.length){
         const empty = document.createElement('div');
         empty.className = 'ws-trash-empty';
@@ -679,10 +702,12 @@ function renderTrash(){
         const card = document.createElement('div');
         card.className = 'ws-trash-card';
         card.dataset.canvasId = c.id;
+        card.classList.toggle('selected', selectedTrashIds.has(c.id));
         card.innerHTML = `
             <div class="ws-card-top">
                 <span class="ws-card-icon">${renderCanvasIcon(isSmart && /[^\x00-\x7F]/.test(c.icon || '') ? 'sparkles' : c.icon, 17)}</span>
                 <span class="ws-card-kind ${isSmart ? 'smart' : 'classic'}">${isSmart ? L('智能','Smart') : L('普通','Classic')}</span>
+                <label class="ws-trash-select"><input type="checkbox" ${selectedTrashIds.has(c.id) ? 'checked' : ''} ${trashBusy ? 'disabled' : ''} aria-label="${escapeAttr(L('选择画布：','Select canvas: ') + (c.title || ''))}"></label>
             </div>
             <div class="ws-card-title">${escapeHtml(c.title)}</div>
             <div class="ws-card-meta"><span class="ws-card-nodes">${escapeHtml(projName)}</span><span class="ws-card-meta-dot"></span><span class="ws-card-time">${formatCanvasTime(c.deleted_at)}</span></div>
@@ -701,25 +726,76 @@ function renderTrash(){
         card.querySelector('.ws-trash-act.purge').onclick = () => card.classList.add('confirming');
         card.querySelector('.ws-trash-confirm-yes').onclick = () => purgeCanvas(c.id);
         card.querySelector('.ws-trash-confirm-no').onclick = () => card.classList.remove('confirming');
+        card.querySelector('.ws-trash-select input').onchange = event => {
+            if(event.target.checked) selectedTrashIds.add(c.id);
+            else selectedTrashIds.delete(c.id);
+            card.classList.toggle('selected', event.target.checked);
+            syncTrashSelectionControls();
+        };
+        card.querySelectorAll('button').forEach(button => { button.disabled = trashBusy; });
         trashListEl.appendChild(card);
     });
     refreshIcons();
 }
 async function restoreCanvas(id){
+    if(trashBusy) return;
+    trashBusy = true;
+    renderTrash();
     try {
         const res = await fetch(`/api/canvases/${encodeURIComponent(id)}/restore`, { method: 'POST' });
         if(!res.ok) throw new Error('restore failed');
         deletedCanvases = deletedCanvases.filter(c => c.id !== id);
-        await loadAll();           // restored canvas returns to its stored project
-        renderTrash();
-        setStatus(L('已恢复','Restored'));
+        selectedTrashIds.delete(id);
+        const boardLoaded = await loadAll(); // restored canvas returns to its stored project
+        const trashLoaded = await loadTrash();
+        setStatus(boardLoaded && trashLoaded
+            ? L('已恢复','Restored')
+            : L('已恢复，但列表刷新失败；请手动刷新','Restored, but list refresh failed; refresh manually'));
     } catch(e){ console.error(e); setStatus(L('恢复失败','Restore failed')); }
+    finally { trashBusy = false; renderTrash(); }
+}
+async function restoreSelectedCanvases(){
+    if(trashBusy || !selectedTrashIds.size) return;
+    const ids = [...selectedTrashIds];
+    trashBusy = true;
+    renderTrash();
+    let restored = 0;
+    let failed = 0;
+    try {
+        for(const id of ids){
+            try {
+                const res = await fetch(`/api/canvases/${encodeURIComponent(id)}/restore`, { method:'POST' });
+                if(!res.ok) throw new Error(`restore failed: ${res.status}`);
+                restored++;
+                selectedTrashIds.delete(id);
+                deletedCanvases = deletedCanvases.filter(c => c.id !== id);
+            } catch(e){
+                failed++;
+                console.error(e);
+            }
+        }
+        const boardLoaded = restored ? await loadAll() : true;
+        const trashLoaded = await loadTrash();
+        const nextStep = selectedTrashIds.size
+            ? L('可重试剩余项', 'retry remaining')
+            : L('请检查结果', 'check the result');
+        setStatus(!boardLoaded || !trashLoaded
+            ? L(`已恢复 ${restored} 个，失败 ${failed} 个；列表刷新失败，请手动刷新`, `${restored} restored, ${failed} failed; list refresh failed`)
+            : failed
+                ? L(`已恢复 ${restored} 个，失败 ${failed} 个；${nextStep}`, `${restored} restored, ${failed} failed; ${nextStep}`)
+                : L(`已恢复 ${restored} 个画布`, `${restored} canvases restored`));
+    } finally {
+        trashBusy = false;
+        renderTrash();
+    }
 }
 async function purgeCanvas(id){
+    if(trashBusy) return;
     try {
         const res = await fetch(`/api/canvases/${encodeURIComponent(id)}/purge`, { method: 'DELETE' });
         if(!res.ok) throw new Error('purge failed');
         deletedCanvases = deletedCanvases.filter(c => c.id !== id);
+        selectedTrashIds.delete(id);
         renderTrash();
         const n = deletedCanvases.length;
         trashBadge.textContent = String(n);
@@ -758,6 +834,13 @@ trashEntryBtn.addEventListener('click', () => {
     else openTrashView();
 });
 trashCloseBtn.addEventListener('click', closeTrashView);
+trashSelectAll.addEventListener('change', () => {
+    if(trashBusy) return;
+    selectedTrashIds.clear();
+    if(trashSelectAll.checked) deletedCanvases.forEach(c => selectedTrashIds.add(c.id));
+    renderTrash();
+});
+trashRestoreSelectedBtn.addEventListener('click', restoreSelectedCanvases);
 
 // close card menu when clicking outside
 document.addEventListener('mousedown', e => {
