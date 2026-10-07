@@ -100,11 +100,17 @@ def github_tree():
     return result.get("tree", [])
 
 
-def git_blob_sha(relative, path):
-    # Let Git apply the same line-ending filters it uses when publishing.
-    return subprocess.check_output(
-        ["git", "hash-object", "--path", relative, str(path)], cwd=ROOT, text=True
-    ).strip()
+def git_index_snapshot():
+    """Compare against Git's indexed bytes; Windows checkout line endings may differ."""
+    raw = subprocess.check_output(["git", "ls-files", "-s", "-z"], cwd=ROOT)
+    indexed = {}
+    for entry in raw.split(b"\0"):
+        if entry:
+            metadata, relative = entry.split(b"\t", 1)
+            indexed[relative.decode("utf-8", "surrogateescape")] = metadata.split()[1].decode("ascii")
+    changed = subprocess.check_output(["git", "diff", "--name-only", "-z"], cwd=ROOT)
+    modified = {part.decode("utf-8", "surrogateescape") for part in changed.split(b"\0") if part}
+    return indexed, modified
 
 
 def check_release(files, allow_current_version=False, preflight=False):
@@ -143,14 +149,20 @@ def check_release(files, allow_current_version=False, preflight=False):
         if "main.py" not in remote_files or "static/index.html" not in remote_files:
             raise ValueError("目标仓库已有另一套程序，不能覆盖其 main 分支")
         if notes["update_mode"] == "in_app":
+            indexed, modified = git_index_snapshot()
             changed = []
             for relative, path in files:
-                if relative in {"main.py", "VERSION"} or relative.startswith("static/"):
+                # Existing clients only replace runtime files. Release docs,
+                # tests and the release builder do not affect installed behavior.
+                if (relative in {"main.py", "VERSION", "tools/prepare-release.py"}
+                        or relative.startswith(("static/", "docs/", "tests/"))):
                     continue
-                if remote_files.get(relative) != git_blob_sha(relative, path):
+                if relative in modified or remote_files.get(relative) != indexed.get(relative):
                     changed.append(relative)
             for relative in remote_files:
-                if included(relative) and relative not in paths and relative not in {"main.py", "VERSION"} and not relative.startswith("static/"):
+                if (included(relative) and relative not in paths
+                        and relative not in {"main.py", "VERSION", "tools/prepare-release.py"}
+                        and not relative.startswith(("static/", "docs/", "tests/"))):
                     changed.append(relative)
             if changed:
                 raise ValueError("这些文件不由界面更新，必须使用 full_install：" + ", ".join(sorted(set(changed))[:12]))
@@ -165,8 +177,8 @@ def check_release(files, allow_current_version=False, preflight=False):
     return version, notes
 
 
-def build_release(files, version, notes):
-    parent = ROOT / "output" / "release"
+def build_release(files, version, notes, parent=None):
+    parent = Path(parent) if parent else ROOT / "output" / "release"
     target = parent / f"nadou-ai-{version}"
     archive = parent / f"nadou-ai-{version}.zip"
     notes_path = parent / f"nadou-ai-{version}-notes.md"
@@ -197,6 +209,7 @@ def main():
     parser.add_argument("--build", action="store_true", help="通过检查后生成完整目录和 ZIP")
     parser.add_argument("--allow-current-version", action="store_true", help="仅供已推送同一版本的发布工作流使用")
     parser.add_argument("--preflight", action="store_true", help="在创建 GitHub 仓库前检查本地发布文件")
+    parser.add_argument("--output-dir", type=Path, help="指定新的发布输出目录，避免覆盖已有候选包")
     args = parser.parse_args()
     files = source_files()
     version, notes = check_release(
@@ -204,7 +217,7 @@ def main():
     )
     print(f"发布检查通过：{version}，{len(files)} 个文件，更新模式 {notes['update_mode']}")
     if args.build:
-        target, archive, notes_path = build_release(files, version, notes)
+        target, archive, notes_path = build_release(files, version, notes, args.output_dir)
         print(f"干净源码目录：{target}")
         print(f"完整安装包：{archive}")
         print(f"发布说明：{notes_path}")

@@ -947,6 +947,8 @@
         .update-modal-summary.ok .update-modal-dot { background:#22c55e; }
         .update-modal-summary.warn .update-modal-dot { background:#f59e0b; }
         .update-modal-summary.fail .update-modal-dot { background:#ef4444; }
+        .update-download-progress { margin-top:12px; padding:12px; border-radius:8px; background:#111827; color:#e5e7eb; font:12px/1.5 Consolas,monospace; }
+        .update-download-progress progress { display:block; width:100%; height:12px; margin-top:8px; accent-color:#22c55e; }
 
         /* 更新弹窗：双卡片需要更宽的面板，避免左右布局被裁剪 */
         #project-update-modal .studio-modal-panel { width:min(880px, 100%); max-height:min(840px, calc(100vh - 48px)); }
@@ -1729,6 +1731,10 @@
                         <span id="project-update-summary-text"></span>
                     </div>
                 </div>
+                <div id="update-download-progress" class="update-download-progress" hidden role="status" aria-live="polite">
+                    <span id="update-download-progress-text">准备下载...</span>
+                    <progress id="update-download-progress-bar" max="100" value="0"></progress>
+                </div>
             </div>
             <div class="studio-modal-actions">
                 <button id="connectivity-test-btn" class="studio-modal-btn" type="button" onclick="runUpdateConnectivityTest()">
@@ -2147,6 +2153,10 @@
         });
 
         function openProjectPage() {
+            if(document.getElementById('github-entry-btn')?.classList.contains('update-available')) {
+                openProjectUpdateModal();
+                return;
+            }
             window.open(PROJECT_URL, '_blank', 'noopener');
         }
 
@@ -2204,15 +2214,8 @@
             const text = document.getElementById('update-now-text');
             if(!btn || !text || !btn.classList.contains('show')) return;
             const remoteVersion = document.getElementById('github-entry-btn')?.dataset.remoteVersion || '';
-            const updateMode = document.getElementById('github-entry-btn')?.dataset.updateMode || 'full_install';
             const isEn = window.StudioI18n?.lang?.() === 'en';
             text.removeAttribute('data-i18n');
-            if(updateMode === 'full_install') {
-                btn.classList.add('full-install');
-                text.textContent = isEn ? 'Get full installer' : '下载完整安装包';
-                btn.setAttribute('aria-label', text.textContent);
-                return;
-            }
             btn.classList.remove('full-install');
             if(remoteVersion) {
                 const prefix = isEn ? 'Update to' : '更新到';
@@ -2244,9 +2247,7 @@
                 ? `Current ${versionLabel(gitBtn.dataset.localVersion || appInfo.version)} · latest ${versionLabel(remoteVersion)}`
                 : `当前 ${versionLabel(gitBtn.dataset.localVersion || appInfo.version)} · 最新 ${versionLabel(remoteVersion)}`;
             const updateBtn = document.getElementById('update-now-btn');
-            if(updateBtn) updateBtn.title = gitBtn.dataset.updateMode === 'in_app'
-                ? (isEn ? `Update to ${versionLabel(remoteVersion)} and restart` : `更新到 ${versionLabel(remoteVersion)} 并自动重启`)
-                : (isEn ? 'Open the full installer download page' : '打开完整安装包下载页');
+            if(updateBtn) updateBtn.title = isEn ? `Update to ${versionLabel(remoteVersion)} and restart` : `更新到 ${versionLabel(remoteVersion)} 并自动重启`;
             refreshUpdateButtonText();
         }
 
@@ -2432,8 +2433,8 @@
                 }
             });
             if(copyEl) copyEl.textContent = updateUiText(
-                `将从 ${sourceName} 更新 main.py、VERSION 和 static 文件。更新前会自动备份，更新完成后后端会自动重启。当前 ${versionLabel(localVersion)}，最新 ${versionLabel(remoteVersion || localVersion)}。`,
-                `This updates main.py, VERSION, and static files from ${sourceName}. A backup is created first, then the backend restarts automatically. Current ${versionLabel(localVersion)}, latest ${versionLabel(remoteVersion || localVersion)}.`
+                `将从 ${sourceName} 下载并校验完整版本，自动备份程序文件、安装并重启。当前 ${versionLabel(localVersion)}，最新 ${versionLabel(remoteVersion || localVersion)}。`,
+                `The complete release will be downloaded, verified, backed up, installed and restarted. Current ${versionLabel(localVersion)}, latest ${versionLabel(remoteVersion || localVersion)}.`
             );
             if(testText) testText.textContent = updateConnectivityResult ? updateUiText('重新测试', 'Retest') : updateUiText('测试连通性', 'Test connectivity');
             if(cancelText) cancelText.textContent = updateUiText('取消', 'Cancel');
@@ -2506,11 +2507,7 @@
         });
 
         async function runProjectUpdate() {
-            if(document.getElementById('github-entry-btn')?.dataset.updateMode !== 'in_app') {
-                window.open(`${PROJECT_URL}/releases`, '_blank', 'noopener');
-                return;
-            }
-            await confirmProjectUpdate();
+            openProjectUpdateModal();
         }
 
         function computeConnectivitySources(results) {
@@ -2663,46 +2660,59 @@
             if(testBtn) testBtn.disabled = true;
             if(text) text.textContent = isEn ? 'Updating...' : '更新中...';
             if(confirmText) confirmText.textContent = isEn ? 'Updating...' : '更新中...';
-            const sourceName = updateSourceLabel();
-            setUpdateSummary('warn', isEn ? 'Updating' : '正在更新', isEn ? `Downloading files from ${sourceName} and creating a local backup.` : `正在从 ${sourceName} 下载文件，并创建本地备份。`);
-            // 客户端兜底超时：即使后端异常挂起，UI 也能恢复，不会永远停在「更新中」
-            const ac = new AbortController();
-            const killer = setTimeout(() => ac.abort(), 300000);
+            const progressBox = document.getElementById('update-download-progress');
+            const progressText = document.getElementById('update-download-progress-text');
+            const progressBar = document.getElementById('update-download-progress-bar');
+            if(progressBox) progressBox.hidden = false;
+            if(progressText) progressText.textContent = isEn ? 'Preparing download...' : '准备下载...';
+            if(progressBar) { progressBar.value = 0; progressBar.removeAttribute('value'); }
+            setUpdateSummary('warn', isEn ? 'Updating' : '正在更新', isEn ? 'Downloading the complete release.' : '正在下载完整版本。');
             try {
-                const res = await fetch('/api/update-from-github', {
-                    method:'POST',
-                    headers:{'Content-Type':'application/json'},
-                    body:JSON.stringify({ auto_restart:true, restart_delay:3 }),
-                    signal:ac.signal
-                });
+                const res = await fetch('/api/update-job', { method:'POST' });
                 const data = await res.json().catch(() => ({}));
                 if(!res.ok) throw new Error(data.detail || (isEn ? 'Update failed' : '更新失败'));
-                if(data.update_notes) setProjectUpdateNotes(data.update_notes);
-                const restarting = data.restart_scheduled;
-                setUpdateSummary(
-                    'ok',
-                    isEn ? 'Update complete' : '更新完成',
-                    (restarting
-                        ? (isEn
-                            ? `Updated ${data.count || 0} files. The backend will restart in about 3 seconds; this page will reload when it returns.`
-                            : `已更新 ${data.count || 0} 个文件。后端将在约 3 秒后自动重启，本页面会在恢复后自动刷新。`)
-                        : (isEn
-                            ? `Updated ${data.count || 0} files. Please restart the backend, then refresh this page.`
-                            : `已更新 ${data.count || 0} 个文件。请重启后端，然后刷新页面。`))
-                );
-                document.getElementById('github-entry-btn')?.classList.remove('update-available');
-                btn?.classList.remove('show');
-                setProjectVersionBadge(data.version || document.getElementById('github-entry-btn')?.dataset.remoteVersion || appInfo.version);
-                if(restarting) waitForBackendAndReload();
-                else if(document.getElementById('project-update-modal')?.hidden) alert(isEn ? 'Update completed. Please restart the backend.' : '更新完成，请手动重启服务。');
+                const deadline = Date.now() + 20 * 60 * 1000;
+                let lastPhase = '';
+                while(Date.now() < deadline) {
+                    await new Promise(resolve => setTimeout(resolve, 700));
+                    let state;
+                    try {
+                        const check = await fetch(`/api/update-job/${encodeURIComponent(data.job_id)}`, {cache:'no-store'});
+                        if(check.ok) state = await check.json();
+                    } catch(e) { /* 服务退出安装时暂时不可访问。 */ }
+                    if(!state) {
+                        if(lastPhase === 'installing' || lastPhase === 'restarting') {
+                            if(progressText) progressText.textContent = isEn ? 'Installing and restarting...' : '正在安装并重启...';
+                        }
+                        continue;
+                    }
+                    lastPhase = state.phase || '';
+                    if(state.phase === 'failed') throw new Error(state.error || (isEn ? 'Update failed' : '更新失败'));
+                    if(state.phase === 'downloading') {
+                        const mb = bytes => (Number(bytes || 0) / 1048576).toFixed(1);
+                        const percent = state.total ? Math.min(100, Math.floor(state.downloaded / state.total * 100)) : 0;
+                        if(progressText) progressText.textContent = state.total
+                            ? `${isEn ? 'Downloading' : '下载中'} ${percent}% · ${mb(state.downloaded)} / ${mb(state.total)} MB`
+                            : `${isEn ? 'Downloaded' : '已下载'} ${mb(state.downloaded)} MB`;
+                        if(progressBar) { if(state.total) progressBar.value = percent; else progressBar.removeAttribute('value'); }
+                    } else if(state.phase === 'verifying') {
+                        if(progressText) progressText.textContent = isEn ? 'Download complete. Verifying files...' : '下载完成，正在校验文件...';
+                        if(progressBar) progressBar.value = 100;
+                    } else if(state.phase === 'installing' || state.phase === 'restarting') {
+                        if(progressText) progressText.textContent = isEn ? 'Installing and restarting...' : '正在安装并重启...';
+                    } else if(state.phase === 'complete') {
+                        if(progressText) progressText.textContent = isEn ? 'Installed. Loading the new version...' : '安装完成，正在打开新版本...';
+                    }
+                    if(['installing', 'restarting', 'complete'].includes(state.phase)) {
+                        await waitForBackendAndReload(data.version, data.job_id);
+                    }
+                }
+                throw new Error(isEn ? 'Update timed out. Check the update status.' : '更新等待超时，请检查更新状态。');
             } catch(e) {
-                const msg = (e && e.name === 'AbortError')
-                    ? (isEn ? 'Update timed out. Check your network, then retry.' : '更新超时。请检查网络后重试。')
-                    : describeNetworkError(e, isEn);
+                const msg = String(e?.message || e || (isEn ? 'Update failed' : '更新失败'));
                 setUpdateSummary('fail', isEn ? 'Update failed' : '更新失败', msg);
                 if(document.getElementById('project-update-modal')?.hidden) alert((isEn ? 'Update failed: ' : '更新失败：') + msg);
             } finally {
-                clearTimeout(killer);
                 projectUpdateRunning = false;
                 if(btn) btn.disabled = false;
                 if(confirmBtn) confirmBtn.disabled = false;
@@ -2712,16 +2722,26 @@
                 refreshUpdateButtonText();
             }
         }
-        async function waitForBackendAndReload() {
-            const deadline = Date.now() + 90 * 1000;
-            await new Promise(r => setTimeout(r, 4000));
+        async function waitForBackendAndReload(expectedVersion, jobId = '') {
+            const deadline = Date.now() + 180 * 1000;
+            await new Promise(r => setTimeout(r, 3500));
             while(Date.now() < deadline) {
+                let failedReason = '';
                 try {
                     const r = await fetch('/api/app-info', { cache:'no-store' });
-                    if(r.ok) { location.reload(); return; }
+                    if(r.ok && (!expectedVersion || (await r.json()).version === expectedVersion)) { location.reload(); return; }
+                    if(jobId) {
+                        const status = await fetch(`/api/update-job/${encodeURIComponent(jobId)}`, {cache:'no-store'});
+                        if(status.ok) {
+                            const state = await status.json();
+                            if(state.phase === 'failed') failedReason = state.error || '安装失败';
+                        }
+                    }
                 } catch {}
+                if(failedReason) throw new Error(failedReason);
                 await new Promise(r => setTimeout(r, 1500));
             }
+            throw new Error('等待新版本启动超时，请检查服务窗口和更新记录。');
         }
         async function rollbackProjectUpdate() {
             const isEn = window.StudioI18n?.lang?.() === 'en';
@@ -2761,7 +2781,7 @@
                 alert(isEn
                     ? `Restored ${data.count || 0} files. A safety restore point was created, and the backend is restarting.`
                     : `已还原 ${data.count || 0} 个文件，当前版本已自动保存为新的恢复点。后端正在重启。`);
-                if(data.restart_scheduled) waitForBackendAndReload();
+                if(data.restart_scheduled) waitForBackendAndReload(data.version || target.from_version);
             } catch(e) {
                 alert((isEn ? 'Rollback failed: ' : '回滚失败：') + describeNetworkError(e, isEn));
             }
@@ -2816,8 +2836,7 @@
                 }
                 if(manual) {
                     if(hasUpdate) {
-                        if(best.update_notes?.update_mode === 'in_app') openProjectUpdateModal();
-                        else window.open(`${PROJECT_URL}/releases`, '_blank', 'noopener');
+                        openProjectUpdateModal();
                     } else if(reachable) {
                         alert(isEn ? `You are on the latest version (${versionLabel(current)}).` : `已是最新版本（${versionLabel(current)}）。`);
                     } else {

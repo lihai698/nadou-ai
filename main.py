@@ -2693,6 +2693,257 @@ def update_from_github(req: UpdateRequest = UpdateRequest()):
             shutil.rmtree(staging_root, ignore_errors=True)
         UPDATE_LOCK.release()
 
+
+# The full-release updater is installed by one final in-app bridge release. The
+# helper runs outside Python so Windows can replace the bundled interpreter.
+FULL_UPDATE_MAX_BYTES = 1024 * 1024 * 1024
+FULL_UPDATE_MAX_FILES = 10000
+FULL_UPDATE_PUBLIC_DIRS = {".github", "API", "CLI", "backend", "docs", "packages", "python", "static", "tests", "tools", "workflows"}
+FULL_UPDATE_PUBLIC_ROOTS = {
+    ".gitignore", "LICENSE", "README.md", "VERSION", "requirements.lock", "requirements.txt",
+    "main.py", "get-pip.py", "run.bat", "安装依赖.bat", "mac-安装依赖.sh",
+    "mac-启动服务.sh", "mac-启动服务.command", "mac-修复权限.command",
+    "安装即梦CLI.bat", "安装即梦CLI.command", "登录即梦CLI.bat", "登录即梦CLI.command",
+    "备份恢复说明.md", "MAC-使用说明.md", "新手运行与使用教程.md", "运行说明.txt",
+}
+
+
+def full_update_path(value: str) -> str:
+    rel = str(value or "")
+    parts = rel.split("/")
+    if (not rel or "\\" in rel or ":" in rel or any(p in {"", ".", ".."} for p in parts)
+            or any(p.endswith((" ", ".")) or re.fullmatch(r"(?i)(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\..*)?", p) for p in parts)):
+        raise ValueError("发布包包含不安全路径")
+    if len(parts) == 1:
+        allowed = rel in FULL_UPDATE_PUBLIC_ROOTS
+    elif parts[0] == "API":
+        allowed = rel == "API/.env.example"
+    else:
+        allowed = parts[0] in FULL_UPDATE_PUBLIC_DIRS and not any(p.startswith(".") for p in parts[1:])
+    if not allowed:
+        raise ValueError(f"发布包包含非程序文件：{rel}")
+    return rel
+
+
+def full_update_status_path(job_id: str) -> str:
+    if not re.fullmatch(r"[0-9a-f]{32}", job_id):
+        raise ValueError("更新任务编号无效")
+    return os.path.join(DATA_DIR, "update_jobs", f"{job_id}.json")
+
+
+def write_full_update_status(job_id: str, **changes: Any) -> None:
+    path = full_update_status_path(job_id)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    try:
+        with open(path, "r", encoding="utf-8") as stream:
+            state = json.load(stream)
+    except (OSError, ValueError):
+        state = {"job_id": job_id}
+    state.update(changes)
+    write_json_atomic(path, state, ensure_ascii=False, indent=2)
+
+
+def verify_full_update_zip(archive_path: str, stage_dir: str, expected_version: str) -> List[str]:
+    """Validate every ZIP member and hash before exposing any file to the installer."""
+    with zipfile.ZipFile(archive_path) as bundle:
+        entries = bundle.infolist()
+        if len(entries) > FULL_UPDATE_MAX_FILES or sum(item.file_size for item in entries) > FULL_UPDATE_MAX_BYTES:
+            raise ValueError("发布包超出安全大小限制")
+        names = [item.filename for item in entries]
+        if len(names) != len({name.casefold() for name in names}) or "RELEASE_FILES.json" not in names:
+            raise ValueError("发布包清单缺失或包含重复路径")
+        manifest = json.loads(bundle.read("RELEASE_FILES.json"))
+        files = manifest.get("files") if isinstance(manifest, dict) else None
+        if not isinstance(manifest, dict) or manifest.get("version") != expected_version or not isinstance(files, dict):
+            raise ValueError("发布包版本或清单不匹配")
+        if not {"main.py", "VERSION", "static/index.html", "run.bat"}.issubset(files):
+            raise ValueError("发布包缺少启动所需文件")
+        if set(names) != set(files) | {"RELEASE_FILES.json"}:
+            raise ValueError("发布包文件与清单不一致")
+        os.makedirs(stage_dir, exist_ok=True)
+        for item in entries:
+            if item.is_dir() or ((item.external_attr >> 16) & 0o170000) == 0o120000:
+                raise ValueError("发布包不能包含目录项或符号链接")
+            rel = full_update_path(item.filename) if item.filename != "RELEASE_FILES.json" else item.filename
+            expected = files.get(rel)
+            if rel != "RELEASE_FILES.json" and not re.fullmatch(r"[0-9a-f]{64}", str(expected or "")):
+                raise ValueError("发布包哈希格式无效")
+            target = os.path.join(stage_dir, *rel.split("/"))
+            os.makedirs(os.path.dirname(target), exist_ok=True)
+            digest = hashlib.sha256()
+            with bundle.open(item) as source, open(target, "wb") as output:
+                for chunk in iter(lambda: source.read(1024 * 1024), b""):
+                    digest.update(chunk)
+                    output.write(chunk)
+            if rel != "RELEASE_FILES.json" and digest.hexdigest() != expected:
+                raise ValueError(f"发布包文件校验失败：{rel}")
+        with open(os.path.join(stage_dir, "VERSION"), encoding="utf-8") as source:
+            staged_version = source.read().strip()
+        if staged_version != expected_version:
+            raise ValueError("发布包 VERSION 不匹配")
+        with open(os.path.join(stage_dir, "main.py"), "rb") as source:
+            compile(source.read(), "main.py", "exec")
+        return sorted(files)
+
+
+def full_update_release(version: str) -> Tuple[str, str]:
+    if not re.fullmatch(r"[0-9]+(?:\.[0-9]+){2,4}", version):
+        raise ValueError("版本号格式无效")
+    release = github_json(f"https://api.github.com/repos/{GITHUB_REPO_SLUG}/releases/tags/v{version}")
+    name = f"nadou-ai-{version}.zip"
+    for asset in release.get("assets") or []:
+        url = str(asset.get("browser_download_url") or "")
+        if asset.get("name") == name and url == f"https://github.com/{GITHUB_REPO_SLUG}/releases/download/v{version}/{name}":
+            return url, name
+    raise RuntimeError("该版本尚无完整安装包，请稍后重试")
+
+
+def download_full_update(job_id: str, version: str, archive_path: str) -> None:
+    url, _ = full_update_release(version)
+    print(f"[更新] 开始下载 nadou ai {version} 完整安装包", flush=True)
+    with requests.get(url, headers={"User-Agent": "nadou-ai-updater"}, stream=True,
+                      timeout=(15, 60), proxies=urllib.request.getproxies() or None) as response:
+        response.raise_for_status()
+        total = int(response.headers.get("Content-Length") or 0)
+        if total > FULL_UPDATE_MAX_BYTES:
+            raise ValueError("下载文件超过安全大小限制")
+        received = 0
+        last_report = 0.0
+        last_console_percent = -5
+        last_console_bytes = 0
+        with open(archive_path, "wb") as output:
+            for chunk in response.iter_content(chunk_size=256 * 1024):
+                if not chunk:
+                    continue
+                received += len(chunk)
+                if received > FULL_UPDATE_MAX_BYTES:
+                    raise ValueError("下载文件超过安全大小限制")
+                output.write(chunk)
+                if time.monotonic() - last_report >= 0.2:
+                    write_full_update_status(job_id, phase="downloading", downloaded=received, total=total)
+                    last_report = time.monotonic()
+                percent = int(received * 100 / total) if total else 0
+                if (total and percent >= last_console_percent + 5) or (not total and received - last_console_bytes >= 5 * 1024 * 1024):
+                    print(f"[更新] 下载进度 {percent}% · {received / 1048576:.1f} / {total / 1048576:.1f} MB" if total
+                          else f"[更新] 已下载 {received / 1048576:.1f} MB", flush=True)
+                    last_console_percent = percent
+                    last_console_bytes = received
+        if total and received != total:
+            raise ValueError("下载不完整")
+        write_full_update_status(job_id, phase="verifying", downloaded=received, total=total)
+        print("[更新] 下载完成，正在校验发布文件", flush=True)
+
+
+def run_full_update(job_id: str, version: str) -> None:
+    staging = os.path.join(DATA_DIR, "update_staging", job_id)
+    try:
+        os.makedirs(staging, exist_ok=False)
+        archive = os.path.join(staging, "release.zip")
+        download_full_update(job_id, version, archive)
+        extracted = os.path.join(staging, "release")
+        files = verify_full_update_zip(archive, extracted, version)
+        print(f"[更新] {len(files)} 个文件校验通过，正在准备备份和安装", flush=True)
+        old_manifest = os.path.join(BASE_DIR, "RELEASE_FILES.json")
+        old_files = set()
+        if os.path.isfile(old_manifest):
+            with open(old_manifest, "r", encoding="utf-8") as stream:
+                old_data = json.load(stream)
+            old_files = {full_update_path(item) for item in old_data.get("files", {})}
+        backup = next_update_backup_dir("full-")
+        os.makedirs(backup, exist_ok=False)
+        plan = {
+            "base": BASE_DIR, "source": extracted, "backup": backup,
+            "status": full_update_status_path(job_id), "pid": os.getpid(),
+            "files": files + ["RELEASE_FILES.json"],
+            "remove": sorted(old_files - set(files)),
+            "version": version, "from_version": current_app_version(), "restart": True,
+        }
+        plan_path = os.path.join(staging, "plan.json")
+        write_json_atomic(plan_path, plan, ensure_ascii=False, indent=2)
+        helper = os.path.join(STATIC_DIR, "update-helper.ps1")
+        if not os.path.isfile(helper):
+            raise RuntimeError("缺少更新安装脚本")
+        staged_helper = os.path.join(staging, "update-helper.ps1")
+        shutil.copy2(helper, staged_helper)
+        write_full_update_status(job_id, phase="installing", downloaded=os.path.getsize(archive))
+        print("[更新] 安装过程将在新的黑色命令窗口继续，完成后自动重启项目", flush=True)
+        subprocess.Popen(
+            ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", staged_helper, "-PlanPath", plan_path],
+            creationflags=subprocess.CREATE_NEW_CONSOLE | subprocess.CREATE_NEW_PROCESS_GROUP,
+            close_fds=True,
+        )
+        UPDATE_LOCK.release()
+    except Exception as exc:
+        write_diagnostic(f"full update failed error={type(exc).__name__}: {exc}")
+        print(f"[更新] 失败：{exc}", flush=True)
+        write_full_update_status(job_id, phase="failed", error=str(exc)[:300])
+        if os.path.isdir(staging):
+            shutil.rmtree(staging, ignore_errors=True)
+        UPDATE_LOCK.release()
+
+
+@app.post("/api/update-job")
+def start_full_update():
+    if os.name != "nt":
+        raise HTTPException(status_code=409, detail="当前仅支持 Windows 界面内完整更新")
+    if not UPDATE_LOCK.acquire(blocking=False):
+        raise HTTPException(status_code=409, detail="正在更新中，请稍后再试")
+    try:
+        available = check_update()
+        if not available.get("update_available"):
+            raise HTTPException(status_code=409, detail="没有可安装的新版本")
+        version = str((available.get("latest") or {}).get("version") or "")
+        job_id = uuid.uuid4().hex
+        write_full_update_status(job_id, phase="preparing", version=version, downloaded=0, total=0)
+        Thread(target=run_full_update, args=(job_id, version), daemon=True).start()
+        return {"job_id": job_id, "version": version}
+    except Exception:
+        UPDATE_LOCK.release()
+        raise
+
+
+@app.get("/api/update-job/{job_id}")
+def get_full_update_status(job_id: str):
+    try:
+        with open(full_update_status_path(job_id), "r", encoding="utf-8") as stream:
+            return json.load(stream)
+    except (OSError, ValueError):
+        raise HTTPException(status_code=404, detail="更新任务不存在")
+
+
+def schedule_full_update_rollback(backup_dir: str, record: Dict[str, Any]) -> Dict[str, Any]:
+    original = record.get("existing")
+    if not isinstance(original, dict) or not original:
+        raise ValueError("完整更新恢复点无效")
+    files = sorted(full_update_path(rel) for rel, existed in original.items() if existed)
+    removed = sorted(full_update_path(rel) for rel, existed in original.items() if not existed)
+    if "main.py" not in files or "VERSION" not in files:
+        raise ValueError("恢复点缺少核心程序文件")
+    job_id = uuid.uuid4().hex
+    staging = os.path.join(DATA_DIR, "update_staging", job_id)
+    os.makedirs(staging, exist_ok=False)
+    helper = os.path.join(STATIC_DIR, "update-helper.ps1")
+    staged_helper = os.path.join(staging, "update-helper.ps1")
+    shutil.copy2(helper, staged_helper)
+    plan = {
+        "base": BASE_DIR, "source": backup_dir,
+        "backup": next_update_backup_dir("rollback-full-"),
+        "status": full_update_status_path(job_id), "pid": os.getpid(),
+        "files": files, "remove": removed,
+        "version": str(record.get("from_version") or ""),
+        "from_version": current_app_version(), "restart": True,
+    }
+    write_json_atomic(os.path.join(staging, "plan.json"), plan, ensure_ascii=False, indent=2)
+    write_full_update_status(job_id, phase="installing", version=plan["version"])
+    subprocess.Popen(
+        ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", staged_helper,
+         "-PlanPath", os.path.join(staging, "plan.json")],
+        creationflags=subprocess.CREATE_NEW_CONSOLE | subprocess.CREATE_NEW_PROCESS_GROUP,
+        close_fds=True,
+    )
+    return {"ok": True, "count": len(files) + len(removed), "restart_scheduled": True,
+            "restart_required": True, "version": plan["version"], "job_id": job_id}
+
 def list_update_backups() -> List[Dict[str, Any]]:
     root = update_backup_root()
     if not os.path.isdir(root):
@@ -2701,6 +2952,24 @@ def list_update_backups() -> List[Dict[str, Any]]:
     for name in sorted(os.listdir(root), reverse=True):
         bp = os.path.join(root, name)
         if not os.path.isdir(bp):
+            continue
+        full_record_path = os.path.join(bp, "full-update-backup.json")
+        if os.path.isfile(full_record_path):
+            try:
+                with open(full_record_path, "r", encoding="utf-8-sig") as stream:
+                    full_record = json.load(stream)
+                if not isinstance(full_record.get("existing"), dict):
+                    continue
+                items.append({
+                    "name": name, "file_count": count_regular_files(bp) - 1,
+                    "created_at": os.path.getmtime(bp), "kind": "full_update",
+                    "from_version": full_record.get("from_version") or "",
+                    "target_version": full_record.get("version") or "",
+                    "affected_file_count": len(full_record["existing"]),
+                    "affected_files": list(full_record["existing"])[:30],
+                })
+            except (OSError, ValueError, TypeError):
+                continue
             continue
         manifest = read_update_backup_manifest(bp)
         if manifest and manifest.get("state") != "ready":
@@ -2747,6 +3016,16 @@ def rollback_update(req: RollbackRequest):
             raise HTTPException(status_code=400, detail="备份路径不安全")
         if not os.path.isdir(backup_dir):
             raise HTTPException(status_code=404, detail="备份不存在")
+        full_record_path = os.path.join(backup_dir, "full-update-backup.json")
+        if os.path.isfile(full_record_path):
+            if os.name != "nt":
+                raise HTTPException(status_code=409, detail="完整版本恢复仅支持 Windows")
+            try:
+                with open(full_record_path, "r", encoding="utf-8-sig") as stream:
+                    return schedule_full_update_rollback(backup_dir, json.load(stream))
+            except Exception as exc:
+                write_diagnostic(f"full update rollback failed error={type(exc).__name__}")
+                raise HTTPException(status_code=500, detail="无法启动完整版本恢复，请检查恢复点") from exc
         manifest = read_update_backup_manifest(backup_dir)
         if manifest and manifest.get("state") != "ready":
             raise HTTPException(status_code=409, detail="备份尚未完整创建，不能还原")
