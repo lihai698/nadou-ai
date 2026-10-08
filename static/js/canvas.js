@@ -297,6 +297,7 @@ const gateTitleInput = document.getElementById('gateTitleInput');
 const gateConfirmBtn = document.getElementById('gateConfirmBtn');
 const gateCancelBtn = document.getElementById('gateCancelBtn');
 const backToManagerBtn = document.getElementById('backToManagerBtn');
+const clearCurrentCanvasBtn = document.getElementById('clearCurrentCanvasBtn');
 const currentCanvasTitle = document.getElementById('currentCanvasTitle');
 const currentCanvasTime = document.getElementById('currentCanvasTime');
 const outputLightbox = document.getElementById('outputLightbox');
@@ -397,6 +398,7 @@ const CANVAS_COLOR_OPTIONS = ['red','orange','amber','green','teal','blue','viol
 backToManagerBtn?.addEventListener('click', () => {
     window.location.href = canvasListUrlForProject(canvas?.project || requestedCanvasListProject() || rememberedCanvasListProject());
 });
+clearCurrentCanvasBtn?.addEventListener('click', clearCurrentCanvas);
 let localCanvasDirty = false;
 let savingCanvasNow = false;
 let saveCanvasAgain = false;
@@ -446,6 +448,7 @@ let promptTemplateQuery = '';
 let promptTemplateEditing = false;
 let canvasPromptTemplates = [];
 let canvasPromptTemplatesLoaded = false;
+let canvasAssistantTemplateCallback = null;
 let canvasPromptLibraries = [];
 let activePromptLibraryId = 'system';
 const CANVAS_PROMPT_TEMPLATE_GROUPS_KEY = 'canvas_prompt_template_groups_v1';
@@ -1498,6 +1501,10 @@ async function saveCanvas(){
         if(res.status === 409){
             const data = await res.json().catch(() => ({}));
             const remote = data.detail?.canvas || data.canvas;
+            if(remote && mergeCanvasAssistantChanges(remote)){
+                saveCanvasAgain = true;
+                return false;
+            }
             if(data.detail?.reason === 'meta_conflict'){
                 if(!remote || !Array.isArray(remote.nodes)) throw new Error('meta conflict response missing canvas');
                 canvas.title = remote.title;
@@ -2181,6 +2188,10 @@ async function syncRemoteCanvasNow(){
         if(!res.ok) throw new Error(tr('canvas.openFailed'));
         const data = await res.json();
         const remote = data.canvas;
+        if((localCanvasDirty || saveTimer || savingCanvasNow || saveCanvasAgain) && mergeCanvasAssistantChanges(remote)){
+            scheduleSave();
+            return;
+        }
         if(Number(remote?.updated_at || 0) >= Number(lastCanvasUpdatedAt || 0)){
             applyRemoteCanvasData(remote);
         }
@@ -2225,6 +2236,11 @@ function handleCanvasUpdatedMessage(data){
     if(data.canvas_id !== canvas.id) return;
     const remoteUpdatedAt = Number(data.updated_at || 0);
     if(remoteUpdatedAt && remoteUpdatedAt <= Number(lastCanvasUpdatedAt || 0)) return;
+    if(data.client_id === 'canvas-assistant'){
+        clearTimeout(remoteSyncTimer);
+        remoteSyncTimer = setTimeout(syncRemoteCanvasNow, savingCanvasNow ? 700 : 120);
+        return;
+    }
     clearTimeout(saveTimer);
     saveTimer = null;
     localCanvasDirty = false;
@@ -2247,6 +2263,51 @@ async function returnToCanvasManager(){
     refreshGateViewControls();
     await loadCanvasList(false);
     setCreateMode(false);
+}
+
+async function clearCurrentCanvas(){
+    if(!canvas || clearCurrentCanvasBtn?.disabled) return;
+    if(savingCanvasNow){ setStatus('正在保存，请稍后再清空'); return; }
+    const confirmed = window.confirm('确认清空当前画布？\n\n当前画布的节点、连线、日志和画布设置会被清除；能确认没有被其他位置引用的生成媒体与历史记录也会清理。此操作不能从回收站恢复。');
+    if(!confirmed) return;
+    clearCurrentCanvasBtn.disabled = true;
+    clearTimeout(saveTimer);
+    saveTimer = null;
+    try {
+        const res = await fetch(`/api/canvases/${encodeURIComponent(canvas.id)}/clear`, {
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({client_id:CLIENT_ID, base_updated_at:Number(lastCanvasUpdatedAt || canvas.updated_at || 0)})
+        });
+        const data = await res.json().catch(() => ({}));
+        if(!res.ok){
+            if(res.status === 409 && data.detail?.canvas) applyRemoteCanvasData(data.detail.canvas);
+            throw new Error(data.detail?.message || data.detail || '清空当前画布失败');
+        }
+        resetCascadeRuntimeState();
+        if(outputTimer){ clearInterval(outputTimer); outputTimer = null; }
+        try {
+            localStorage.removeItem(unsavedCanvasAcceptedTasksKey(canvas.id));
+            localStorage.removeItem(unknownCanvasSubmissionKey(canvas.id));
+        } catch(e) {}
+        canvas = {...(data.canvas || canvas), nodes:[], connections:[], logs:[], settings:{}};
+        nodes = [];
+        connections = [];
+        selected.clear();
+        localCanvasDirty = false;
+        lastCanvasUpdatedAt = Number(canvas.updated_at || Date.now());
+        viewport = localViewportForCanvas(canvas.id, canvas.viewport || viewport);
+        canvas.viewport = {...viewport};
+        render();
+        currentCanvasTime.textContent = formatCanvasTime(canvas.updated_at);
+        setStatus(data.skipped_referenced?.length ? `画布已清空，保留 ${data.skipped_referenced.length} 个仍被引用的文件` : '当前画布已清空');
+        await loadCanvasList(false);
+    } catch(e) {
+        setStatus(e.message || '清空当前画布失败');
+        console.error(e);
+    } finally {
+        clearCurrentCanvasBtn.disabled = false;
+    }
 }
 function requestDeleteCanvas(id, event){
     event?.preventDefault();
@@ -8049,10 +8110,19 @@ function closePromptTemplateModal(){
     promptTemplateModal?.classList.remove('open');
     promptTemplateNodeId = '';
     promptTemplateEditing = false;
+    canvasAssistantTemplateCallback = null;
     syncCanvasPromptTemplateButtons();
 }
 function applyPromptTemplateToPromptNode(mode='positive'){
     const template = canvasPromptTemplates.find(item => item.id === promptTemplateSelectedId);
+    if(canvasAssistantTemplateCallback){
+        if(!template) return;
+        const callback = canvasAssistantTemplateCallback;
+        canvasAssistantTemplateCallback = null;
+        callback(canvasPromptTemplateText(template, mode));
+        closePromptTemplateModal();
+        return;
+    }
     const node = nodes.find(n => n.id === promptTemplateNodeId && n.type === 'prompt');
     if(!template || !node) return;
     node.text = canvasPromptTemplateText(template, mode);
@@ -17339,6 +17409,49 @@ function hasOutputImageDrag(dataTransfer){ return [...(dataTransfer?.types || []
 function escapeHtml(str){ return String(str == null ? '' : str).replace(/[&<>"']/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s])); }
 function escapeAttr(str){ return escapeHtml(str); }
 
+function mergeCanvasAssistantChanges(remote){
+    if(!canvas || !remote || remote.id !== canvas.id) return false;
+    const receipts=remote.assistant_receipts||{};
+    const changes=Object.entries(receipts).filter(([key])=>!canvas.assistant_receipts?.[key]);
+    if(!changes.length) return false;
+    const byId=new Map(nodes.map(node=>[node.id,node]));
+    const remoteById=new Map((remote.nodes||[]).map(node=>[node.id,node]));
+    let conflict=false;
+    changes.sort((a,b)=>(a[1].updatedAtAfter||0)-(b[1].updatedAtAfter||0));
+    for(const [,receipt] of changes){
+        for(const id of receipt.createdNodeIds||[]){
+            if(!byId.has(id) && remoteById.has(id)){
+                const node=structuredClone(remoteById.get(id));nodes.push(node);byId.set(id,node);
+            }
+        }
+        for(const patch of receipt.nodePatches||[]){
+            const node=byId.get(patch.nodeId);
+            if(!node) continue; // 保留用户本地删除。
+            for(const [name,value] of Object.entries(patch.fields)){
+                if(JSON.stringify(node[name]??null)===JSON.stringify(value.before)) node[name]=structuredClone(value.after);
+                else if(JSON.stringify(node[name]??null)!==JSON.stringify(value.after)) conflict=true;
+            }
+        }
+        for(const id of receipt.createdEdgeIds||[]){
+            const edge=(remote.connections||[]).find(item=>item.id===id);
+            if(edge && byId.has(edge.from) && byId.has(edge.to) && !connections.some(item=>item.from===edge.from && item.to===edge.to)) connections.push(structuredClone(edge));
+        }
+    }
+    canvas.assistant_receipts=structuredClone(receipts);
+    canvas.updated_at=Number(remote.updated_at||0);lastCanvasUpdatedAt=canvas.updated_at;
+    render();
+    if(conflict) setStatus('助手与手动修改冲突，已保留手动修改');
+    return true;
+}
+function canvasAssistantCreationSettings(){
+    const picked=nodes.filter(node=>selected.has(node.id));
+    const image=picked.find(node=>node.type==='generator')||[...nodes].reverse().find(node=>node.type==='generator');
+    const video=picked.find(node=>node.type==='video')||[...nodes].reverse().find(node=>node.type==='video');
+    return {engine:'api',provider_id:image?.apiProvider||'',model:image?.model||'',ratio:image?.ratio||'square',resolution:image?.resolution||'1k',quality:image?.quality||'auto',
+        customRatio:image?.customRatio||'',customSize:image?.customSize||'',customRatioWidth:image?.customRatioWidth||'',customRatioHeight:image?.customRatioHeight||'',customWidth:image?.customWidth||'',customHeight:image?.customHeight||'',
+        videoProvider:video?.apiProvider||'',videoModel:video?.model||'',videoDuration:video?.duration||5,videoAspect:video?.aspectRatio||'16:9',videoResolution:video?.resolution||'',
+        videoEnhancePrompt:!!video?.enhancePrompt,videoEnableUpsample:!!video?.enableUpsample,videoWatermark:!!video?.watermark,videoCameraFixed:!!video?.cameraFixed,videoGenerateAudio:!!video?.generateAudio,videoMultimodal:!!video?.multimodal,videoUseFrameRoles:!!video?.useFrameRoles};
+}
 window.onload = async () => {
     applyTheme(localStorage.getItem('studio_theme') || localStorage.getItem(CANVAS_THEME_KEY) || 'light');
     applyQuickToolbarState();
@@ -17353,10 +17466,23 @@ window.onload = async () => {
     const openId = new URLSearchParams(window.location.search).get('id');
     if(openId){
         await openCanvas(openId);
+        await loadCanvasPromptTemplates();
         window.CanvasAssistant?.mount({
             kind:'classic',
-            getContext:()=>canvas ? {id:canvas.id,title:canvas.title,updatedAt:Number(canvas.updated_at||0),nodes,selectedNodeIds:[...selected]} : null,
+            getContext:()=>canvas ? {id:canvas.id,title:canvas.title,updatedAt:Number(canvas.updated_at||0),nodes,selectedNodeIds:[...selected],creationSettings:canvasAssistantCreationSettings()} : null,
             save:()=>saveCanvas(),
+            refresh:()=>syncRemoteCanvasNow(),
+            referencePreview:(item,size)=>item.kind==='video' ? canvasVideoPreviewHtml(item.url,size,'preload="none"') : canvasPreviewImgHtml(item.thumbnail||item.url,size,'loading="lazy" draggable="false"'),
+            bindReferencePreviews:element=>bindCanvasPreviewImageFallbacks(element),
+            openPromptTemplates:async callback=>{canvasAssistantTemplateCallback=callback;await openPromptTemplateModal('');},
+            addTextNode:async text=>{const node=addPromptNode(defaultPoint(0,0));if(!node)return false;node.text=String(text||'');render();scheduleSave();return true;},
+            addImageNode:async (url,name)=>{if(!url)return false;createImageCardFromUrl(url,defaultPoint(0,0),name||'助手图片');return true;},
+            viewChanges:async ids=>{
+                await syncRemoteCanvasNow();
+                const affected=nodes.filter(node=>ids.includes(node.id));
+                if(!affected.length)return false;
+                selected=new Set(affected.map(node=>node.id));render();fitAllNodesViewport();return true;
+            },
         });
     } else {
         window.location.replace(canvasListUrlForProject(rememberedCanvasListProject()));

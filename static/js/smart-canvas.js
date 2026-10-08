@@ -31,6 +31,7 @@ const inputPromptPreview = document.getElementById('inputPromptPreview');
 const minimap = document.getElementById('minimap');
 const minimapContent = document.getElementById('minimapContent');
 const smartArrangeBtn = document.getElementById('smartArrangeBtn');
+const clearCurrentCanvasBtn = document.getElementById('clearCurrentCanvasBtn');
 const imageEditModal = document.getElementById('imageEditModal');
 const smartLogModal = document.getElementById('smartLogModal');
 const smartLogList = document.getElementById('smartLogList');
@@ -125,6 +126,7 @@ const PROMPT_TEMPLATE_GROUPS_KEY = 'smart_canvas_prompt_template_groups_v1';
 const PROMPT_TEMPLATE_OVERRIDES_KEY = 'smart_canvas_prompt_template_overrides_v1';
 const SMART_UNSAVED_ACCEPTED_TASKS_PREFIX = 'smart_canvas_unsaved_accepted_tasks:';
 let promptPresets = [];
+let canvasAssistantTemplateCallback = null;
 let builtinPromptTemplates = [];
 let promptLibraries = [];
 let activePromptLibraryId = 'system';
@@ -1257,6 +1259,63 @@ function canvasListUrlForProject(projectId){
 function backToCanvasList(){
     savePromptDraftForCurrent();
     window.location.href = canvasListUrlForProject(canvas?.project || sourceProjectId || 'default');
+}
+clearCurrentCanvasBtn?.addEventListener('click', clearCurrentSmartCanvas);
+
+async function clearCurrentSmartCanvas(){
+    if(!canvasId || !canvas || clearCurrentCanvasBtn?.disabled) return;
+    if(smartCascadeAnyRunning() || canvasSyncInFlight){
+        toast('当前画布正在运行或保存，请稍后再清空');
+        return;
+    }
+    const confirmed = window.confirm('确认清空当前画布？\n\n当前画布的节点、连线、日志和画布设置会被清除；能确认没有被其他位置引用的生成媒体与历史记录也会清理。此操作不能从回收站恢复。');
+    if(!confirmed) return;
+    clearCurrentCanvasBtn.disabled = true;
+    clearTimeout(saveTimer);
+    saveTimer = null;
+    try {
+        const res = await fetch(`/api/canvases/${encodeURIComponent(canvasId)}/clear`, {
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({client_id:smartClientId, base_updated_at:Number(canvas.updated_at || 0)})
+        });
+        const data = await res.json().catch(() => ({}));
+        if(!res.ok) throw new Error(data.detail?.message || data.detail || '清空当前画布失败');
+        activeSmartTaskPolls.clear();
+        activeSmartComfyTaskPolls.clear();
+        smartNodeRunTokens.clear();
+        smartCascadeRuns.clear();
+        syncSmartCascadeLegacyState();
+        if(runTimerInterval){ clearInterval(runTimerInterval); runTimerInterval = null; }
+        transientSmartCloudLinks = [];
+        try { localStorage.removeItem(`${SMART_UNSAVED_ACCEPTED_TASKS_PREFIX}${canvasId}`); } catch(e) {}
+        canvas = {...(data.canvas || canvas), nodes:[], connections:[], logs:[], settings:{}};
+        nodes = [];
+        canvasBaseNodes = new Map();
+        canvasSaveQueued = false;
+        canvasDefaultSmartSettings = cloneSmartSettings(initialSmartSettings);
+        settings = cloneSmartSettings(initialSmartSettings);
+        lastComposerNodeId = '';
+        activeComposerSubject = null;
+        selectedId = '';
+        selectedIds = [];
+        selectedImage = {nodeId:'', index:-1};
+        undoStack.length = 0;
+        redoStack.length = 0;
+        pendingUndoSnapshot = null;
+        canvas.updated_at = Number(canvas.updated_at || Date.now());
+        canvas.settings = {};
+        canvas.viewport = {...viewport};
+        setCanvasSaveError(false);
+        renderDynamicParams();
+        render();
+        toast(data.skipped_referenced?.length ? `画布已清空，保留 ${data.skipped_referenced.length} 个仍被引用的文件` : '当前画布已清空');
+    } catch(e) {
+        toast(e.message || '清空当前画布失败');
+        console.error(e);
+    } finally {
+        clearCurrentCanvasBtn.disabled = false;
+    }
 }
 function promptPlainText(){
     return originalPromptTextFromParts(collectPromptParts());
@@ -4859,7 +4918,7 @@ function syncComposerTemplateButton(){
 }
 async function openPromptTemplatePanel(nodeId='', templateId='', options={}){
     if(!promptTemplatePanel) return;
-    const target = options.target === 'composer' ? 'composer' : 'node';
+    const target = ['composer','assistant'].includes(options.target) ? options.target : 'node';
     promptTemplatePanel.dataset.target = target;
     promptTemplatePanel.dataset.nodeId = nodeId || '';
     if(promptTemplatePanel.parentElement !== shell) shell.appendChild(promptTemplatePanel);
@@ -4882,12 +4941,20 @@ async function openPromptTemplatePanel(nodeId='', templateId='', options={}){
 }
 function closePromptTemplatePanel(){
     promptTemplatePanel?.classList.remove('open');
+    canvasAssistantTemplateCallback = null;
     syncComposerTemplateButton();
     render();
 }
 function applyPromptTemplateToNode(mode='positive'){
     const template = promptTemplateItems().find(item => item.id === promptTemplateSelectedId);
     if(!template) return;
+    if(promptTemplatePanel?.dataset.target === 'assistant' && canvasAssistantTemplateCallback){
+        const callback=canvasAssistantTemplateCallback;
+        canvasAssistantTemplateCallback=null;
+        callback(promptTemplateText(template, mode));
+        closePromptTemplatePanel();
+        return;
+    }
     if(promptTemplatePanel?.dataset.target === 'composer'){
         const text = promptTemplateText(template, mode);
         setPromptText(text);
@@ -19905,7 +19972,7 @@ document.addEventListener('click', event => {
     if(!event.target.closest('.smart-control')) closeAllSmartPopovers();
     if(!event.target.closest('.mention-picker') && !event.target.closest('#promptInput') && !event.target.closest('[data-input-add-reference]')) closeMentionPicker();
     if(!event.target.closest('.prompt-preset-panel') && !event.target.closest('.prompt-preset-edit') && !event.target.closest('.prompt-preset-save')) closePromptPresetPanel();
-    if(!event.target.closest('.prompt-template-panel') && !event.target.closest('.prompt-preset-edit') && !event.target.closest('#composerTemplateBtn')) closePromptTemplatePanel();
+    if(!event.target.closest('.prompt-template-panel') && !event.target.closest('.prompt-preset-edit') && !event.target.closest('#composerTemplateBtn') && !event.target.closest('.canvas-assistant-template')) closePromptTemplatePanel();
 });
 document.addEventListener('keydown', event => {
     if(window.CanvasViewAdjust?.isOpen()) return;
@@ -20201,6 +20268,10 @@ window.addEventListener('studio-lang-change', () => {
     if(promptTemplatePanel?.classList?.contains('open')) renderPromptTemplatePanel();
     render();
 });
+function smartAssistantCreationSettings(){
+    const names=['engine','provider_id','model','ratio','resolution','quality','customRatio','customSize','customRatioWidth','customRatioHeight','customWidth','customHeight','videoProvider','videoModel','videoDuration','videoAspect','videoResolution','videoEnhancePrompt','videoEnableUpsample','videoWatermark','videoCameraFixed','videoGenerateAudio','videoMultimodal','videoUseFrameRoles'];
+    return Object.fromEntries(names.filter(key=>settings[key]!==undefined).map(key=>[key,settings[key]]));
+}
 window.onload = async () => {
     applyTheme(localStorage.getItem('studio_theme') || localStorage.getItem('canvas_theme') || 'light');
     loadPromptPresets();
@@ -20217,7 +20288,19 @@ window.onload = async () => {
     render();
     window.CanvasAssistant?.mount({
         kind:'smart',
-        getContext:()=>canvas ? {id:canvasId,title:canvas.title,updatedAt:Number(canvas.updated_at||0),nodes,selectedNodeIds:selectedNodeIds()} : null,
+        getContext:()=>canvas ? {id:canvasId,title:canvas.title,updatedAt:Number(canvas.updated_at||0),nodes,selectedNodeIds:selectedNodeIds(),creationSettings:smartAssistantCreationSettings()} : null,
         save:()=>saveCanvas(),
+        refresh:()=>mergeReloadCanvasNow(),
+        referencePreview:(item,size)=>item.kind==='video' ? smartVideoPreviewHtml(item,size,'preload="none"') : smartPreviewImgHtml(item.thumbnail||item.url,size,'loading="lazy" draggable="false"'),
+        bindReferencePreviews:element=>bindSmartPreviewImageFallbacks(element),
+        openPromptTemplates:async callback=>{canvasAssistantTemplateCallback=callback;await openPromptTemplatePanel('', '', {target:'assistant'});},
+        addTextNode:async text=>{const node=createPromptNode((viewport?.x||0)+120,(viewport?.y||0)+120);if(!node)return false;node.text=String(text||'');render();scheduleSave();return true;},
+        addImageNode:async (url,name)=>{if(!url)return false;createNode((viewport?.x||0)+120,(viewport?.y||0)+120,[{url,name:name||'助手图片'}],{select:true});return true;},
+        viewChanges:async ids=>{
+            await mergeReloadCanvasNow();
+            const affected=nodes.filter(node=>ids.includes(node.id));
+            if(!affected.length)return false;
+            selectedIds=affected.map(node=>node.id);selectedId=affected[0].id;render();fitAllNodesViewport();return true;
+        },
     });
 };

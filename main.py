@@ -68,6 +68,7 @@ from backend.diagnostics import configure_diagnostics, write_diagnostic
 from backend.atomic_json import write_json_atomic, write_text_atomic
 from backend.process_lock import interprocess_file_lock
 from backend.canvas_assistant import create_assistant_router
+from backend.canvas_assistant_operations import prepare_operations
 from backend.data_formats import (
     InvalidDataFormat,
     UnsupportedDataFormat,
@@ -3143,6 +3144,10 @@ class DeleteCanvasLogRequest(BaseModel):
     log_id: str
     delete_unreferenced_media: bool = False
     reset_referencing_nodes: bool = False
+    base_updated_at: int = 0
+
+class ClearCanvasRequest(BaseModel):
+    client_id: str = ""
     base_updated_at: int = 0
 
 class TokenRequest(BaseModel):
@@ -6329,6 +6334,31 @@ def jimeng_cli_executable():
         return configured
     return shutil.which("dreamina") or shutil.which("dreamina.exe") or shutil.which("dreamina.cmd") or ""
 
+def jimeng_cli_missing_message():
+    """给 Windows 用户说明即梦 CLI 缺失时真正需要补齐的运行环境。"""
+    if os.name == "nt":
+        wsl = shutil.which("wsl.exe") or shutil.which("wsl")
+        if wsl:
+            try:
+                proc = subprocess.run(
+                    [wsl, "-l", "-q"],
+                    cwd=BASE_DIR,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.DEVNULL,
+                    timeout=5,
+                    check=False,
+                )
+                names = [
+                    line.replace("\x00", "").strip().lstrip("*").strip()
+                    for line in decode_wsl_output(proc.stdout).splitlines()
+                    if line.replace("\x00", "").strip()
+                ]
+                if not any(re.match(r"^Ubuntu($|-)", name) for name in names):
+                    return "未找到 dreamina CLI。Windows 版需要先安装并初始化 WSL Ubuntu，再运行即梦 CLI 安装脚本。"
+            except Exception:
+                pass
+    return "未找到 dreamina CLI。请先安装即梦 CLI，并完成 dreamina login。"
+
 def decode_utf16_auto(raw: bytes) -> str:
     # WSL/Windows interop emits UTF-16 for null-heavy diagnostics, but the
     # endianness varies by source (console vs proxy vs subprocess), so a
@@ -6514,7 +6544,7 @@ def jimeng_extract_json(text):
 async def run_jimeng_cli(args, timeout=120, raw_text=False):
     exe = jimeng_cli_executable()
     if not exe:
-        raise HTTPException(status_code=400, detail="未找到 dreamina CLI。请先安装：curl -fsSL https://jimeng.jianying.com/cli | bash，并完成 dreamina login。")
+        raise HTTPException(status_code=400, detail=jimeng_cli_missing_message())
     clean_args = [str(arg) for arg in args if str(arg) != ""]
     command = jimeng_command(clean_args, exe)
     try:
@@ -14583,7 +14613,7 @@ async def gemini_cli_help(payload: GeminiCliHelpRequest):
 async def jimeng_status():
     exe = jimeng_cli_executable()
     if not exe:
-        return {"installed": False, "logged_in": False, "message": "未找到 dreamina CLI"}
+        return {"installed": False, "logged_in": False, "message": jimeng_cli_missing_message()}
     version, version_text = await jimeng_cli_version()
     version_str = ".".join(str(part) for part in version) if version else None
     version_ok = version >= JIMENG_MIN_CLI_VERSION if version else None
@@ -19435,7 +19465,66 @@ async def canvas_llm(payload: CanvasLLMRequest):
     return {"text": text, "model": model, "raw_usage": public_usage(raw_data.get("usage"))}
 
 async def call_canvas_assistant_model(fields):
+    fields = dict(fields)
+    images = []
+    for url in fields.get("images", []):
+        if url.startswith(("/assets/", "/output/", "/api/storage-files/local/")):
+            if not output_file_from_url(url):
+                raise HTTPException(409, "引用图片已丢失，请重新选择")
+            url = await asyncio.to_thread(reference_to_data_url, {"url": url}, 1024)
+            if not url.startswith("data:image/"):
+                raise HTTPException(422, "引用素材无法读取为图片，请重新选择")
+        images.append(url)
+    fields["images"] = images
     return await canvas_llm(CanvasLLMRequest(**fields))
+
+
+def apply_canvas_assistant_operations(user, payload, operations):
+    with CANVAS_LOCK:
+        current = load_canvas(payload.canvasId)
+        candidate, summary = prepare_operations(
+            current, operations, request_id=payload.requestId, user=user,
+            expected_updated_at=payload.expectedUpdatedAt,
+            creation_settings=payload.creationSettings, providers=public_api_providers(),
+        )
+        if candidate is not None:
+            _require_canvas_format(candidate)
+            candidate["updated_at"] = max(now_ms(), int(current.get("updated_at") or 0) + 1)
+            summary["updatedAtAfter"] = candidate["updated_at"]
+            _write_canvas_document(candidate)
+        return summary
+
+
+async def notify_canvas_assistant_changed(canvas_id):
+    await manager.broadcast_canvas_updated(canvas_id, int(load_canvas(canvas_id).get("updated_at") or 0), "canvas-assistant")
+
+
+def canvas_assistant_reference_assets():
+    """从真实素材索引读取公开展示字段，不接受客户端自报媒体地址。"""
+    items = []
+    library = load_asset_library()
+    for lib in library.get("libraries", []):
+        library_id = str(lib.get("id") or "")
+        for category in lib.get("categories", []):
+            if category.get("type") == "workflow":
+                continue
+            for item in category.get("items", []):
+                if not isinstance(item, dict):
+                    continue
+                url = item.get("url")
+                item_id = str(item.get("id") or "")
+                kind = item.get("kind") or asset_library_media_kind(url or "")
+                if not item_id or kind not in {"image", "video"} or not isinstance(url, str) or not url.startswith(("/assets/", "/output/", "/api/storage-files/local/", "https://", "http://")):
+                    continue
+                items.append({"id": f"asset:{library_id}:{item_id}", "url": url, "thumbnail": item.get("thumbnail") or item.get("thumb") or item.get("preview") or "", "name": item.get("name") or "图片资产", "kind": kind, "source": "asset", "libraryId": library_id, "categoryId": str(category.get("id") or ""), "libraryName": lib.get("name") or "资产库", "categoryName": category.get("name") or ""})
+    _, local_items = _local_upload_tree_and_items()
+    for item in local_items:
+        item_id = str(item.get("id") or "")
+        url = item.get("url")
+        if not item_id or item.get("kind") not in {"image", "video"} or not isinstance(url, str) or not url.startswith("/api/storage-files/local/"):
+            continue
+        items.append({"id": f"local:{item_id}", "url": url, "thumbnail": "", "name": item.get("name") or "本地素材", "kind": item["kind"], "source": "local", "libraryId": "local", "categoryId": item.get("folder") or "", "libraryName": "本地素材", "categoryName": item.get("folder") or "全部上传"})
+    return items
 
 
 app.include_router(create_assistant_router(
@@ -19444,6 +19533,9 @@ app.include_router(create_assistant_router(
     providers=public_api_providers,
     user_id=safe_user_id,
     call_model=call_canvas_assistant_model,
+    apply_operations=apply_canvas_assistant_operations,
+    notify_changed=notify_canvas_assistant_changed,
+    load_reference_assets=canvas_assistant_reference_assets,
 ))
 
 # --- 对话管理 ---
@@ -20839,6 +20931,91 @@ async def update_canvas(canvas_id: str, payload: CanvasSaveRequest):
         save_canvas(canvas)
     await manager.broadcast_canvas_updated(canvas_id, int(canvas.get("updated_at") or now_ms()), payload.client_id)
     return {"canvas": canvas}
+
+@app.post("/api/canvases/{canvas_id}/clear")
+async def clear_canvas(canvas_id: str, payload: ClearCanvasRequest):
+    """清空当前画布内容，并安全清理该画布独占的生成媒体和历史引用。"""
+
+    def clear_document():
+        with CANVAS_LOCK:
+            canvas = load_canvas(canvas_id)
+            current_updated_at = int(canvas.get("updated_at") or 0)
+            if payload.base_updated_at and current_updated_at and int(payload.base_updated_at) != current_updated_at:
+                raise HTTPException(status_code=409, detail={
+                    "message": "画布已被其他页面更新，请刷新后再清空。",
+                    "reason": "canvas_conflict",
+                    "canvas": canvas,
+                    "updated_at": current_updated_at,
+                })
+
+            previous_content = {
+                "nodes": list(canvas.get("nodes") or []),
+                "logs": list(canvas.get("logs") or []),
+            }
+            candidate_paths = []
+            for value in (previous_content["nodes"], previous_content["logs"]):
+                for url in collect_local_media_urls(value):
+                    path = generated_media_path_from_url(url)
+                    if path and path not in candidate_paths:
+                        candidate_paths.append(path)
+            candidate_paths = expand_canvas_generated_media_paths(canvas, candidate_paths)
+
+            canvas["nodes"] = []
+            canvas["connections"] = []
+            canvas["logs"] = []
+            canvas["settings"] = {}
+            save_canvas(canvas)
+            return canvas, candidate_paths
+
+    canvas, candidate_paths = await asyncio.to_thread(clear_document)
+    removed_files = []
+    skipped_referenced = []
+    removed_previews = 0
+    removed_history = 0
+    if candidate_paths:
+        deletable_paths = []
+        with HISTORY_LOCK, CONVERSATION_LOCK, ASSET_LIBRARY_LOCK:
+            for path in candidate_paths:
+                if persisted_json_references_media_path(path):
+                    skipped_referenced.append(os.path.basename(path))
+                else:
+                    deletable_paths.append(path)
+        try:
+            removed_history = prune_generation_history_for_media(deletable_paths)
+        except HistoryPruneError as exc:
+            await manager.broadcast_canvas_updated(canvas_id, int(canvas.get("updated_at") or now_ms()), payload.client_id)
+            raise HTTPException(status_code=500, detail="画布已清空，但历史记录未能安全核对，媒体文件已保留。") from exc
+        with HISTORY_LOCK, CONVERSATION_LOCK, ASSET_LIBRARY_LOCK:
+            try:
+                history = []
+                if os.path.isfile(HISTORY_FILE):
+                    with open(HISTORY_FILE, "r", encoding="utf-8-sig") as handle:
+                        history = json.load(handle)
+                    if not isinstance(history, list):
+                        raise ValueError("历史记录格式异常")
+            except (OSError, UnicodeError, json.JSONDecodeError, ValueError) as exc:
+                await manager.broadcast_canvas_updated(canvas_id, int(canvas.get("updated_at") or now_ms()), payload.client_id)
+                raise HTTPException(status_code=500, detail="画布已清空，但历史记录无法核对，媒体文件已保留。") from exc
+            for path in deletable_paths:
+                if json_references_media_path(history, path) or persisted_json_references_media_path(path):
+                    skipped_referenced.append(os.path.basename(path))
+                    continue
+                try:
+                    removed_previews += delete_media_preview_cache(path)
+                    os.remove(path)
+                    removed_files.append(os.path.basename(path))
+                except OSError:
+                    skipped_referenced.append(os.path.basename(path))
+
+    await manager.broadcast_canvas_updated(canvas_id, int(canvas.get("updated_at") or now_ms()), payload.client_id)
+    return {
+        "ok": True,
+        "canvas": canvas,
+        "removed_files": removed_files,
+        "removed_previews": removed_previews,
+        "removed_history": removed_history,
+        "skipped_referenced": sorted(set(skipped_referenced)),
+    }
 
 @app.post("/api/canvases/{canvas_id}/logs/delete")
 async def delete_canvas_log(canvas_id: str, payload: DeleteCanvasLogRequest):
