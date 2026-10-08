@@ -20215,4 +20215,9 @@ window.onload = async () => {
     await loadCanvas();
     syncApiKindToggleVisibility();
     render();
+    window.CanvasAssistant?.mount({
+        kind:'smart',
+        getContext:()=>canvas ? {id:canvasId,title:canvas.title,updatedAt:Number(canvas.updated_at||0),nodes,selectedNodeIds:selectedNodeIds()} : null,
+        save:()=>saveCanvas(),
+    });
 };

@@ -66,6 +66,7 @@ from backend.tracing import (
 from backend.diagnostics import configure_diagnostics, write_diagnostic
 from backend.atomic_json import write_json_atomic, write_text_atomic
 from backend.process_lock import interprocess_file_lock
+from backend.canvas_assistant import create_assistant_router
 from backend.data_formats import (
     InvalidDataFormat,
     UnsupportedDataFormat,
@@ -19376,6 +19377,18 @@ async def canvas_llm(payload: CanvasLLMRequest):
     text = required_chat_response_text(raw)
     raw_data = unwrap_apimart_response(raw) if isinstance(raw, dict) else {}
     return {"text": text, "model": model, "raw_usage": public_usage(raw_data.get("usage"))}
+
+async def call_canvas_assistant_model(fields):
+    return await canvas_llm(CanvasLLMRequest(**fields))
+
+
+app.include_router(create_assistant_router(
+    root=lambda: os.path.join(DATA_DIR, "canvas_assistant"),
+    load_canvas=load_canvas,
+    providers=public_api_providers,
+    user_id=safe_user_id,
+    call_model=call_canvas_assistant_model,
+))
 
 # --- 对话管理 ---
 

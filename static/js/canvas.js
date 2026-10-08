@@ -17353,6 +17353,11 @@ window.onload = async () => {
     const openId = new URLSearchParams(window.location.search).get('id');
     if(openId){
         await openCanvas(openId);
+        window.CanvasAssistant?.mount({
+            kind:'classic',
+            getContext:()=>canvas ? {id:canvas.id,title:canvas.title,updatedAt:Number(canvas.updated_at||0),nodes,selectedNodeIds:[...selected]} : null,
+            save:()=>saveCanvas(),
+        });
     } else {
         window.location.replace(canvasListUrlForProject(rememberedCanvasListProject()));
     }
