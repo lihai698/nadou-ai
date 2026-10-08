@@ -14,6 +14,36 @@ import main
 
 
 class CanvasTaskLifecycleTests(unittest.IsolatedAsyncioTestCase):
+    async def test_assistant_credential_revision_changes_without_returning_secret(self):
+        catalog = lambda:[{'id':'test-only','protocol':'openai','image_models':['image']}]
+        with patch.object(main, 'public_api_providers', side_effect=catalog):
+            with patch.object(main, 'provider_env_key_value', return_value='test-credential-one'):
+                first = main.canvas_assistant_providers()
+            with patch.object(main, 'provider_env_key_value', return_value='test-credential-two'):
+                second = main.canvas_assistant_providers()
+        self.assertNotEqual(first[0]['_configuration_revision'],second[0]['_configuration_revision'])
+        self.assertNotIn('test-credential',json.dumps(first + second))
+
+    async def test_assistant_fixed_id_survives_cache_loss_without_another_worker(self):
+        from types import SimpleNamespace
+        generated = []
+        async def generator(payload):
+            generated.append(payload.prompt)
+            return {'images':['/assets/output/test-only.png']}
+        request = SimpleNamespace(state=SimpleNamespace())
+        payload = main.OnlineImageRequest(prompt='固定编号验收',provider_id='test-only')
+        with patch.object(main, 'build_online_image_result', side_effect=generator):
+            first, second = await asyncio.gather(
+                main.enqueue_canvas_image_task(payload, request, 'canvas_img_assistant_fixed'),
+                main.enqueue_canvas_image_task(payload, request, 'canvas_img_assistant_fixed'))
+            await asyncio.sleep(.05)
+            main.CANVAS_TASKS.clear()
+            restored = await main.enqueue_canvas_image_task(payload, request, 'canvas_img_assistant_fixed')
+            await asyncio.sleep(.01)
+        self.assertEqual(first['task_id'], second['task_id'])
+        self.assertEqual(restored['task_id'], first['task_id'])
+        self.assertEqual(generated, ['固定编号验收'])
+
     async def asyncSetUp(self):
         self.tasks_patch = patch.object(main, 'CANVAS_TASKS', {})
         self.tasks_patch.start()

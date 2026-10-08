@@ -14,12 +14,14 @@ function editor(responses){
         resultMediaUrls:x=>x,nowMs:()=>1,extractUpstreamTaskId:()=>'',
         finalizeSmartPendingTask:(n,id,images)=>{n.pendingTasks=n.pendingTasks.filter(t=>t.taskId!==id);n.pending=n.pendingTasks.length;n.images.push(...images);},
         fetchImageTaskQuery:()=>{throw Error('must not query upstream');},
+        watchSmartDepthCapture:()=>{throw Error('unexpected depth capture');},
     });
     vm.runInContext(part('function smartPendingTasks(', 'class JimengPendingSignal')+
         part('class JimengPendingSignal', 'function extractUpstreamTaskId')+
         part('function smartRecoverableImageTask(', 'function imageTaskRecoverBodyHtml')+
         part('async function pollSmartCanvasTask(', 'function finalizeSmartPendingTask')+
         part('async function resumeSmartPendingNode(', 'function updateSelectionBox')+
+        part('function resumeSmartDepthCaptureTasks(', 'async function runJimengUpscale(')+
         part('async function querySmartImageTaskNow(', 'function startJimengPoll'),ctx);
     return {node,calls,delays,ctx,run:()=>vm.runInContext('resumeSmartPendingNode(nodes[0])',ctx),query:()=>vm.runInContext("querySmartImageTaskNow('n','original')",ctx)};
 }

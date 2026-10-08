@@ -29,12 +29,14 @@ test('a saved image task queried after backend restart ends without false output
         setTimeout:fn => fn(),
         render:()=>{}, scheduleSave:()=>saves.push(true), toast:message=>notices.push(message),
         tr:key=>key, nowMs:()=>1,
+        watchSmartDepthCapture:()=>{throw Error('unexpected depth capture');},
     });
     vm.runInContext(
         part('function smartPendingTasks(', 'class JimengPendingSignal') +
         part('function smartRecoverableImageTask(', 'function imageTaskRecoverBodyHtml') +
         part('async function pollSmartCanvasTask(', 'function finalizeSmartPendingTask') +
-        part('async function resumeSmartPendingNode(', 'function updateSelectionBox'),
+        part('async function resumeSmartPendingNode(', 'function updateSelectionBox') +
+        part('function resumeSmartDepthCaptureTasks(', 'async function runJimengUpscale('),
         ctx,
     );
     vm.runInContext('resumeSmartPendingTasks()', ctx);

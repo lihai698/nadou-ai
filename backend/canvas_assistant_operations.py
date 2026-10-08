@@ -39,17 +39,27 @@ class ConnectNodes(StrictOperation):
     to: str = Field(pattern=r"^[a-zA-Z0-9_-]{1,100}$")
 
 
+class ProposeImage(StrictOperation):
+    op: Literal["propose_image"]
+    title: str = Field(default="", max_length=80)
+    prompt: str = Field(min_length=1, max_length=12000)
+
+
 class AssistantPlan(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
     reply: str = Field(min_length=1, max_length=24000)
-    operations: list[Annotated[Union[CreateNode, UpdateNode, ConnectNodes], Field(discriminator="op")]] = Field(default_factory=list, max_length=20)
+    operations: list[Annotated[Union[CreateNode, UpdateNode, ConnectNodes, ProposeImage], Field(discriminator="op")]] = Field(default_factory=list, max_length=20)
 
 
 OPERATION_GUIDE = """你是当前画布的创作助手，使用简体中文。
-仅在用户明确要求创建、修改或连线时操作；分析和建议时 operations 为空。
+仅在用户要求创作图片、创建、修改或连线时操作；纯聊天、分析和建议时 operations 为空。
 禁止删除节点、修改任务/媒体结果、执行代码、提交生成或改变用户模型选择。
 返回一个 JSON 对象，禁止 Markdown 包裹：{"reply":"中文回复","operations":[]}。
-每个操作的 operationId 在本轮唯一，按依赖顺序排列。只允许以下三类：
+用户希望生成或编辑图片时，智能提出图片方案，不需要用户切换模式；使用 propose_image 而不重复创建生成节点。
+图片方案：{"op":"propose_image","operationId":"image1","title":"标题","prompt":"完整的图片生成提示词"}。
+此操作自动创建原生提示词、图片生成节点和已引用图片输入，只提出方案，等待用户点击生成，绝不能声称已生成。
+每轮最多一个图片方案。仅需创建工作流、不需要生成时继续使用 create/connect。暂不提出视频生成方案。
+每个操作的 operationId 在本轮唯一，按依赖顺序排列。允许以下结构操作：
 创建：{"op":"create","operationId":"c1","ref":"p1","type":"prompt","title":"标题","content":"提示词"}。
 type 只可为 prompt、text、image_generator、video_generator；新节点位置和原生默认字段由程序补齐。
 普通画布图片创作使用 prompt + image_generator；智能画布图片创作使用 prompt + image_generator（对应 smart-loop）。
@@ -178,7 +188,7 @@ def would_cycle(connections, source, target):
     return False
 
 
-def prepare_operations(canvas, operations, *, request_id, user, expected_updated_at, creation_settings, providers):
+def prepare_operations(canvas, operations, *, request_id, user, expected_updated_at, creation_settings, providers, image_model_confirmed=False, reference_images=None):
     """一批操作全部校验后生成候选；任何失败均不改传入文档。"""
     wire = [op.model_dump(by_alias=True, exclude_none=True) for op in operations]
     digest = hashlib.sha256(json.dumps(wire, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
@@ -198,6 +208,7 @@ def prepare_operations(canvas, operations, *, request_id, user, expected_updated
     aliases, operation_ids = {}, set()
     created, updated, edges, affected = [], [], [], []
     generation = None
+    proposals = []
     # 新节点置于现有节点下方，不覆盖正在编辑的节点。
     base_y = max([float(n.get("y", 0)) + max(float(n.get("h", 300)), 300) for n in nodes] or [0]) + 90
     base_x = min([float(n.get("x", 100)) for n in nodes] or [100])
@@ -205,7 +216,24 @@ def prepare_operations(canvas, operations, *, request_id, user, expected_updated
         if op.operationId in operation_ids:
             raise HTTPException(422, "同一轮操作编号重复，本轮未执行")
         operation_ids.add(op.operationId)
-        if isinstance(op, CreateNode):
+        if isinstance(op, ProposeImage):
+            if proposals:
+                raise HTTPException(422, "一轮只提出一个图片方案，请分开创作")
+            if not image_model_confirmed:
+                raise HTTPException(409, "请先在模型选择中指定并勾选图片模型，再提出生成方案")
+            from backend.canvas_assistant_generation import add_image_proposal
+            generation = generation_settings(canvas, creation_settings, providers)
+            if not generation.get("provider_id") or not generation.get("model"):
+                raise HTTPException(409, "请先指定图片模型")
+            proposal, added_nodes, added_edges = add_image_proposal(candidate, op, key=key, settings=generation,
+                reference_images=reference_images, x=base_x, y=base_y + len(created) * 360)
+            proposals.append(proposal)
+            for node in added_nodes:
+                by_id[node["id"]] = node
+                created.append(node["id"])
+                affected.append(node["id"])
+            edges.extend(edge["id"] for edge in added_edges)
+        elif isinstance(op, CreateNode):
             if op.ref in aliases or op.ref in by_id:
                 raise HTTPException(422, "新节点引用名称重复，本轮未执行")
             node_id = "assistant_" + hashlib.sha256((key + ":" + op.ref).encode()).hexdigest()[:28]
@@ -284,6 +312,11 @@ def prepare_operations(canvas, operations, *, request_id, user, expected_updated
     summary = {"createdNodeIds": created, "updatedNodeIds": updated, "createdEdgeIds": edges, "affectedNodeIds": list(dict.fromkeys(affected)), "nodePatches": patches,
                "operationIds": [op.operationId for op in operations], "operationHash": digest,
                "updatedAtBefore": expected_updated_at, "contentHashBefore": content_hash(canvas), "contentHashAfter": content_hash(candidate)}
+    if proposals:
+        from backend.canvas_assistant_generation import bind_snapshot
+        for proposal in proposals:
+            bind_snapshot(candidate, proposal, providers)
+        summary["proposals"] = proposals
     receipts = candidate.setdefault("assistant_receipts", {})
     receipts[key] = summary
     while len(receipts) > 100:

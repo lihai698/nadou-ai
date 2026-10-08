@@ -6241,6 +6241,8 @@ function retryCanvasSave(){
 }
 async function saveCanvas(){
     if(!canvasId || !canvas) return false;
+    clearTimeout(saveTimer);
+    saveTimer = null;
     if(canvasSyncInFlight){
         canvasSaveQueued = true;
         return false;
@@ -16785,17 +16787,17 @@ function runSmartCascadeFromLoop(loopId){
     selectedImage = {nodeId:'', index:-1};
     runSmartCascade(tail);
 }
-async function runGeneration(){
-    const node = selectedNode();
+async function runGeneration(options={}){
+    const node = options.assistantProposal ? nodes.find(n=>n.id===options.assistantProposal.nodeId) : selectedNode();
     if(node?.type === 'smart-minimax') return runMinimaxNode(node.id);
     if(!node || smartNodeInFlight(node)) return;
     if(!confirmSmartUnknownResubmission(node)) return;
-    const request = buildPromptRequest(node, null, true, smartLoopContext);
+    const request = options.assistantProposal ? {prompt:options.assistantProposal.prompt,displayPrompt:options.assistantProposal.prompt,refs:options.assistantProposal.referenceImages.map(url=>({url,kind:'image'}))} : buildPromptRequest(node, null, true, smartLoopContext);
     const prompt = request.prompt.trim();
     const refs = request.refs;
     const previousSettings = cloneSmartSettings(settings);
     const runSettings = smartSettingsForNode(node);
-    settings = {...settings, ...cloneSmartSettings(runSettings || {})};
+    settings = {...settings, ...cloneSmartSettings(runSettings || {}), ...(options.acceptedTask?{count:1}:{})};
     if(!prompt && smartRunNeedsPrompt(settings)){
         settings = previousSettings;
         toast(tr('smart.toastNeedPrompt'));
@@ -16815,6 +16817,7 @@ async function runGeneration(){
         };
     }
     const meta = snapshotRunMeta(prompt, node.id, request.displayPrompt, refs);
+    if(options.assistantProposal){meta.promptText=options.assistantProposal.prompt;meta.promptHtml=escapeHtml(options.assistantProposal.prompt);}
     const logKind = isApiLikeEngine(settings.engine) && settings.apiKind === 'video' ? 'video' : 'image';
     const runLog = smartRunSnapshot(node, prompt, refs, logKind);
     rememberRecentSmartSettings(settings, node);
@@ -16894,7 +16897,7 @@ async function runGeneration(){
                 ? await runRunningHubGeneration(prompt, refs)
                 : settings.engine === 'modelscope'
                 ? await runModelscopeGeneration(prompt, refs)
-                : await runApiGeneration(prompt, refs);
+                : await runApiGeneration(prompt, refs, settings, options);
         if(isApiLikeEngine(settings.engine) || rhModelMode){
             const taskIds = Array.isArray(outImages?.taskIds) ? outImages.taskIds : [];
             const warning = recordSmartTaskSubmission(taskIds.length ? pendingNode : node, outImages);
@@ -17121,9 +17124,9 @@ async function saveSmartAcceptedTasksBeforeQuery(node, taskIds){
     toast('任务已受理，但画布尚未保存；请先重试保存，再查询原任务');
     return false;
 }
-async function runApiGeneration(prompt, refs, runSettings=settings){
+async function runApiGeneration(prompt, refs, runSettings=settings, options={}){
     if(!runSettings.provider_id || !runSettings.model) throw new Error(tr('smart.errNoApiModel'));
-    const count = Math.max(1, Math.min(8, Number(runSettings.count || 1)));
+    const count = options.acceptedTask ? 1 : Math.max(1, Math.min(8, Number(runSettings.count || 1)));
     const payload = {
         prompt,
         provider_id:runSettings.provider_id,
@@ -17136,6 +17139,7 @@ async function runApiGeneration(prompt, refs, runSettings=settings){
         reference_images:imageRefsOnly(refs).slice(0, SMART_REFERENCE_IMAGE_MAX)
     };
     const settled = await Promise.allSettled(Array.from({length:count}, async () => {
+        if(options.acceptedTask?.task_id) return options.acceptedTask.task_id;
         const response = await fetch('/api/canvas-image-tasks', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
         if(!response.ok){
             const error = new Error((await response.text().catch(() => '')) || `HTTP ${response.status}`);
@@ -18344,6 +18348,7 @@ async function pollSmartVideoCanvasTask(taskId, options={}){
 }
 function finalizeSmartPendingTask(node, taskId, images, kind='image'){
     if(!node || !taskId) return;
+    if(node.assistantTaskId===taskId) node.assistantCompletedTaskId=taskId;
     delete node.taskFailureNotice;
     node.pendingTasks = smartPendingTasks(node).filter(task => task.taskId !== taskId);
     node.pending = Math.max(0, Number(node.pending || 0) - 1);
@@ -20272,6 +20277,25 @@ function smartAssistantCreationSettings(){
     const names=['engine','provider_id','model','ratio','resolution','quality','customRatio','customSize','customRatioWidth','customRatioHeight','customWidth','customHeight','videoProvider','videoModel','videoDuration','videoAspect','videoResolution','videoEnhancePrompt','videoEnableUpsample','videoWatermark','videoCameraFixed','videoGenerateAudio','videoMultimodal','videoUseFrameRoles'];
     return Object.fromEntries(names.filter(key=>settings[key]!==undefined).map(key=>[key,settings[key]]));
 }
+async function smartAssistantImageRequest(proposal){
+    const node=nodes.find(n=>n.id===proposal.nodeId && n.type==='smart-image');
+    if(!canvas || canvasId!==proposal.canvasId || !node) throw new Error('画布或生成节点已变化，请重新提出方案');
+    if(smartNodeInFlight(node)) throw new Error('该节点还有原任务，请先在画布查询或恢复原任务');
+    const runSettings=smartSettingsForNode(node);
+    return {prompt:proposal.prompt,provider_id:runSettings.provider_id,model:runSettings.model,size:sizeForRun(runSettings),
+        aspect_ratio:API_RATIO_VALUES[runSettings.ratio]||(runSettings.ratio==='custom'?String(runSettings.customRatio||'').trim():''),resolution:['1k','2k','4k'].includes(runSettings.resolution)?runSettings.resolution:'',
+        reference_images:proposal.referenceImages.map(url=>({url,kind:'image'})),quality:runSettings.quality||'auto',n:1};
+}
+async function smartAssistantGenerateImage(proposal,task){
+    const node=nodes.find(n=>n.id===proposal.nodeId && n.type==='smart-image');
+    if(!canvas || canvasId!==proposal.canvasId || !node || !task?.task_id) throw new Error('画布或任务已变化，请查询原任务');
+    if(node.assistantCompletedTaskId===task.task_id) return;
+    if(smartPendingTasks(node).some(p=>p.taskId===task.task_id)){await resumeSmartPendingNode(node);return;}
+    if(smartNodeInFlight(node)) throw new Error('该节点正在生成，请查看画布中的任务');
+    node.assistantTaskId=task.task_id;
+    await runGeneration({assistantProposal:proposal,acceptedTask:task});
+    await saveCanvas();
+}
 window.onload = async () => {
     applyTheme(localStorage.getItem('studio_theme') || localStorage.getItem('canvas_theme') || 'light');
     loadPromptPresets();
@@ -20291,6 +20315,8 @@ window.onload = async () => {
         getContext:()=>canvas ? {id:canvasId,title:canvas.title,updatedAt:Number(canvas.updated_at||0),nodes,selectedNodeIds:selectedNodeIds(),creationSettings:smartAssistantCreationSettings()} : null,
         save:()=>saveCanvas(),
         refresh:()=>mergeReloadCanvasNow(),
+        prepareImageRequest:smartAssistantImageRequest,
+        generateImage:smartAssistantGenerateImage,
         referencePreview:(item,size)=>item.kind==='video' ? smartVideoPreviewHtml(item,size,'preload="none"') : smartPreviewImgHtml(item.thumbnail||item.url,size,'loading="lazy" draggable="false"'),
         bindReferencePreviews:element=>bindSmartPreviewImageFallbacks(element),
         openPromptTemplates:async callback=>{canvasAssistantTemplateCallback=callback;await openPromptTemplatePanel('', '', {target:'assistant'});},

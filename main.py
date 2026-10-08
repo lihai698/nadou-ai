@@ -67,7 +67,8 @@ from backend.tracing import (
 from backend.diagnostics import configure_diagnostics, write_diagnostic
 from backend.atomic_json import write_json_atomic, write_text_atomic
 from backend.process_lock import interprocess_file_lock
-from backend.canvas_assistant import create_assistant_router
+from backend.canvas_assistant import create_assistant_router, canvas_context
+from backend.canvas_assistant_generation import validate_snapshot
 from backend.canvas_assistant_operations import prepare_operations
 from backend.data_formats import (
     InvalidDataFormat,
@@ -16478,13 +16479,20 @@ async def _run_canvas_image_task(task_id: str, payload: OnlineImageRequest):
 
 @app.post("/api/canvas-image-tasks")
 async def create_canvas_image_task(payload: OnlineImageRequest, request: Request):
-    task_id = f"canvas_img_{uuid.uuid4().hex}"
+    return await enqueue_canvas_image_task(payload, request)
+
+
+async def enqueue_canvas_image_task(payload: OnlineImageRequest, request: Request, task_id=None):
+    task_id = task_id or f"canvas_img_{uuid.uuid4().hex}"
     trace_fields = task_context(
         task_id,
         trace_id=getattr(request.state, "trace_id", ""),
         request_id=getattr(request.state, "request_id", ""),
     )
     with CANVAS_TASK_LOCK:
+        previous = CANVAS_TASKS.get(task_id) or _read_canvas_task_record(task_id)
+        if previous:
+            return {"task_id": task_id, "status": previous.get("status", "unknown")}
         CANVAS_TASKS[task_id] = {
             "id": task_id,
             "type": "online-image",
@@ -16509,7 +16517,9 @@ async def create_canvas_image_task(payload: OnlineImageRequest, request: Request
             _write_canvas_task_record(CANVAS_TASKS[task_id], required=True)
         except (OSError, TaskRecordError):
             CANVAS_TASKS.pop(task_id, None)
-            raise HTTPException(status_code=503, detail="本地图片任务记录无法保存，本次请求未提交")
+            error = HTTPException(status_code=503, detail="本地图片任务记录无法保存，本次请求未提交")
+            error.submission_known_rejected = True
+            raise error
     asyncio.create_task(run_canvas_image_task(task_id, payload))
     return {"task_id": task_id, "status": "queued", **trace_fields}
 
@@ -19479,15 +19489,34 @@ async def call_canvas_assistant_model(fields):
     return await canvas_llm(CanvasLLMRequest(**fields))
 
 
+def canvas_assistant_providers():
+    """确认快照包含真实凭据摘要；公开模型目录与回合均不返回凭据。"""
+    values = public_api_providers()
+    for provider in values:
+        credentials = [provider_env_key_value(provider['id'])]
+        if provider.get('protocol') == 'codex':
+            auth = gpt_image_2_skill_auth_json(gpt_image_2_skill_auth_file())
+            credentials.append(auth)  # 登录变更（含令牌刷新）后重新确认方案。
+        if provider['id'] == 'volcengine':
+            credentials.extend([volcengine_access_key_value(), volcengine_secret_key_value()])
+        provider['_configuration_revision'] = hashlib.sha256(json.dumps(credentials, sort_keys=True).encode()).hexdigest()
+    return values
+
+
 def apply_canvas_assistant_operations(user, payload, operations):
     with CANVAS_LOCK:
         current = load_canvas(payload.canvasId)
+        assets = canvas_assistant_reference_assets() if payload.referencedAssetIds else []
+        _, reference_images, _ = canvas_context(current, payload, assets)
         candidate, summary = prepare_operations(
             current, operations, request_id=payload.requestId, user=user,
             expected_updated_at=payload.expectedUpdatedAt,
-            creation_settings=payload.creationSettings, providers=public_api_providers(),
+            creation_settings=payload.creationSettings, providers=canvas_assistant_providers(),
+            image_model_confirmed=payload.imageModelConfirmed, reference_images=reference_images,
         )
         if candidate is not None:
+            for proposal in summary.get("proposals", []):
+                proposal["referenceAssetSnapshot"] = [{"id": a["id"], "url": a["url"]} for a in assets if a["id"] in payload.referencedAssetIds]
             _require_canvas_format(candidate)
             candidate["updated_at"] = max(now_ms(), int(current.get("updated_at") or 0) + 1)
             summary["updatedAtAfter"] = candidate["updated_at"]
@@ -19497,6 +19526,13 @@ def apply_canvas_assistant_operations(user, payload, operations):
 
 async def notify_canvas_assistant_changed(canvas_id):
     await manager.broadcast_canvas_updated(canvas_id, int(load_canvas(canvas_id).get("updated_at") or 0), "canvas-assistant")
+
+
+async def submit_canvas_assistant_image(proposal, image_request, request):
+    with CANVAS_LOCK:
+        current = load_canvas(request.state.assistant_canvas_id)
+        validate_snapshot(current, proposal, canvas_assistant_providers(), proposal["confirmedUpdatedAt"])
+        return await enqueue_canvas_image_task(OnlineImageRequest.model_validate(image_request), request, proposal["taskId"])
 
 
 def canvas_assistant_reference_assets():
@@ -19530,12 +19566,14 @@ def canvas_assistant_reference_assets():
 app.include_router(create_assistant_router(
     root=lambda: os.path.join(DATA_DIR, "canvas_assistant"),
     load_canvas=load_canvas,
-    providers=public_api_providers,
+    providers=canvas_assistant_providers,
     user_id=safe_user_id,
     call_model=call_canvas_assistant_model,
     apply_operations=apply_canvas_assistant_operations,
     notify_changed=notify_canvas_assistant_changed,
     load_reference_assets=canvas_assistant_reference_assets,
+    submit_image=submit_canvas_assistant_image,
+    query_image=get_canvas_image_task,
 ))
 
 # --- 对话管理 ---

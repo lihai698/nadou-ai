@@ -439,8 +439,10 @@ test('reload does not automatically query a locally restored unsaved task',()=>{
         ]}],
         materializeCanvasDirectTasks:()=>{},
         pollCanvasImageTask:id=>queries.push(id),
+        watchCanvasDepthCapture:()=>{throw Error('unexpected depth capture');},
     });
-    vm.runInContext(section('function resumeCanvasImageTasks(', 'function renderOutputMedia('),context);
+    vm.runInContext(section('function resumeCanvasDepthCaptureTasks(', 'function openOutputNodeMenu(')
+        +section('function resumeCanvasImageTasks(', 'function renderOutputMedia('),context);
     vm.runInContext('resumeCanvasImageTasks()',context);
     assert.deepEqual(queries,['saved-2']);
 });

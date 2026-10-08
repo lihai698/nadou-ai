@@ -96,3 +96,13 @@ body:has(.smart-assistant-toggle) .smart-workflow-toggle { right:466px; }
 }
 @media(max-width:500px) { body:has(.smart-assistant-toggle) .smart-assistant-toggle,body:has(.smart-assistant-toggle) .asset-toggle,body:has(.smart-assistant-toggle) .smart-log-toggle,body:has(.smart-assistant-toggle) .smart-shortcut-toggle,body:has(.smart-assistant-toggle) .smart-workflow-toggle { top:76px; } }
 @media(pointer:coarse) { .canvas-assistant textarea { font-size:16px; } .canvas-assistant-head-actions button { min-height:36px; } .canvas-assistant .canvas-assistant-height { height:20px; min-height:20px; } }
+.canvas-assistant-proposal{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;margin:10px 0;display:grid;gap:9px;font-size:12px;text-shadow:none;}
+.canvas-assistant-proposal-meta,.canvas-assistant-proposal details div{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.6;}
+.canvas-assistant-proposal summary{cursor:pointer;}
+.canvas-assistant-proposal-state{line-height:1.5;overflow-wrap:anywhere;}
+.canvas-assistant-proposal-actions{display:flex;flex-wrap:wrap;gap:8px;}
+.canvas-assistant-proposal-actions button{border:1px solid var(--line);background:var(--card,var(--panel));color:var(--text);border-radius:8px;padding:6px 10px;cursor:pointer;}
+.canvas-assistant-proposal-actions button:first-child{color:var(--accent);}
+.canvas-assistant-proposal-actions button:disabled{opacity:.5;cursor:wait;}
+.canvas-assistant-proposal-refs{display:flex;gap:6px;flex-wrap:wrap;}
+.canvas-assistant-proposal-refs img{width:42px;height:42px;object-fit:contain;border-radius:6px;background:var(--soft);}

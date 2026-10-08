@@ -61,7 +61,7 @@
         function matches(id=canvasId){ return !destroyed && current()?.id===id; }
         async function api(path,body,signal){
             const response=await fetch(`/api/canvas-assistant/${path}`,{method:body?'POST':'GET',headers,body:body?JSON.stringify(body):undefined,signal});
-            if(!response.ok){ const data=await response.json().catch(()=>({})); throw new Error(typeof data.detail==='string'?data.detail:'助手请求失败，请检查连接'); }
+            if(!response.ok){ const data=await response.json().catch(()=>({})); const error=new Error(typeof data.detail==='string'?data.detail:'助手请求失败，请检查连接');error.status=response.status;error.submissionKnownRejected=data.submissionKnownRejected===true;throw error; }
             return response.json();
         }
         function rememberLayout(){ const rect=panel.getBoundingClientRect(); write(layoutKey,{left:rect.left,top:rect.top,height:rect.height}); }
@@ -131,6 +131,66 @@
             for(const item of media){const add=document.createElement('button');add.type='button';add.title='引用到画布';add.innerHTML=`${icon('image-plus')}<span>引用到画布</span>`;add.onclick=async()=>{try{if(await adapter.addImageNode?.(item.url,item.name||'助手图片'))showStatus('已引用到画布');else showStatus('当前画布暂不支持图片节点');}catch(err){showStatus(err.message||'引用图片失败');}};actions.append(add);}
             container.append(actions);icons();
         }
+        function addProposalCard(turn, proposal){
+            const owner=canvasId,sessionId=session.id;
+            const card=document.createElement('section');card.className='canvas-assistant-proposal';card.setAttribute('aria-label','图片生成方案');
+            const title=document.createElement('strong');title.textContent=proposal.title||'图片生成方案';
+            const ratios={square:'1:1',portrait:'2:3',landscape:'3:2',portrait43:'3:4',landscape43:'4:3',story:'9:16',wide:'16:9',ultrawide:'21:9',ultratall:'9:21',source:'适配参考图',custom:'自定义'};
+            const meta=document.createElement('div');meta.className='canvas-assistant-proposal-meta';meta.textContent=`${proposal.providerName||proposal.provider} · ${proposal.model}\n比例 ${ratios[proposal.ratio]||proposal.ratio} · 分辨率 ${proposal.resolution==='auto'?'自动':proposal.resolution.toUpperCase()} · 1 张 · 参考图 ${proposal.referenceImages.length} 张`;
+            const details=document.createElement('details'),summary=document.createElement('summary'),prompt=document.createElement('div');summary.textContent='查看生成提示词';prompt.textContent=proposal.prompt;details.append(summary,prompt);
+            const note=document.createElement('div');note.className='canvas-assistant-note';note.textContent='点击生成后使用所选平台额度，实际消耗以平台为准。';
+            const state=document.createElement('div');state.className='canvas-assistant-proposal-state';state.setAttribute('role','status');
+            const actions=document.createElement('div');actions.className='canvas-assistant-proposal-actions';
+            card.append(title,meta,details,note,state,actions);messages.append(card);
+            if(proposal.referenceImages.length){const refs=document.createElement('div');refs.className='canvas-assistant-proposal-refs';for(const url of proposal.referenceImages){const image=document.createElement('img');image.src=url;image.alt='生成参考图';image.loading='lazy';refs.append(image);}card.insertBefore(refs,details);}
+            let flight=false,uncertain=false,task=null,error='';
+            const alive=()=>matches(owner)&&session?.id===sessionId&&card.isConnected;
+            const actionButton=(label,action)=>{const b=document.createElement('button');b.type='button';b.textContent=label;b.disabled=flight||busy;b.onclick=()=>operate(action);actions.append(b);};
+            function render(){
+                if(!alive())return;
+                actions.replaceChildren();state.classList.toggle('canvas-assistant-error',!!error);
+                state.textContent=error||(flight?'正在处理，请勿重复提交…':proposal.state==='dismissed'?'已放弃本方案':proposal.state==='pending'&&!uncertain?'等待确认，尚未提交生成':task?.status==='succeeded'?'生成完成，可在画布查看':task?.status==='failed'?task.error||'图片生成失败':'任务已记录，可查询原任务并恢复到画布');
+                if(proposal.state==='pending'&&!uncertain){actionButton('生成','confirm');actionButton('先不用','dismiss');}
+                else if(proposal.state!=='dismissed'){actionButton('查询原任务','query');if(task?.status==='failed'&&!proposal.retryProposalId)actionButton('重试','retry');}
+                const view=document.createElement('button');view.type='button';view.textContent='查看画布';view.disabled=flight;view.onclick=async()=>{try{await adapter.viewChanges?.(proposal.nodeIds);}catch(err){error=err.message;render();}};actions.append(view);
+            }
+            async function operate(action){
+                if(flight||busy||!alive())return;
+                flight=true;error='';render();
+                let attempted=false;
+                try{
+                    const body={canvasId:owner,sessionId,turnId:turn.id,proposalId:proposal.id,action};
+                    if(action==='confirm'){
+                        if(!imageConfirm.checked||imageModels.value!==JSON.stringify([proposal.provider,proposal.model]))throw new Error('请勾选方案对应的图片模型；修改模型后需要重新提出方案');
+                        body.imageRequest=await adapter.prepareImageRequest(proposal);
+                        if(!await adapter.save())throw new Error('画布尚未保存，请保存后再确认');
+                        if(!alive())return;
+                        Object.assign(body,{expectedUpdatedAt:current().updatedAt,imageProvider:proposal.provider,imageModel:proposal.model});
+                    }
+                    attempted=true;
+                    const result=await api('proposals/action',body);
+                    if(!alive())return;
+                    if(action==='retry'){
+                        proposal.retryProposalId=result.proposal.id;
+                        if(!turn.proposals.some(p=>p.id===result.proposal.id)){turn.proposals.push(result.proposal);addProposalCard(turn,result.proposal);}
+                        error='已创建重试方案，请再次点击生成确认。';return;
+                    }
+                    Object.assign(proposal,result.proposal);task=result.task||null;uncertain=false;
+                    if(task&&task.status!=='failed'){
+                        state.textContent='任务已受理，正在同步画布…';
+                        await adapter.generateImage(proposal,task);
+                        if(!alive())return;
+                        const latest=await api('proposals/action',{...body,action:'query'});
+                        if(alive()){Object.assign(proposal,latest.proposal);task=latest.task;}
+                    }
+                }catch(err){
+                    if(alive()){error=err.message||'操作失败，请查询原任务';if(action==='confirm'&&attempted&&!err.submissionKnownRejected&&(!err.status||err.status>=500||err.message.includes('查询原任务')))uncertain=true;}
+                }finally{flight=false;render();}
+            }
+            render();
+            // 重开只读取原编号状态，不触发新的图片请求。
+            if(['submitted','submitting'].includes(proposal.state))api('proposals/action',{canvasId:owner,sessionId,turnId:turn.id,proposalId:proposal.id,action:'query'}).then(result=>{if(alive()&&!flight){Object.assign(proposal,result.proposal);task=result.task;render();}}).catch(err=>{if(alive()&&!flight){error=err.message;render();}});
+        }
         function drawHistory(){
             messages.replaceChildren();
             if(!session?.turns?.length){ messages.textContent='选中节点，或引用画布素材，告诉我你的创作想法。';return; }
@@ -141,6 +201,7 @@
                 else if(turn.state!=='completed'){reply.classList.add('canvas-assistant-error');reply.textContent=turn.error||'这一轮没有完成';if(['failed','interrupted'].includes(turn.state)){const retry=document.createElement('button');retry.type='button';retry.textContent='重试';retry.onclick=()=>{input.value=turn.message;syncControls();input.focus();};reply.append(retry);}}
                 if(turn.state==='completed')addReplyActions(reply,turn.reply||'',Array.isArray(turn.media)?turn.media:[]);
                 messages.append(reply);
+                for(const proposal of turn.proposals||[])addProposalCard(turn,proposal);
                 const change=turn.change;
                 if(change && (change.createdNodeIds?.length||change.updatedNodeIds?.length||change.createdEdgeIds?.length)){
                     const card=document.createElement('div');card.className='canvas-assistant-change';
@@ -201,7 +262,8 @@
             const owner=canvasId,sessionId=session.id,text=input.value.trim(),[provider,model]=JSON.parse(models.value);
             closeReference();
             const selection=[...(current()?.selectedNodeIds||[])],refs=[...references],assetRefs=assetReferences.map(item=>item.id);
-            const creationSettings=buildCreationSettings(current()?.creationSettings,imageConfirm.checked?imageModels.value:'');
+            const imageModelConfirmed=!!imageConfirm.checked;
+            const creationSettings=buildCreationSettings(current()?.creationSettings,imageModelConfirmed?imageModels.value:'');
             const active={canvasId:owner,sessionId,id:crypto.randomUUID(),controller:new AbortController()};request=active;busy=true;syncControls();showStatus('正在保存画布…');
             let ended=false,reply=null;
             try{
@@ -209,7 +271,7 @@
                 if(active.controller.signal.aborted)throw new DOMException('已停止','AbortError');
                 if(!matches(owner)||session?.id!==sessionId)throw new Error('画布或对话已切换');
                 const value=current();
-                const response=await fetch('/api/canvas-assistant/chat',{method:'POST',headers,signal:active.controller.signal,body:JSON.stringify({canvasId:owner,sessionId,requestId:active.id,message:text,provider,model,selectedNodeIds:selection,referencedNodeIds:refs,referencedAssetIds:assetRefs,expectedUpdatedAt:value.updatedAt,creationSettings})});
+                const response=await fetch('/api/canvas-assistant/chat',{method:'POST',headers,signal:active.controller.signal,body:JSON.stringify({canvasId:owner,sessionId,requestId:active.id,message:text,provider,model,selectedNodeIds:selection,referencedNodeIds:refs,referencedAssetIds:assetRefs,expectedUpdatedAt:value.updatedAt,creationSettings,imageModelConfirmed})});
                 if(!response.ok){const data=await response.json().catch(()=>({}));throw new Error(typeof data.detail==='string'?data.detail:'发送失败');}
                 active.submitted=true;
                 const userBubble=document.createElement('div');userBubble.className='canvas-assistant-message canvas-assistant-user';userBubble.textContent=text;reply=document.createElement('div');reply.className='canvas-assistant-message canvas-assistant-reply';reply.textContent='正在分析画布…';messages.append(userBubble,reply);input.value='';let output='';

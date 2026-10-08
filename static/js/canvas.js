@@ -11700,11 +11700,11 @@ async function runGenerator(genId, opts={}){
     if(!gen || (gen.running && !opts.cascade)) return;
     const cascadeTargetId = cascadeTargetIdFromOptions(opts);
     const sources = orderedSources(gen, generatorSources(gen));
-    const prompt = sources.map(s => s.prompt).filter(Boolean).join('\n\n');
-    const refs = imageRefsOnly(sources.flatMap(s => s.refs || []));
+    const prompt = opts.assistantProposal?.prompt ?? sources.map(s => s.prompt).filter(Boolean).join('\n\n');
+    const refs = opts.assistantProposal ? opts.assistantProposal.referenceImages.map(url=>({url,kind:'image'})) : imageRefsOnly(sources.flatMap(s => s.refs || []));
     if(!prompt && !refs.length){ alert(tr('canvas.needPromptOrImage')); return; }
     if(!confirmCanvasUnknownResubmission(gen, opts)) return;
-    const count = Math.max(1, Math.min(8, Number(gen.count || 1)));
+    const count = opts.acceptedTask ? 1 : Math.max(1, Math.min(8, Number(gen.count || 1)));
     let out = outputForNode(gen, 460);
     const run = runSnapshot(gen, prompt || 'Edit the reference images.', refs);
     const payload = {
@@ -11726,7 +11726,7 @@ async function runGenerator(genId, opts={}){
     }
     rememberCanvasSubmissionWarning(gen, '');
     try {
-        const submission = await submitCanvasImageTaskBatch(count, payload, {cascadeTargetId});
+        const submission = await submitCanvasImageTaskBatch(count, payload, {...opts,cascadeTargetId});
         const {taskInfos, warning, unknownCount} = submission;
         rememberCanvasSubmissionWarning(gen, warning, unknownCount > 0);
         if(!out){
@@ -11736,6 +11736,7 @@ async function runGenerator(genId, opts={}){
             mergeGeneratedOutputs(gen, outputs, Boolean(opts.cascade));
             addGenerationLog({run, outputs, runMs:nowMs() - startedAt});
             gen.runStatus = 'done';
+            if(opts.acceptedTask?.task_id) gen.assistantCompletedTaskId=opts.acceptedTask.task_id;
             gen.runError = warning;
             gen.running = false;
             refreshRunNodes(gen, out);
@@ -14489,6 +14490,7 @@ function rememberCanvasSubmissionWarning(node, warning, unknown=false){
     }
 }
 async function createCanvasImageTask(payload, options={}){
+    if(options.acceptedTask?.task_id) return options.acceptedTask;
     const res = await cascadeFetch('/api/canvas-image-tasks', {
         method:'POST',
         headers:{'Content-Type':'application/json'},
@@ -15043,6 +15045,7 @@ function completeCanvasImageTask(taskId, result){
     if(gen){
         mergeGeneratedOutputs(gen, images, Boolean(pending.appendGenerated));
         gen.runStatus = 'done';
+        if(gen.assistantTaskId===taskId) gen.assistantCompletedTaskId=taskId;
         gen.runError = '';
         gen.running = false;
     }
@@ -17452,6 +17455,26 @@ function canvasAssistantCreationSettings(){
         videoProvider:video?.apiProvider||'',videoModel:video?.model||'',videoDuration:video?.duration||5,videoAspect:video?.aspectRatio||'16:9',videoResolution:video?.resolution||'',
         videoEnhancePrompt:!!video?.enhancePrompt,videoEnableUpsample:!!video?.enableUpsample,videoWatermark:!!video?.watermark,videoCameraFixed:!!video?.cameraFixed,videoGenerateAudio:!!video?.generateAudio,videoMultimodal:!!video?.multimodal,videoUseFrameRoles:!!video?.useFrameRoles};
 }
+async function canvasAssistantImageRequest(proposal){
+    const node=nodes.find(n=>n.id===proposal.nodeId && n.type==='generator');
+    if(!canvas || canvas.id!==proposal.canvasId || !node) throw new Error('画布或生成节点已变化，请重新提出方案');
+    if(node.running || node._directPending?.length || nodes.some(n=>(n._pending||[]).some(p=>p.run?.node?.id===node.id))) throw new Error('该节点还有原任务，请先在画布查询或恢复原任务');
+    const refs=proposal.referenceImages.map(url=>({url,kind:'image'}));
+    return {prompt:proposal.prompt,provider_id:node.apiProvider,model:node.model,size:await generatorSizeForRun({...node},refs),
+        reference_images:refs,quality:normalizedImageQuality(node.quality)||'auto',n:1};
+}
+async function canvasAssistantGenerateImage(proposal,task){
+    const node=nodes.find(n=>n.id===proposal.nodeId && n.type==='generator');
+    if(!canvas || canvas.id!==proposal.canvasId || !node || !task?.task_id) throw new Error('画布或任务已变化，请查询原任务');
+    if(node.assistantCompletedTaskId===task.task_id || (node.assistantTaskId===task.task_id && node.runStatus==='done')) return;
+    if(nodes.some(n=>(n._pending||[]).some(p=>p.canvasTaskId===task.task_id)) || (node._directPending||[]).some(p=>p.canvasTaskId===task.task_id)){
+        await pollCanvasImageTask(task.task_id);return;
+    }
+    if(node.running) throw new Error('该节点正在生成，请查看画布中的任务');
+    node.assistantTaskId=task.task_id;
+    await runGenerator(node.id,{assistantProposal:proposal,acceptedTask:task});
+    await saveCanvas();
+}
 window.onload = async () => {
     applyTheme(localStorage.getItem('studio_theme') || localStorage.getItem(CANVAS_THEME_KEY) || 'light');
     applyQuickToolbarState();
@@ -17472,6 +17495,8 @@ window.onload = async () => {
             getContext:()=>canvas ? {id:canvas.id,title:canvas.title,updatedAt:Number(canvas.updated_at||0),nodes,selectedNodeIds:[...selected],creationSettings:canvasAssistantCreationSettings()} : null,
             save:()=>saveCanvas(),
             refresh:()=>syncRemoteCanvasNow(),
+            prepareImageRequest:canvasAssistantImageRequest,
+            generateImage:canvasAssistantGenerateImage,
             referencePreview:(item,size)=>item.kind==='video' ? canvasVideoPreviewHtml(item.url,size,'preload="none"') : canvasPreviewImgHtml(item.thumbnail||item.url,size,'loading="lazy" draggable="false"'),
             bindReferencePreviews:element=>bindCanvasPreviewImageFallbacks(element),
             openPromptTemplates:async callback=>{canvasAssistantTemplateCallback=callback;await openPromptTemplateModal('');},

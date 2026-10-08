@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import copy
 import hashlib
 import json
 import re
@@ -11,12 +12,13 @@ from pathlib import Path
 from threading import RLock
 
 from fastapi import APIRouter, Header, HTTPException, Request
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, JSONResponse
 from pydantic import BaseModel, Field
 
 from backend.atomic_json import write_json_atomic
 from backend.process_lock import interprocess_file_lock
 from backend.canvas_assistant_operations import OPERATION_GUIDE, parse_plan, receipt_key
+from backend.canvas_assistant_generation import bind_snapshot, target_signature, validate_snapshot, validate_image_request
 
 
 class SessionRequest(BaseModel):
@@ -36,6 +38,19 @@ class TurnRequest(BaseModel):
     referencedAssetIds: list[str] = Field(default_factory=list, max_length=20)
     expectedUpdatedAt: int
     creationSettings: dict[str, str | int | float | bool] = Field(default_factory=dict, max_length=30)
+    imageModelConfirmed: bool = False
+
+
+class ProposalAction(BaseModel):
+    canvasId: str
+    sessionId: str
+    turnId: str
+    proposalId: str
+    action: str = Field(pattern=r"^(confirm|dismiss|retry|query)$")
+    expectedUpdatedAt: int = 0
+    imageProvider: str = ""
+    imageModel: str = ""
+    imageRequest: dict = Field(default_factory=dict)
 
 
 class CancelRequest(BaseModel):
@@ -158,6 +173,8 @@ class AssistantStore:
             turn.update(state="completed", reply=plan.reply, error="")
             if summary:
                 turn["change"] = summary
+                if summary.get("proposals"):
+                    turn["proposals"] = copy.deepcopy(summary["proposals"])
             return turn
         return self.transact(user, payload.canvasId, change)
 
@@ -168,6 +185,8 @@ class AssistantStore:
                     receipt = receipts.get(receipt_key(user, turn["id"]))
                     if receipt and not turn.get("change"):
                         turn.update(change=receipt, state="completed", reply=turn.get("plannedReply") or "画布操作已保存，请在画布上查看。", error="")
+                        if receipt.get("proposals") and not turn.get("proposals"):
+                            turn["proposals"] = copy.deepcopy(receipt["proposals"])
         if receipts:
             self.transact(user, canvas_id, change)
 
@@ -261,7 +280,7 @@ def assistant_output_media(result):
     return output
 
 
-def create_assistant_router(*, root, load_canvas, providers, user_id, call_model, apply_operations=None, notify_changed=None, load_reference_assets=None):
+def create_assistant_router(*, root, load_canvas, providers, user_id, call_model, apply_operations=None, notify_changed=None, load_reference_assets=None, submit_image=None, query_image=None):
     router = APIRouter(prefix="/api/canvas-assistant")
     store = AssistantStore(root)
     running = {}
@@ -324,6 +343,96 @@ def create_assistant_router(*, root, load_canvas, providers, user_id, call_model
             task.cancel()
         return {"state": turn["state"]}
 
+    def change_proposal(user, payload, change):
+        def transaction(doc):
+            session = store.session(doc, payload.sessionId)
+            turn = next((t for t in session["turns"] if t["id"] == payload.turnId), None)
+            proposal = next((p for p in (turn or {}).get("proposals", []) if p["id"] == payload.proposalId), None)
+            if not proposal:
+                raise HTTPException(404, "当前对话找不到这张生成方案")
+            return change(proposal, turn)
+        return store.transact(user, payload.canvasId, transaction)
+
+    @router.post("/proposals/action")
+    async def proposal_action(payload: ProposalAction, request: Request, x_user_id: str = Header(default="")):
+        user, canvas = identity(request, x_user_id, payload.canvasId)
+        if not submit_image or not query_image:
+            raise HTTPException(409, "当前服务尚未接入图片生成，请更新后重启")
+        proposal = await asyncio.to_thread(change_proposal, user, payload, lambda p, t: copy.deepcopy(p))
+        if payload.action == "dismiss":
+            def dismiss(p, turn):
+                if p["state"] != "pending":
+                    raise HTTPException(409, "这张方案已处理，请查看当前状态")
+                p["state"] = "dismissed"
+                return {"proposal": copy.deepcopy(p)}
+            return await asyncio.to_thread(change_proposal, user, payload, dismiss)
+        if payload.action in {"query", "retry"} or proposal["state"] in {"submitting", "submitted"}:
+            try:
+                task = await query_image(proposal["taskId"])
+                task = {**task, "task_id": proposal["taskId"]}
+            except HTTPException as exc:
+                if exc.status_code == 404:
+                    raise HTTPException(409, "尚未确认任务受理状态，请查询原任务，勿重复提交") from exc
+                raise
+            if payload.action == "retry":
+                if task.get("status") != "failed":
+                    raise HTTPException(409, "原任务尚未明确失败，不能再次提交，请先查询原任务")
+                if task.get('upstream_task_id') or task.get('upstream_task_ids') or re.search(r'(?:task_id|taskId|task id)\s*[=:：]\s*[A-Za-z0-9_.:-]+', str(task.get('error') or ''), re.I):
+                    raise HTTPException(409, '原任务仍有可恢复的远端编号，请先在画布查询原任务，勿重复生成')
+                def retry(p, turn):
+                    if p.get("retryProposalId"):
+                        found = next(item for item in turn["proposals"] if item["id"] == p["retryProposalId"])
+                        return {"proposal": copy.deepcopy(found)}
+                    current = load_canvas(payload.canvasId)
+                    if target_signature(current, p) != p["targetHash"]:
+                        raise HTTPException(409, "提示词、参考图或模型设置已变化，请重新提出生成方案")
+                    fresh = copy.deepcopy(p)
+                    fresh.update(id="proposal_" + uuid.uuid4().hex, taskId="canvas_img_assistant_" + uuid.uuid4().hex, state="pending")
+                    for name in ("imageRequest", "retryProposalId", "error"):
+                        fresh.pop(name, None)
+                    bind_snapshot(current, fresh, providers())
+                    p["retryProposalId"] = fresh["id"]
+                    turn["proposals"].append(fresh)
+                    return {"proposal": copy.deepcopy(fresh)}
+                return await asyncio.to_thread(change_proposal, user, payload, retry)
+            def recovered(p, turn):
+                p["state"] = "submitted"
+                return {"proposal": copy.deepcopy(p), "task": task}
+            return await asyncio.to_thread(change_proposal, user, payload, recovered)
+        if payload.action != "confirm":
+            raise HTTPException(409, "方案尚未提交，没有可查询的图片任务")
+        if (payload.imageProvider, payload.imageModel) != (proposal["provider"], proposal["model"]):
+            raise HTTPException(409, "助手选择的图片模型已变化，请重新提出生成方案")
+        validate_image_request(proposal, payload.imageRequest)
+        # 外部素材按服务端索引重新核对，不相信浏览器传回的图片地址。
+        if proposal.get("referenceAssetSnapshot"):
+            fresh_assets = await asyncio.to_thread(load_reference_assets) if load_reference_assets else []
+            by_id = {item["id"]: item for item in fresh_assets}
+            if any(by_id.get(item["id"], {}).get("url") != item["url"] for item in proposal["referenceAssetSnapshot"]):
+                raise HTTPException(409, "参考素材已变化，请重新提出生成方案")
+        def claim(p, turn):
+            if p["state"] != "pending":
+                raise HTTPException(409, "方案正在处理或已处理，请查询原任务")
+            validate_snapshot(load_canvas(payload.canvasId), p, providers(), payload.expectedUpdatedAt)
+            p.update(state="submitting", imageRequest=copy.deepcopy(payload.imageRequest), confirmedUpdatedAt=payload.expectedUpdatedAt)
+            return copy.deepcopy(p)
+        claimed = await asyncio.to_thread(change_proposal, user, payload, claim)
+        request.state.assistant_canvas_id = payload.canvasId
+        try:
+            task = await submit_image(claimed, payload.imageRequest, request)
+            task = {**task, "task_id": claimed["taskId"]}
+        except HTTPException as exc:
+            known_rejected = getattr(exc, 'submission_known_rejected', False)
+            if known_rejected or (400 <= exc.status_code < 500 and exc.status_code != 408):
+                await asyncio.to_thread(change_proposal, user, payload, lambda p, t: p.update(state="pending"))
+            if known_rejected:
+                return JSONResponse(status_code=exc.status_code, content={'detail':exc.detail, 'submissionKnownRejected':True})
+            raise
+        def accepted(p, turn):
+            p["state"] = "submitted"
+            return {"proposal": copy.deepcopy(p), "task": task}
+        return await asyncio.to_thread(change_proposal, user, payload, accepted)
+
     @router.post("/chat")
     async def chat(payload: TurnRequest, request: Request, x_user_id: str = Header(default="")):
         user, canvas = identity(request, x_user_id, payload.canvasId)
@@ -379,7 +488,7 @@ def create_assistant_router(*, root, load_canvas, providers, user_id, call_model
                 if final:
                     if final.get("reply"):
                         await queue.put({"type": "text_delta", "text": final["reply"]})
-                    await queue.put({"type": "turn_end", "state": final["state"], "error": final.get("error", ""), "turnId": payload.requestId, "change": final.get("change"), "media": final.get("media") or []})
+                    await queue.put({"type": "turn_end", "state": final["state"], "error": final.get("error", ""), "turnId": payload.requestId, "change": final.get("change"), "proposals": final.get("proposals") or [], "media": final.get("media") or []})
                 else:
                     await queue.put({"type": "turn_end", "state": "failed", "error": "回复历史保存失败，请查看历史确认状态后重试"})
                 running.pop(key, None)
