@@ -54,6 +54,7 @@ from backend.model_selection import (
     normalize_model_list,
     selected_model,
 )
+from backend.codex_models import list_codex_models
 from backend.tracing import (
     bind_context,
     current_request_id,
@@ -5299,11 +5300,42 @@ def is_gemini_cli_provider(provider):
 def codex_env_value(key):
     return os.getenv(key, "") or read_api_env_value(key)
 
+def _windows_codex_install_candidates():
+    """返回官方 Windows 安装器和 npm 全局安装的常见 Codex 路径。"""
+    if os.name != "nt":
+        return []
+    local_appdata = str(os.getenv("LOCALAPPDATA", "") or "").strip()
+    appdata = str(os.getenv("APPDATA", "") or "").strip()
+    candidates = []
+    if local_appdata:
+        for install_root in (
+            os.path.join(local_appdata, "OpenAI", "Codex", "bin"),
+            os.path.join(local_appdata, "Programs", "OpenAI", "Codex", "bin"),
+        ):
+            try:
+                versioned_paths = glob.glob(os.path.join(install_root, "*", "codex.exe"))
+            except OSError:
+                versioned_paths = []
+            candidates.extend(versioned_paths)
+        candidates.sort(key=lambda path: os.path.getmtime(path) if os.path.isfile(path) else 0, reverse=True)
+    if appdata:
+        candidates.extend([
+            os.path.join(appdata, "npm", "codex.cmd"),
+            os.path.join(appdata, "npm", "codex.exe"),
+        ])
+    return list(dict.fromkeys(candidates))
+
 def codex_cli_executable():
     configured = str(codex_env_value("CODEX_BIN") or "").strip()
     if configured:
         return configured
-    return shutil.which("codex") or shutil.which("codex.exe") or shutil.which("codex.cmd") or ""
+    executable = shutil.which("codex") or shutil.which("codex.exe") or shutil.which("codex.cmd")
+    if executable:
+        return executable
+    for candidate in _windows_codex_install_candidates():
+        if os.path.isfile(candidate):
+            return candidate
+    return ""
 
 def codex_timeout(default=CODEX_DEFAULT_TIMEOUT):
     try:
@@ -5422,6 +5454,18 @@ def gpt_image_2_skill_executable():
         or ""
     )
 
+def gpt_image_2_skill_environment():
+    env = dict(os.environ)
+    if os.name == "nt":
+        # The Rust helper reads proxy environment variables, not Windows Internet Settings.
+        # urllib uses the existing Windows proxy when no proxy is supplied by the process.
+        proxies = urllib.request.getproxies()
+        for scheme, key in (("https", "HTTPS_PROXY"), ("http", "HTTP_PROXY"), ("all", "ALL_PROXY"), ("no", "NO_PROXY")):
+            value = proxies.get(scheme)
+            if value and not env.get(key) and not env.get(key.lower()):
+                env[key] = value
+    return env
+
 def gpt_image_2_skill_auth_file():
     configured = str(codex_env_value("GPT_IMAGE_2_SKILL_AUTH_FILE") or codex_env_value("CODEX_AUTH_FILE") or "").strip()
     if configured:
@@ -5491,13 +5535,13 @@ def gpt_image_2_skill_provider_args(auth_file=""):
         return ["--provider", "openai", "--api-key", api_key], "openai"
     return (["--provider", "codex", "--auth-file", auth_file] if auth_file else ["--provider", "codex"]), "codex"
 
-def gpt_image_2_skill_model_arg(model="", provider="openai"):
+def gpt_image_2_skill_model_arg(model="", provider="openai", fallback_model=""):
     value = str(model or "").strip()
     low = value.lower()
     provider = str(provider or "").strip().lower()
     if provider == "codex":
         if not value or low.startswith("$imagegen") or low.startswith("gpt-image"):
-            return "gpt-5.4"
+            return fallback_model or CODEX_DEFAULT_CHAT_MODELS[0]
         return value
     if not value or low.startswith("$imagegen"):
         return "gpt-image-2"
@@ -5506,19 +5550,10 @@ def gpt_image_2_skill_model_arg(model="", provider="openai"):
 def gpt_image_2_skill_size_arg(size="", model="", prompt="", provider="openai"):
     text = " ".join([str(size or ""), str(model or ""), str(prompt or "")]).lower()
     size_text = str(size or "").strip()
-    if str(provider or "").strip().lower() == "codex":
-        if "1k" in text or "1024" in text:
-            return "1K"
-        if "2k" in text or "2048" in text:
-            return "2K"
-        if "4k" in text or "3840" in text:
-            return "4K"
-        width, height = parse_size_pair(size_text)
-        if 0 < max(width, height) < 1800:
-            return "1K"
-        if 1800 <= max(width, height) < 3000:
-            return "2K"
-        return "4K"
+    # Both helper providers accept explicit pixels, auto, 2K and 4K; 1K is not a CLI preset.
+    presets = {"auto": "auto", "1k": "1024x1024", "2k": "2K", "4k": "4K"}
+    if size_text.lower() in presets:
+        return presets[size_text.lower()]
     match = re.search(r"(\d{3,5})\s*[x×*]\s*(\d{3,5})", size_text, flags=re.I)
     if match:
         width = int(match.group(1))
@@ -5538,7 +5573,9 @@ def gpt_image_2_skill_size_arg(size="", model="", prompt="", provider="openai"):
     if "4k" in text or "3840" in text:
         return "4K"
     if "1k" in text or "1024" in text:
-        return "1K"
+        return "1024x1024"
+    if not size_text and str(provider or "").strip().lower() == "codex" and "2k" not in text:
+        return "auto"
     return "2K"
 
 def gpt_image_2_skill_prompt_arg(prompt="", size="", provider="openai"):
@@ -5644,6 +5681,9 @@ def gpt_image_2_skill_failure_message(stdout_text="", stderr_text="", returncode
             msg = error.get("message") or error.get("detail") or error.get("code")
             if msg:
                 messages.append(str(msg))
+            detail = error.get("detail")
+            if detail and str(detail) != str(msg):
+                messages.append(str(detail))
         elif isinstance(error, str) and error.strip():
             messages.append(error.strip())
         if item.get("ok") is False:
@@ -5703,6 +5743,15 @@ async def generate_codex_provider_image_via_gpt_image_2_skill(prompt, size, mode
         attempts.append((["--provider", "openai", "--api-key", fallback_api_key], "openai"))
     last_message = ""
     for attempt_index, (attempt_provider_args, attempt_provider) in enumerate(attempts):
+        fallback_model = ""
+        if attempt_provider == "codex" and (not model or str(model).lower().startswith(("gpt-image", "$imagegen"))):
+            try:
+                models = await list_codex_models(codex_cli_executable(), cwd=BASE_DIR)
+            except asyncio.TimeoutError as exc:
+                raise HTTPException(status_code=504, detail="读取 Codex 生图调度模型超时，请检查网络和登录状态。") from exc
+            except (OSError, RuntimeError) as exc:
+                raise HTTPException(status_code=502, detail=safe_cli_public_text(str(exc))) from exc
+            fallback_model = models[0]
         out_path = os.path.join(OUTPUT_OUTPUT_DIR, f"gpt_image_2_{uuid.uuid4().hex}.png")
         mode = "edit" if ref_paths else "generate"
         args = [
@@ -5718,7 +5767,7 @@ async def generate_codex_provider_image_via_gpt_image_2_skill(prompt, size, mode
             "--out",
             out_path,
             "--model",
-            gpt_image_2_skill_model_arg(model, attempt_provider),
+            gpt_image_2_skill_model_arg(model, attempt_provider, fallback_model),
             "--format",
             "png",
             "--size",
@@ -5734,6 +5783,7 @@ async def generate_codex_provider_image_via_gpt_image_2_skill(prompt, size, mode
             proc = await asyncio.create_subprocess_exec(
                 *args,
                 cwd=BASE_DIR,
+                env=gpt_image_2_skill_environment(),
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
@@ -5845,22 +5895,38 @@ async def codex_reference_paths(reference_images=None):
                 pass
         raise
 
-def codex_models_payload(raw=None):
-    all_models = [*CODEX_DEFAULT_IMAGE_MODELS, *CODEX_DEFAULT_CHAT_MODELS]
+def codex_models_payload(raw=None, chat_models=None):
+    chat_models = list(chat_models or [])
+    all_models = [*CODEX_DEFAULT_IMAGE_MODELS, *chat_models]
     return {
         "ok": True,
         "protocol": "codex",
         "status": 200,
-        "message": "OpenAI Codex CLI 可用，模型列表来自本机 CLI 默认配置。",
+        "message": "模型列表来自本机 Codex CLI；生图模型由 GPT Image 2 helper 提供。" if chat_models else "请先安装并登录 Codex CLI。",
+        "model_source": "codex-cli",
         "model_count": len(all_models),
         "total": len(all_models),
         "image_models": CODEX_DEFAULT_IMAGE_MODELS,
-        "chat_models": CODEX_DEFAULT_CHAT_MODELS,
+        "chat_models": chat_models,
         "video_models": [],
         "all": all_models,
         # 管理页只需要受控诊断摘要；CLI 原始 stdout/stderr 可能含本机路径或凭据。
         "raw": safe_cli_public_raw(raw or {}),
     }
+
+async def fetch_codex_models_payload(status=None):
+    status = status if status is not None else await codex_status()
+    if not status.get("installed"):
+        payload = codex_models_payload(raw={"status": status}, chat_models=[])
+        payload.update(ok=False, status=0, message=safe_cli_public_text(status.get("message") or "未找到 Codex CLI。"))
+        return payload
+    try:
+        models = await list_codex_models(codex_cli_executable(), cwd=BASE_DIR)
+    except asyncio.TimeoutError as exc:
+        raise HTTPException(status_code=504, detail="读取 Codex 模型目录超时，请检查网络和 CLI 登录状态后重试。") from exc
+    except (OSError, RuntimeError) as exc:
+        raise HTTPException(status_code=502, detail=safe_cli_public_text(str(exc))) from exc
+    return codex_models_payload(raw={"status": status}, chat_models=models)
 
 async def generate_codex_provider_image(prompt, size, model, reference_images=None, provider=None):
     ref_paths, temp_paths = await codex_reference_paths(reference_images)
@@ -15088,14 +15154,7 @@ async def test_provider_connection(payload: TestConnectionPayload):
     """测试请求地址是否可用：调上游 /v1/models。验证通过时同时把模型清单按类别返回，避免再调一次拉取接口。"""
     protocol = protocol_from_payload(payload)
     if protocol == "codex":
-        status = await codex_status()
-        payload_models = codex_models_payload(raw={"status": status})
-        payload_models.update({
-            "ok": bool(status.get("installed")),
-            "status": 200 if status.get("installed") else 0,
-            "message": safe_cli_public_text(status.get("message") or ("OpenAI Codex CLI 可用" if status.get("installed") else "未找到 OpenAI Codex CLI")),
-        })
-        return payload_models
+        return await fetch_codex_models_payload()
     if protocol == "gemini-cli":
         status = await gemini_cli_status()
         payload_models = gemini_cli_models_payload(raw={"status": status})
@@ -15370,10 +15429,7 @@ async def fetch_models_from_upstream(base_url: str, api_key: str, protocol: str 
     """从上游模型列表端点拉取模型，并按名称做轻量分类。"""
     protocol = protocol if protocol in SUPPORTED_PROVIDER_PROTOCOLS else "openai"
     if protocol == "codex":
-        status = await codex_status()
-        payload = codex_models_payload(raw={"status": status})
-        payload["message"] = status.get("message") or payload["message"]
-        return payload
+        return await fetch_codex_models_payload()
     if protocol == "gemini-cli":
         status = await gemini_cli_status()
         payload = gemini_cli_models_payload(raw={"status": status})

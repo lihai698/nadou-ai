@@ -93,6 +93,9 @@ const CODEX_DEFAULT_CHAT_MODELS = ['gpt-5.5'];
 const GEMINI_CLI_DEFAULT_IMAGE_MODELS = ['auto'];
 const GEMINI_CLI_DEFAULT_CHAT_MODELS = ['auto'];
 const CLI_PROTOCOLS = new Set(['jimeng', 'codex', 'gemini-cli']);
+// CLI 平台没有 HTTP 地址，列表卡片应显示本机 CLI 的实际检测状态，
+// 不能把空地址误显示成“未配置地址”。
+const cliStatusCache = Object.create(null);
 const API_PROTOCOLS = ['openai', 'apimart', 'gemini', 'volcengine', 'runninghub', 'jimeng', 'codex', 'gemini-cli'];
 const CLI_PROVIDER_PRESETS = {
     jimeng:{id:'jimeng', name:'即梦 CLI', protocol:'jimeng'},
@@ -2347,8 +2350,17 @@ function renderProviderList(){
     providerList.innerHTML = sortedProviders().map(item => {
         const active = item.id === selectedId ? 'active' : '';
         const itemProtocol = String(item.protocol || 'openai').toLowerCase();
-        const stateClass = item.enabled === false ? 'is-disabled' : (item.has_key || item.has_wallet_key || CLI_PROTOCOLS.has(itemProtocol) ? 'has-key' : 'missing-key');
+        const cliStatus = CLI_PROTOCOLS.has(itemProtocol) ? cliStatusCache[itemProtocol] : null;
+        const cliReady = cliStatus?.installed === true;
+        const stateClass = item.enabled === false ? 'is-disabled' : (item.has_key || item.has_wallet_key || cliReady ? 'has-key' : 'missing-key');
         const protocolLabel = item.id === 'runninghub' ? 'RH' : String(item.protocol || 'openai').toUpperCase();
+        const providerMeta = CLI_PROTOCOLS.has(itemProtocol)
+            ? (cliStatus?.installed === true
+                ? '本机 CLI · 已安装'
+                : cliStatus?.installed === false
+                    ? '本机 CLI · 未安装'
+                    : '本机 CLI · 点击检测')
+            : (item.base_url || '未配置地址');
         if(item.id === 'modelscope'){
             return `
                 <button class="provider-card provider-card-banner ${active} ${stateClass}" type="button" onclick="selectProvider('${escapeHtml(item.id)}')">
@@ -2397,7 +2409,7 @@ function renderProviderList(){
                 <span class="provider-mark"><i data-lucide="${item.has_key ? 'key-round' : 'key'}" class="w-4 h-4"></i></span>
                 <span class="provider-info">
                     <div class="provider-name">${escapeHtml(item.name || item.id)}</div>
-                    <div class="provider-meta">${escapeHtml(item.base_url || '未配置地址')}</div>
+                    <div class="provider-meta">${escapeHtml(providerMeta)}</div>
                 </span>
                 <span class="provider-side-meta">
                     <span class="provider-status-dot"></span>
@@ -2634,6 +2646,8 @@ async function refreshJimengStatus(showCredit=true){
     setJimengStatus('检测中...');
     try {
         const data = await fetch('/api/jimeng/status').then(r => r.json());
+        cliStatusCache.jimeng = data;
+        renderProviderList();
         setJimengStatus(data.logged_in ? '已登录' : (data.installed ? '未登录' : '未安装'), data.logged_in === true);
         if(data.installed && data.version_ok === false && jimengCredit){
             jimengCredit.textContent = `⚠ 检测到 dreamina CLI 版本 ${data.cli_version || '未知'}，低于推荐的 ${data.min_version || '1.4.2'}。旧版本任务状态可能无法更新，请升级 CLI。`;
@@ -2753,6 +2767,8 @@ async function refreshCodexStatus(showInfo=true){
     setCodexStatus('检测中...');
     try {
         const data = await fetch('/api/codex/status').then(r => r.json());
+        cliStatusCache.codex = data;
+        renderProviderList();
         setCodexStatus(data.installed ? '已安装' : '未安装', data.installed === true);
         if(showInfo && codexCliInfo){
             const parts = [];
@@ -2804,6 +2820,8 @@ async function refreshGeminiCliStatus(showInfo=true){
     setGeminiCliStatus('检测中...');
     try {
         const data = await fetch('/api/gemini-cli/status').then(r => r.json());
+        cliStatusCache['gemini-cli'] = data;
+        renderProviderList();
         setGeminiCliStatus(data.installed ? '已安装' : '未安装', data.installed === true);
         if(showInfo && geminiCliInfo){
             const parts = [];
@@ -3089,13 +3107,16 @@ async function testConnection(){
                 ? `<div style="margin-top:6px;color:#92400e;font-size:11px;font-weight:700">${detectedProtocol === 'volcengine' ? '已自动识别为方舟/Ark 任务协议。' : ''}火山协议提示：模型列表只代表可见模型，聊天模型建议填写你在方舟控制台创建的 <code>ep-...</code> 推理接入点。</div>`
                 : '';
             const jimengNote = isJimeng ? `<div style="margin-top:6px;color:#15803d;font-size:11px;font-weight:700">即梦 CLI 已可用，可在画布里选择“即梦 CLI”生成。</div>` : '';
-            const codexNote = currentProtocol === 'codex' ? `<div style="margin-top:6px;color:#15803d;font-size:11px;font-weight:700">OpenAI Codex CLI 已可用，可在画布里选择“OpenAI CLI”聊天或生成图片。</div>` : '';
+            const codexNote = currentProtocol === 'codex' ? `<div style="margin-top:6px;color:#15803d;font-size:11px;font-weight:700">已读取本机 Codex CLI 的 ${data.chat_models?.length || 0} 个聊天模型。点击“选择模型”勾选导入并保存；各模型调用与生图需要另行验证。</div>` : '';
             const geminiCliNote = currentProtocol === 'gemini-cli' ? `<div style="margin-top:6px;color:#15803d;font-size:11px;font-weight:700">Antigravity CLI 已可用，可在画布里选择“Antigravity CLI”聊天或测试生图。</div>` : '';
-            const imageModeNote = ` · 图片接口：${imageRequestModeLabel(imageRequestModeInput?.value || item.image_request_mode)}`;
+            const imageModeNote = currentProtocol === 'codex'
+                ? ` · 聊天 ${data.chat_models?.length || 0} / 生图 ${data.image_models?.length || 0}`
+                : ` · 图片接口：${imageRequestModeLabel(imageRequestModeInput?.value || item.image_request_mode)}`;
             const runninghubNote = isRunningHubNow
                 ? ` · RunningHub OpenAPI${runninghubModelSourceNote(data)}`
                 : imageModeNote;
-            showVerifyResult(`<span style="color:#15803d;font-size:11px;font-weight:800">✓ 地址验证通过 · 找到 ${data.model_count} 个模型${runninghubNote}</span>${volcengineNote}${jimengNote}${codexNote}${geminiCliNote}`);
+            const verifyLabel = currentProtocol === 'codex' ? 'CLI 验证通过' : '地址验证通过';
+            showVerifyResult(`<span style="color:#15803d;font-size:11px;font-weight:800">✓ ${verifyLabel} · 找到 ${data.model_count} 个模型${runninghubNote}</span>${volcengineNote}${jimengNote}${codexNote}${geminiCliNote}`);
         } else {
             showVerifyResult(`
                 <div style="font-size:11px;font-weight:800;color:#b45309">⚠ 地址验证未通过 (HTTP ${data.status})</div>

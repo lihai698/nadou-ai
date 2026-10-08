@@ -7,6 +7,7 @@ import asyncio
 import json
 import pathlib
 import sys
+import tempfile
 import unittest
 from unittest.mock import AsyncMock, patch
 
@@ -74,6 +75,16 @@ class Stage6CliOutputTests(unittest.IsolatedAsyncioTestCase):
         self.assert_private_absent(help_payload)
         self.assertIn("codex 1.2.3", help_payload["text"])
 
+    def test_codex_executable_finds_official_windows_install_when_path_is_stale(self):
+        with tempfile.TemporaryDirectory() as root:
+            executable = pathlib.Path(root) / "Programs" / "OpenAI" / "Codex" / "bin" / "5ea220ae823df3d7" / "codex.exe"
+            executable.parent.mkdir(parents=True)
+            executable.write_bytes(b"")
+            with patch.dict(main.os.environ, {"LOCALAPPDATA": root, "APPDATA": root}, clear=False), patch.object(
+                main, "codex_env_value", return_value=""
+            ), patch.object(main.shutil, "which", return_value=None):
+                self.assertEqual(main.codex_cli_executable(), str(executable))
+
     async def test_gemini_status_and_help_keep_frontend_fields_without_raw_leaks(self):
         agy_path = r"C:\Users\PrivateUser\AppData\Local\antigravity\agy.exe"
         process = FakeProcess(
@@ -104,7 +115,9 @@ class Stage6CliOutputTests(unittest.IsolatedAsyncioTestCase):
             },
         }
         for protocol, status_fn in (("codex", main.codex_status), ("gemini-cli", main.gemini_cli_status)):
-            with self.subTest(protocol=protocol), patch.object(main, status_fn.__name__, new=AsyncMock(return_value=malicious_status)):
+            with self.subTest(protocol=protocol), patch.object(main, status_fn.__name__, new=AsyncMock(return_value=malicious_status)), patch.object(
+                main, "list_codex_models", new=AsyncMock(return_value=["gpt-test"])
+            ):
                 payload = main.TestConnectionPayload(provider_id=protocol, protocol=protocol)
                 connection = await main.test_provider_connection(payload)
                 probe = await main.probe_async_endpoint(payload)
