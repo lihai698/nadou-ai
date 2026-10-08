@@ -19,7 +19,7 @@ class AssistantTests(unittest.IsolatedAsyncioTestCase):
         self.calls = []
         self.gate = None
         self.started = asyncio.Event()
-        self.fail = False
+        self.model_fails = False
         self.provider = [{"id": "mock", "name": "测试平台", "enabled": True, "has_key": True, "key_preview": "private", "chat_models": ["chat-test"]}]
         self.client = httpx.AsyncClient(transport=httpx.ASGITransport(app=self.make_app()), base_url="http://test", headers={"X-User-Id": "user-a"})
 
@@ -33,7 +33,7 @@ class AssistantTests(unittest.IsolatedAsyncioTestCase):
             self.started.set()
             if self.gate:
                 await self.gate.wait()
-            if self.fail:
+            if self.model_fails:
                 raise RuntimeError("private-secret")
             return {"text": "可以先整理提示词。"}
         app = FastAPI()
@@ -56,6 +56,18 @@ class AssistantTests(unittest.IsolatedAsyncioTestCase):
         response = await self.client.get("/api/canvas-assistant/history", params={"canvasId": "canvas-a", "sessionId": session})
         self.assertEqual(response.status_code, 200)
         return response.json()["session"]
+
+    async def test_model_catalog_separates_chat_and_image_including_image_only_platforms(self):
+        self.provider.extend([
+            {"id": "image-only", "name": "生图平台", "enabled": True, "has_key": True, "image_models": ["image-user"]},
+            {"id": "disabled", "enabled": False, "chat_models": ["hidden-chat"], "image_models": ["hidden-image"]},
+        ])
+        result = (await self.client.get("/api/canvas-assistant/status")).json()
+        self.assertEqual([p["id"] for p in result["providers"]], ["mock"])
+        self.assertIn("image_providers", result)
+        self.assertEqual(result["image_providers"][0]["models"], ["image-user"])
+        self.assertEqual([p["id"] for p in result["image_providers"]], ["image-only"])
+        self.assertNotIn("private", json.dumps(result))
 
     async def test_context_history_and_reopen(self):
         session = await self.create()
@@ -130,7 +142,7 @@ class AssistantTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_failure_keeps_message_and_hides_raw_error(self):
         session = await self.create()
-        self.fail = True
+        self.model_fails = True
         response = await self.client.post("/api/canvas-assistant/chat", json=self.payload(session))
         self.assertNotIn("private-secret", response.text)
         self.assertEqual(json.loads(response.text.splitlines()[-1])["state"], "failed")

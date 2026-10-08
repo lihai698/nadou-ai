@@ -4,6 +4,14 @@
     const icon = name => `<i data-lucide="${name}" aria-hidden="true"></i>`;
     const read = key => { try { return JSON.parse(localStorage.getItem(key) || 'null'); } catch(_) { return null; } };
     const write = (key, value) => { try { localStorage.setItem(key, JSON.stringify(value)); } catch(_) {} };
+    function buildCreationSettings(inherited, imageChoice){
+        const settings={...(inherited||{})};
+        if(imageChoice){
+            const [provider,model]=JSON.parse(imageChoice);
+            Object.assign(settings,{engine:'api',provider_id:provider,model});
+        }
+        return settings;
+    }
     async function consumeStream(response, onEvent){
         if(!response.body) throw new Error('回复连接不可用');
         const reader = response.body.getReader(), decoder = new TextDecoder();
@@ -32,11 +40,14 @@
         if(!button) return null;
         const panel = document.createElement('aside');
         panel.className = 'canvas-assistant'; panel.hidden = true; panel.setAttribute('aria-label','创作助手');
-        panel.innerHTML = `<header class="canvas-assistant-head"><div class="canvas-assistant-heading">${icon('sparkles')}创作助手</div><div class="canvas-assistant-head-actions"><button type="button" data-action="fold" aria-label="收起助手" title="收起">${icon('minus')}</button><button type="button" data-action="new" aria-label="新建对话" title="新建对话">${icon('plus')}</button><button type="button" data-action="history" aria-label="历史对话" title="历史对话">${icon('history')}</button><button type="button" data-action="close" aria-label="关闭助手" title="关闭">${icon('x')}</button></div></header><div class="canvas-assistant-subhead"></div><div class="canvas-assistant-messages" aria-live="polite"></div><div class="canvas-assistant-compose"><div class="canvas-assistant-context"><div class="canvas-assistant-context-chips"></div><button type="button" class="canvas-assistant-view" hidden>在画布上查看</button></div><div class="canvas-assistant-input"><textarea aria-label="给创作助手的消息" placeholder="描述想法，@ 选择图片或视频" maxlength="12000"></textarea></div><div class="canvas-assistant-send-row"><button type="button" class="canvas-assistant-template" data-action="templates" title="从模板库选择提示词">${icon('library')}<span>模板库</span></button><select aria-label="聊天模型"><option value="">请选择聊天模型</option></select><button type="button" class="canvas-assistant-send" data-action="send">发送</button></div><div class="canvas-assistant-status" role="status"></div></div><button type="button" class="canvas-assistant-height" aria-label="调整窗口高度" title="拖动调整高度，也可用上下方向键"></button>`;
+        panel.innerHTML = `<header class="canvas-assistant-head"><div class="canvas-assistant-heading">${icon('sparkles')}创作助手</div><div class="canvas-assistant-head-actions"><button type="button" data-action="fold" aria-label="收起助手" title="收起">${icon('minus')}</button><button type="button" data-action="new" aria-label="新建对话" title="新建对话">${icon('plus')}</button><button type="button" data-action="history" aria-label="历史对话" title="历史对话">${icon('history')}</button><button type="button" data-action="close" aria-label="关闭助手" title="关闭">${icon('x')}</button></div></header><div class="canvas-assistant-subhead"></div><div class="canvas-assistant-messages" aria-live="polite"></div><div class="canvas-assistant-compose"><div class="canvas-assistant-context"><div class="canvas-assistant-context-chips"></div><button type="button" class="canvas-assistant-view" hidden>在画布上查看</button></div><div class="canvas-assistant-input"><textarea aria-label="给创作助手的消息" placeholder="描述想法，@ 选择图片或视频" maxlength="12000"></textarea></div><div class="canvas-assistant-send-row"><button type="button" class="canvas-assistant-template" data-action="templates" title="从模板库选择提示词">${icon('library')}<span>模板库</span></button><button type="button" class="canvas-assistant-model-toggle" data-action="models" aria-label="模型" aria-expanded="false" aria-controls="canvas-assistant-model-picker" title="选择聊天模型">${icon('boxes')}<span>模型</span></button><button type="button" class="canvas-assistant-send" data-action="send">发送</button></div><div class="canvas-assistant-model-picker" id="canvas-assistant-model-picker" role="group" aria-label="选择聊天模型" hidden><div class="canvas-assistant-model-category">文本模型</div><div class="canvas-assistant-model-row"><select class="select-lite canvas-assistant-model-provider" aria-label="聊天平台"><option value="">选择平台</option></select><select class="select-lite canvas-assistant-model-select" aria-label="聊天模型"><option value="">选择模型</option></select><input type="checkbox" class="canvas-assistant-model-confirm" aria-label="指定文本模型" title="勾选指定文本模型"></div><div class="canvas-assistant-model-category">图片模型</div><div class="canvas-assistant-model-row"><select class="select-lite canvas-assistant-image-provider" aria-label="图片平台"><option value="">选择平台</option></select><select class="select-lite canvas-assistant-image-select" aria-label="图片模型"><option value="">选择模型</option></select><input type="checkbox" class="canvas-assistant-image-confirm" aria-label="指定图片模型" title="勾选指定图片模型"></div></div><div class="canvas-assistant-status" role="status"></div></div><button type="button" class="canvas-assistant-height" aria-label="调整窗口高度" title="拖动调整高度，也可用上下方向键"></button>`;
         const dock = document.createElement('div'); dock.className='canvas-assistant-dock'; dock.hidden=true;
         dock.innerHTML=`<span class="canvas-assistant-dock-grip">${icon('grip-vertical')}</span><button type="button" aria-label="展开创作助手">${icon('sparkles')}创作助手</button>`;
         document.body.append(panel,dock);
-        const messages=panel.querySelector('.canvas-assistant-messages'), input=panel.querySelector('textarea'), models=panel.querySelector('select'), status=panel.querySelector('.canvas-assistant-status'), sendButton=panel.querySelector('[data-action=send]'), viewButton=panel.querySelector('.canvas-assistant-view');
+        const messages=panel.querySelector('.canvas-assistant-messages'), input=panel.querySelector('textarea'), models=panel.querySelector('.canvas-assistant-model-select'), status=panel.querySelector('.canvas-assistant-status'), sendButton=panel.querySelector('[data-action=send]'), viewButton=panel.querySelector('.canvas-assistant-view');
+        const modelProvider=panel.querySelector('.canvas-assistant-model-provider'), modelPicker=panel.querySelector('.canvas-assistant-model-picker'), modelToggle=panel.querySelector('[data-action=models]');
+        const imageProvider=panel.querySelector('.canvas-assistant-image-provider'), imageModels=panel.querySelector('.canvas-assistant-image-select'), textConfirm=panel.querySelector('.canvas-assistant-model-confirm'), imageConfirm=panel.querySelector('.canvas-assistant-image-confirm');
+        let imageProviders=[];
         const listeners=[], cleanups=[];
         let canvasId='', session=null, sessions=[], references=[], assetReferences=[], referenceItems=[], picker=null, pickerToken=0, request=null, busy=false, providers=[], historyShown=false, destroyed=false, sequence=0, viewingChanges=false, mentionStart=-1;
         let user='';
@@ -61,9 +72,38 @@
         }
         const layout=read(layoutKey);
         if(layout && [layout.left,layout.top,layout.height].every(Number.isFinite)){ panel.style.left=`${layout.left}px`;panel.style.top=`${layout.top}px`;panel.style.height=`${layout.height}px`;panel.style.right='auto';panel.style.bottom='auto'; }
+        function closeModels(){ modelPicker.hidden=true;modelToggle.setAttribute('aria-expanded','false'); }
+        function fillModels(previous=''){
+            const provider=providers.find(item=>item.id===modelProvider.value);
+            models.replaceChildren(new Option(provider?'选择模型':'请先选择平台',''));
+            for(const model of provider?.models||[])models.add(new Option(model,JSON.stringify([provider.id,model])));
+            if(previous && [...models.options].some(option=>option.value===previous))models.value=previous;
+            syncControls();
+        }
+        function fillImageModels(previous=''){
+            const provider=imageProviders.find(item=>item.id===imageProvider.value);
+            imageModels.replaceChildren(new Option(provider?'选择模型':'请先选择平台',''));
+            for(const model of provider?.models||[])imageModels.add(new Option(model,JSON.stringify([provider.id,model])));
+            if(previous && [...imageModels.options].some(option=>option.value===previous))imageModels.value=previous;
+        }
+        function modelTitle(){
+            const choices=[];
+            if(textConfirm.checked&&models.value)choices.push(`文本：${modelProvider.selectedOptions[0].textContent} · ${models.selectedOptions[0].textContent}`);
+            if(imageConfirm.checked&&imageModels.value)choices.push(`图片：${imageProvider.selectedOptions[0].textContent} · ${imageModels.selectedOptions[0].textContent}`);
+            modelToggle.title=choices.join('；')||'选择并勾选文本、图片模型';
+        }
+        function rememberImageModel(){
+            write(`canvas_assistant_image_model_${canvasId}`,imageConfirm.checked?imageModels.value:'');
+            modelTitle();syncControls();
+        }
+        function rememberModel(){
+            write(`canvas_assistant_model_${canvasId}`,textConfirm.checked?models.value:'');
+            modelTitle();
+            syncControls();
+        }
         function syncControls(){
-            sendButton.textContent=busy?'停止':'发送';sendButton.disabled=!busy&&(!models.value||!input.value.trim()||!session);
-            viewButton.disabled=busy||viewingChanges; models.disabled=busy; panel.querySelector('[data-action=new]').disabled=busy;panel.querySelector('[data-action=history]').disabled=busy;panel.querySelector('[data-action=templates]').disabled=busy;
+            sendButton.textContent=busy?'停止':'发送';sendButton.disabled=!busy&&(!models.value||!textConfirm.checked||!input.value.trim()||!session);
+            viewButton.disabled=busy||viewingChanges; models.disabled=busy||!modelProvider.value; modelProvider.disabled=busy; imageProvider.disabled=busy; imageModels.disabled=busy||!imageProvider.value; textConfirm.disabled=busy||!models.value; imageConfirm.disabled=busy||!imageModels.value; modelToggle.disabled=busy||(!providers.length&&!imageProviders.length); if(busy)closeModels(); panel.querySelector('[data-action=new]').disabled=busy;panel.querySelector('[data-action=history]').disabled=busy;panel.querySelector('[data-action=templates]').disabled=busy;
         }
         function contextChips(){
             const value=current(); if(!value)return;
@@ -128,12 +168,21 @@
             const owner=value.id,token=++sequence;canvasId=owner;
             const [configuration,history]=await Promise.all([api('status'),api(`sessions?canvasId=${encodeURIComponent(owner)}`)]);
             if(!matches(owner)||token!==sequence)return;
-            providers=configuration.providers;sessions=history.sessions;
+            providers=configuration.providers;imageProviders=configuration.image_providers||[];sessions=history.sessions;
             panel.querySelector('.canvas-assistant-subhead').textContent=value.title||'当前画布';
             const previous=read(`canvas_assistant_model_${owner}`);
-            models.innerHTML='<option value="">请选择聊天模型</option>';
-            providers.forEach(provider=>{const group=document.createElement('optgroup');group.label=provider.name+(provider.ready?'':'（未配置密钥）');provider.models.forEach(model=>{const option=document.createElement('option');option.value=JSON.stringify([provider.id,model]);option.textContent=model;group.append(option);});models.append(group);});
-            if(previous && [...models.options].some(o=>o.value===previous))models.value=previous;
+            closeModels();modelProvider.replaceChildren(new Option('选择平台',''));
+            providers.forEach(provider=>modelProvider.add(new Option(provider.name+(provider.ready?'':'（未配置密钥）'),provider.id)));
+            let previousPair=[];try{previousPair=JSON.parse(previous||'[]');}catch(_){}
+            if(Array.isArray(previousPair) && providers.some(provider=>provider.id===previousPair[0] && provider.models.includes(previousPair[1])))modelProvider.value=previousPair[0];
+            fillModels(previous);textConfirm.checked=!!models.value;
+            const previousImage=read(`canvas_assistant_image_model_${owner}`);
+            imageProvider.replaceChildren(new Option('选择平台',''));
+            imageProviders.forEach(provider=>imageProvider.add(new Option(provider.name+(provider.ready?'':'（未配置密钥）'),provider.id)));
+            let previousImagePair=[];try{previousImagePair=JSON.parse(previousImage||'[]');}catch(_){}
+            if(Array.isArray(previousImagePair) && imageProviders.some(provider=>provider.id===previousImagePair[0] && provider.models.includes(previousImagePair[1])))imageProvider.value=previousImagePair[0];
+            fillImageModels(previousImage);imageConfirm.checked=!!imageModels.value;
+            rememberModel();rememberImageModel();
             showStatus(providers.length?(configuration.stage==='operations'?'可创建、修改节点与连线':'当前阶段：对话与创作建议'):'请先在 API 设置中配置聊天模型');
             if(history.activeSessionId)await selectSession(history.activeSessionId);else if(sessions.length)await selectSession(sessions[0].id);else await newSession();
             contextChips();syncControls();
@@ -148,11 +197,11 @@
         }
         async function send(){
             if(busy){await cancel();return;}
-            if(!session||!models.value||!input.value.trim())return;
+            if(!session||!models.value||!textConfirm.checked||!input.value.trim())return;
             const owner=canvasId,sessionId=session.id,text=input.value.trim(),[provider,model]=JSON.parse(models.value);
             closeReference();
             const selection=[...(current()?.selectedNodeIds||[])],refs=[...references],assetRefs=assetReferences.map(item=>item.id);
-            const creationSettings={...(current()?.creationSettings||{})};
+            const creationSettings=buildCreationSettings(current()?.creationSettings,imageConfirm.checked?imageModels.value:'');
             const active={canvasId:owner,sessionId,id:crypto.randomUUID(),controller:new AbortController()};request=active;busy=true;syncControls();showStatus('正在保存画布…');
             let ended=false,reply=null;
             try{
@@ -216,11 +265,11 @@
             const back=document.createElement('button');back.type='button';back.textContent='返回对话';back.onclick=()=>{historyShown=false;drawHistory();};messages.append(back);
             for(const record of sessions){const item=document.createElement('button');item.type='button';item.textContent=record.title;item.onclick=()=>selectSession(record.id).catch(err=>showStatus(err.message));messages.append(item);}
         }
-        listen(button,'click',()=>{if(panel.hidden)open().catch(err=>showStatus(err.message));else{panel.hidden=true;dock.hidden=true;button.classList.remove('active');button.setAttribute('aria-expanded','false');}});
+        listen(button,'click',()=>{if(panel.hidden)open().catch(err=>showStatus(err.message));else{closeModels();panel.hidden=true;dock.hidden=true;button.classList.remove('active');button.setAttribute('aria-expanded','false');}});
         listen(panel,'click',event=>{
             const action=event.target.closest('[data-action]')?.dataset.action;
-            if(action==='close'){panel.hidden=true;dock.hidden=true;button.classList.remove('active');button.setAttribute('aria-expanded','false');}
-            if(action==='fold'){const rect=panel.getBoundingClientRect();panel.hidden=true;dock.hidden=false;dock.style.left=`${Math.min(innerWidth-dock.offsetWidth-8,rect.left)}px`;dock.style.top=`${Math.min(innerHeight-dock.offsetHeight-8,rect.bottom-dock.offsetHeight)}px`;dock.style.right='auto';dock.style.bottom='auto';}
+            if(action==='close'){closeModels();panel.hidden=true;dock.hidden=true;button.classList.remove('active');button.setAttribute('aria-expanded','false');}
+            if(action==='fold'){const rect=panel.getBoundingClientRect();closeModels();panel.hidden=true;dock.hidden=false;dock.style.left=`${Math.min(innerWidth-dock.offsetWidth-8,rect.left)}px`;dock.style.top=`${Math.min(innerHeight-dock.offsetHeight-8,rect.bottom-dock.offsetHeight)}px`;dock.style.right='auto';dock.style.bottom='auto';}
             if(action==='new')newSession().catch(err=>showStatus(err.message));
             if(action==='history')listSessions().catch(err=>showStatus(err.message));
             if(action==='templates')openTemplates();
@@ -240,7 +289,15 @@
             catch(err){showStatus(err.message||'引用素材失败');}
         });
         listen(input,'keydown',event=>{if(picker&&event.key==='Escape'){event.preventDefault();closeReference();return;}if(event.key==='Enter'&&!event.shiftKey&&!event.isComposing){event.preventDefault();if(!busy&&!picker)send();}});
-        listen(models,'change',()=>{write(`canvas_assistant_model_${canvasId}`,models.value);syncControls();});
+        listen(modelToggle,'click',()=>{if(modelToggle.disabled)return;const opening=modelPicker.hidden;modelPicker.hidden=!opening;modelToggle.setAttribute('aria-expanded',String(opening));if(opening)modelProvider.focus();});
+        listen(modelProvider,'change',()=>{fillModels();if(modelProvider.value && models.options.length>1)models.selectedIndex=1;textConfirm.checked=false;rememberModel();});
+        listen(models,'change',()=>{textConfirm.checked=false;rememberModel();});
+        listen(textConfirm,'change',rememberModel);
+        listen(imageProvider,'change',()=>{fillImageModels();if(imageProvider.value && imageModels.options.length>1)imageModels.selectedIndex=1;imageConfirm.checked=false;rememberImageModel();});
+        listen(imageModels,'change',()=>{imageConfirm.checked=false;rememberImageModel();});
+        listen(imageConfirm,'change',rememberImageModel);
+        listen(document,'pointerdown',event=>{if(!modelPicker.contains(event.target)&&!modelToggle.contains(event.target))closeModels();},true);
+        listen(panel,'keydown',event=>{if(event.key==='Escape'&&!modelPicker.hidden){event.preventDefault();closeModels();modelToggle.focus();}});
         for(const target of [panel,dock])for(const type of ['pointerdown','mousedown','dblclick','wheel','keydown'])listen(target,type,event=>event.stopPropagation());
         function bindMove(handle,target){
             let drag=null;
@@ -264,5 +321,5 @@
         const controller={destroy(){destroyed=true;sequence++;closeReference();if(request){api('cancel',{canvasId:request.canvasId,sessionId:request.sessionId,requestId:request.id}).catch(()=>{});request.controller.abort();}listeners.forEach(fn=>fn());cleanups.forEach(fn=>fn());panel.remove();dock.remove();},open};
         global.canvasAssistantController=controller;return controller;
     }
-    global.CanvasAssistant={mount,consumeStream};
+    global.CanvasAssistant={mount,consumeStream,creationSettings:buildCreationSettings};
 })(window);

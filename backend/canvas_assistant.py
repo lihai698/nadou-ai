@@ -275,7 +275,13 @@ def create_assistant_router(*, root, load_canvas, providers, user_id, call_model
 
     @router.get("/status")
     async def status():
-        return {"stage": "operations" if apply_operations else "conversation", "providers": [{"id": p["id"], "name": p.get("name") or p["id"], "models": p.get("chat_models") or [], "ready": bool(p.get("has_key") or p.get("protocol") in {"codex", "gemini-cli", "gemini_cli"})} for p in providers() if p.get("enabled", True) and p.get("chat_models")]}
+        configured = providers()
+        def catalog(category):
+            return [{"id": p["id"], "name": p.get("name") or p["id"], "models": p[category],
+                     "ready": bool(p.get("has_key") or p.get("protocol") in {"codex", "gemini-cli", "gemini_cli", "jimeng"})}
+                    for p in configured if p.get("enabled", True) and p.get(category)]
+        return {"stage": "operations" if apply_operations else "conversation",
+                "providers": catalog("chat_models"), "image_providers": catalog("image_models")}
 
     @router.get("/canvas")
     async def get_canvas(canvasId: str, request: Request, x_user_id: str = Header(default="")):
