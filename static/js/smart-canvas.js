@@ -226,6 +226,7 @@ function pushUndo(){
     if(undoStack.length > UNDO_LIMIT) undoStack.shift();
 }
 function restoreHistorySnapshot(snap){
+    invalidateSmartVideoDeconstruction();
     undoSuppressed = true;
     try {
         discardPendingUndo();
@@ -1289,6 +1290,7 @@ async function clearCurrentSmartCanvas(){
         if(runTimerInterval){ clearInterval(runTimerInterval); runTimerInterval = null; }
         transientSmartCloudLinks = [];
         try { localStorage.removeItem(`${SMART_UNSAVED_ACCEPTED_TASKS_PREFIX}${canvasId}`); } catch(e) {}
+        invalidateSmartVideoDeconstruction();
         canvas = {...(data.canvas || canvas), nodes:[], connections:[], logs:[], settings:{}};
         nodes = [];
         canvasBaseNodes = new Map();
@@ -1623,6 +1625,10 @@ function smartGroupThumbLayout(node){
     const scale = mediaNodeDefaultScale({type:'smart-image', images:items, scale:node?.scale});
     const summarySpace = 28;
     const outerPad = 32;
+    if(node.frameGroupOperationId){
+        const cols=Math.min(4,count),rows=Math.ceil(count/cols);
+        return {refs,compactMembers,cols,rows,visibleRows:rows,width:Math.round(explicitW||cols*292+16),height:Math.round(explicitH||rows*222+60),thumb:190,single:count===1};
+    }
     if(count === 1){
         if(hasExplicit){
             return {
@@ -2008,6 +2014,7 @@ function smartGroupImageGridLayout(node){
     return {cols, rows, visibleRows, width, height, thumb:baseThumb};
 }
 function imageLayout(images, scale=1, node=null){
+    if(node?.type === 'smart-shot-table') return {cols:1,rows:1,width:Math.max(560,Number(node.w)||1120),height:Math.max(300,Number(node.h)||390),thumb:96,single:true};
     if(node?.type === 'smart-group'){
         const groupThumbLayout = smartGroupThumbLayout(node);
         if(groupThumbLayout) return groupThumbLayout;
@@ -2207,6 +2214,7 @@ function arrangeSelectedSmartNodes(){
     toast('已整理选中节点');
 }
 function applyViewport(){
+    if(window.CanvasVideoDeconstructionBridge) window.CanvasVideoDeconstructionUI?.updateScale(window.CanvasVideoDeconstructionBridge);
     world.style.transform = `translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.scale})`;
     // world 被 transform:scale 缩放后，其内部带 backdrop-filter 的卡片（参数设置/合成卡等）
     // 会被部分浏览器（Chrome/Edge 等 Blink 内核）当作独立合成层先按 1x 栅格化、再整体缩放，
@@ -5571,6 +5579,7 @@ function mergeSmartConnections(localConns, remoteConns, nodeIds){
 }
 function applyMergedServerCanvas(serverCanvas){
     if(!serverCanvas || !canvas) return false;
+    invalidateSmartVideoDeconstruction();
     const remoteNodes = (Array.isArray(serverCanvas.nodes) ? serverCanvas.nodes : []).map(normalizeLegacySmartNode).filter(Boolean);
     const conflictCopies = [];
     const mergedNodes = mergeSmartNodeLists(nodes, remoteNodes, canvasBaseNodes, conflictCopies);
@@ -6167,6 +6176,7 @@ function migrateSmartGroupImageMembers(){
 }
 async function loadCanvas(){
     if(!canvasId) return;
+    invalidateSmartVideoDeconstruction();
     try {
         const res = await fetch(`/api/canvases/${encodeURIComponent(canvasId)}`);
         if(!res.ok) return;
@@ -8639,6 +8649,7 @@ function smartDepthPair(node){
     return capture ? nodes.filter(item => item.depthCapture?.operationId === capture.operationId) : [];
 }
 function remapSmartDepthCopies(copies, idMap, preserveExternal=false){
+    window.CanvasVideoDeconstructionModel?.remapCopies(copies, idMap);
     const operations = new Map();
     copies.forEach(node => {
         const capture = node.depthCapture;
@@ -8667,7 +8678,13 @@ function openSmartVideoEditor(sourceId, sourceIndex){
     const item = node?.images?.[sourceIndex];
     if(!item?.url || mediaKindForItem(imageForDisplay(item)) !== 'video') return;
     const sourceUrl = item.url;
+    const bridge = window.CanvasVideoDeconstructionBridge;
+    const source = bridge?.sourceFor(sourceId, sourceIndex, sourceUrl, item.name || '视频');
     CanvasDepthCapture.open({sourceUrl, title:item.name || '视频',
+        extensions:source ? {
+            onOpenCuts:() => window.CanvasVideoDeconstructionUI.openCuts(source, bridge),
+            onOpenTable:() => window.CanvasVideoDeconstructionUI.openTable(source, bridge)
+        } : undefined,
         getCurrent:() => latestSmartDepthCapture(sourceId, sourceIndex, sourceUrl) || {},
         onStart:() => startSmartDepthCapture(sourceId, sourceIndex, sourceUrl),
         onRetry:() => {
@@ -8916,6 +8933,7 @@ function rememberInlineVideoActivations(){
     });
 }
 function render(){
+    if(window.CanvasVideoDeconstructionBridge) window.CanvasVideoDeconstructionUI?.reconcile(window.CanvasVideoDeconstructionBridge,nodes.filter(n=>n.type==='smart-shot-table').map(n=>n.id));
     if(smartWorkflowTransferModal?.classList.contains('open')) updateSmartWorkflowTransferMeta();
     rememberInlineVideoActivations();
     world.classList.toggle('smart-multi-selected', selectedNodeIds().length > 1);
@@ -8939,7 +8957,8 @@ function render(){
         .sort((a, b) => (isSmartGroupNode(a) ? 0 : 1) - (isSmartGroupNode(b) ? 0 : 1))
         .map(node => {
         const imgs = node.images || [];
-        const title = node.depthCapture ? (node.depthCapture.role === 'pose' ? '骨骼姿态' : '灰度深度') : node.viewAdjust ? `API · ${node.viewAdjust.kind === 'angle' ? '多角度' : '打光'}` : node.type === 'smart-group' ? (node.title === '万能分组' ? '智能分组' : (node.title || '智能分组')) : node.type === 'smart-prompt' ? 'Prompt' : node.type === 'smart-loop' ? 'Loop' : node.type === 'smart-minimax' ? 'MiniMax H3' : (imgs.length > 1 ? 'Group' : imgs.length ? 'Image' : escapeHtml(tr('smart.createImportNode')));
+        const isShotTable = node.type === 'smart-shot-table';
+        const title = isShotTable ? '镜头表' : node.depthCapture ? (node.depthCapture.role === 'pose' ? '骨骼姿态' : '灰度深度') : node.viewAdjust ? `API · ${node.viewAdjust.kind === 'angle' ? '多角度' : '打光'}` : node.type === 'smart-group' ? (node.title === '万能分组' ? '智能分组' : (node.title || '智能分组')) : node.type === 'smart-prompt' ? 'Prompt' : node.type === 'smart-loop' ? 'Loop' : node.type === 'smart-minimax' ? 'MiniMax H3' : (imgs.length > 1 ? 'Group' : imgs.length ? 'Image' : escapeHtml(tr('smart.createImportNode')));
         const scale = nodeScale(node);
         const layout = imageLayout(imgs, scale, node);
         const isPrompt = node.type === 'smart-prompt';
@@ -8950,11 +8969,11 @@ function render(){
         const isImageNode = node.type === 'smart-image' || !node.type;
         const isJimengPending = Boolean(node.jimengPending && node.jimengPending.submitId && imgs.length === 0);
         const isQueued = Boolean(node.queued && imgs.length === 0 && !node.pending && !isJimengPending);
-        const isEmpty = isImageNode && imgs.length === 0 && !node.pending && !isQueued && !isJimengPending && !node.depthCapture;
+        const isEmpty = !isShotTable && isImageNode && imgs.length === 0 && !node.pending && !isQueued && !isJimengPending && !node.depthCapture;
         const isHistory = isHistoryGroupNode(node);
         const isGroup = isImageNode && imgs.length > 1;
         const isPending = ((node.pending || isQueued || isJimengPending) && imgs.length === 0);
-        const body = nodeBodyHtml(node, layout);
+        const body = isShotTable ? '' : nodeBodyHtml(node, layout);
         const deleteBtn = (isGroup || isMinimax) ? '' : `<button class="mini-x node-delete" type="button" title="${escapeHtml(tr('smart.deleteNode'))}"><i data-lucide="trash-2"></i></button>`;
         const conflictCopyHtml = String(node.title || '').includes('（本地冲突副本）')
             ? '<span class="smart-conflict-copy">本地冲突副本</span>' : '';
@@ -8963,7 +8982,7 @@ function render(){
         const taskFailureHtml = node.taskFailureNotice
             ? `<button class="smart-submission-warning" type="button" title="${escapeAttr(node.taskFailureNotice)}" data-smart-task-failure="1">任务已失效</button>` : '';
         const hint = isSmartGroup ? '双击添加 · 拖入归组 · 选中后生成' : isMinimax ? 'Timeline editing' : isPending ? escapeHtml(tr('smart.hintPending')) : (imgs.length > 1 ? escapeHtml(tr('smart.hintMulti')) : imgs.length ? escapeHtml(tr('smart.hintSingle')) : node.viewAdjust ? '在下方 API 面板调整模型并运行' : escapeHtml(tr('smart.hintEmpty')));
-        const html = `<div class="image-node ${isEmpty ? 'empty-node' : ''} ${isGroup ? 'group-node' : ''} ${isHistory ? 'history-group-node' : ''} ${isPrompt ? 'prompt-smart-node' : ''} ${isLoop ? 'loop-smart-node' : ''} ${isMinimax ? 'minimax-smart-node' : ''} ${isSmartGroup ? 'smart-group-node' : ''} ${isCompactMember ? 'smart-group-member-node' : ''} ${isNodeSelected(node.id) ? 'selected' : ''} ${(dragState?.groupIds?.includes(node.id) || dragState?.id === node.id) ? 'dragging' : ''} ${node.running ? 'node-running' : ''} ${isPending ? 'node-pending' : ''}" data-id="${escapeHtml(node.id)}" style="left:${node.x || 0}px;top:${node.y || 0}px;width:${layout.width}px;height:${layout.height}px">
+        const html = `<div class="image-node ${isShotTable ? 'shot-table-node smart-shot-table-node' : ''} ${isEmpty ? 'empty-node' : ''} ${isGroup ? 'group-node' : ''} ${isHistory ? 'history-group-node' : ''} ${isPrompt ? 'prompt-smart-node' : ''} ${isLoop ? 'loop-smart-node' : ''} ${isMinimax ? 'minimax-smart-node' : ''} ${isSmartGroup ? 'smart-group-node' : ''} ${isCompactMember ? 'smart-group-member-node' : ''} ${isNodeSelected(node.id) ? 'selected' : ''} ${(dragState?.groupIds?.includes(node.id) || dragState?.id === node.id) ? 'dragging' : ''} ${node.running ? 'node-running' : ''} ${isPending ? 'node-pending' : ''}" data-id="${escapeHtml(node.id)}" style="left:${node.x || 0}px;top:${node.y || 0}px;width:${layout.width}px;height:${layout.height}px">
 
             <div class="node-head"><div class="node-title">${title}</div><div class="node-actions">${deleteBtn}</div></div>
             ${!isEmpty && !isGroup && !isMinimax ? `<div class="floating-node-actions"><button class="mini-x node-delete" type="button" title="${escapeHtml(tr('smart.deleteNode'))}"><i data-lucide="trash-2"></i></button></div>` : ''}
@@ -8973,7 +8992,7 @@ function render(){
             <div class="node-body">${body}</div>
             ${isCompactMember && (isPrompt || isLoop) ? '<div class="smart-group-member-grab" title="拖动移出分组"></div>' : ''}
             <div class="node-hint">${hint}</div>
-            ${imgs.length || node.pending || isQueued || isJimengPending || isPrompt || isLoop || isMinimax || isSmartGroup ? '<div class="node-resize-handle" data-resize="1"></div>' : ''}
+            ${imgs.length || node.pending || isQueued || isJimengPending || isPrompt || isLoop || isMinimax || isSmartGroup || isShotTable ? '<div class="node-resize-handle" data-resize="1"></div>' : ''}
             <div class="node-port port-in" data-port="in" title="input"></div>
             <div class="node-port port-out" data-port="out" title="output"></div>
         </div>`;
@@ -8999,6 +9018,9 @@ function render(){
         const fresh = renderedNodeEls.get(entry.node.id);
         if(!fresh) return;
         world.appendChild(fresh);
+        if(entry.node.type === 'smart-shot-table' && window.CanvasVideoDeconstructionBridge && window.CanvasVideoDeconstructionUI){
+            window.CanvasVideoDeconstructionUI.mount(fresh,entry.node,window.CanvasVideoDeconstructionBridge);
+        }
         const reusable = reusableNodes.get(entry.node.id);
         if(reusable){
             transplantSmartMediaElements(reusable, fresh);
@@ -9662,7 +9684,7 @@ function bindMinimaxNodeControls(el, node){
             e.stopPropagation();
             focusMinimaxNode();
             const seg = smartMinimaxSelectedSegment(node);
-            if(seg) seg.prompt = prompt.value;
+            if(seg) setMinimaxSegmentPrompt(node,seg.id,prompt.value);
             scheduleSave();
         };
     }
@@ -13494,6 +13516,11 @@ function setPromptDraftForNode(node, text){
     }
 }
 function loadPromptDraft(subject){
+    if(subject?.promptDraftTouched === true){
+        const html=String(subject.promptDraftHtml || '');
+        promptInput.innerHTML=html.includes('mention-image-token') ? html : (promptHtmlWithMentionTokens(subject.promptDraftText || '',subject.runPromptRefs || []) || html);
+        return;
+    }
     if(subject?.promptDraftHtml){
         const hasToken = String(subject.promptDraftHtml || '').includes('mention-image-token');
         promptInput.innerHTML = hasToken
@@ -14405,6 +14432,7 @@ function connectInputNode(fromId, toId){
     const from = nodes.find(n => n.id === fromId);
     const to = nodes.find(n => n.id === toId);
     if(!from || !to || from.id === to.id) return false;
+    if(from.type === 'smart-shot-table' || to.type === 'smart-shot-table') return false;
     if(to.type === 'smart-loop'){
         const groupImages = isSmartGroupNode(from) ? imagesForNode(from).filter(img => img?.url) : [];
         const groupPrompts = isSmartGroupNode(from) ? promptTextItemsForNode(from).filter(Boolean) : [];
@@ -15963,16 +15991,7 @@ function syncCascadeRunButton(node=selectedNode()){
     refreshIcons();
 }
 function loadNodePromptDraftToInput(node){
-    if(node?.promptDraftHtml) {
-        const hasToken = String(node.promptDraftHtml || '').includes('mention-image-token');
-        promptInput.innerHTML = hasToken
-            ? node.promptDraftHtml
-            : (promptHtmlWithMentionTokens(node.runPrompt || node.promptDraftText || '', node.runPromptRefs || []) || node.promptDraftHtml);
-    } else {
-        const rebuilt = promptHtmlWithMentionTokens(node?.runPrompt || '', node?.runPromptRefs || []);
-        if(rebuilt) promptInput.innerHTML = rebuilt;
-        else setPromptText(node?.runPrompt || '');
-    }
+    loadPromptDraft(node);
 }
 async function createSmartComfyTask(payload){
     const res = await fetch('/api/canvas-comfy-tasks', {
@@ -16792,7 +16811,7 @@ async function runGeneration(options={}){
     if(node?.type === 'smart-minimax') return runMinimaxNode(node.id);
     if(!node || smartNodeInFlight(node)) return;
     if(!confirmSmartUnknownResubmission(node)) return;
-    const request = options.assistantProposal ? {prompt:options.assistantProposal.prompt,displayPrompt:options.assistantProposal.prompt,refs:options.assistantProposal.referenceImages.map(url=>({url,kind:'image'}))} : buildPromptRequest(node, null, true, smartLoopContext);
+    const request = options.assistantProposal ? {prompt:options.assistantProposal.prompt,displayPrompt:options.assistantProposal.prompt,refs:options.assistantProposal.referenceImages.map(url=>({url,kind:'image'}))} : options.shotTableRun ? buildPromptRequestForNode(node, [], smartLoopContext) : buildPromptRequest(node, null, true, smartLoopContext);
     const prompt = request.prompt.trim();
     const refs = request.refs;
     const previousSettings = cloneSmartSettings(settings);
@@ -16848,6 +16867,12 @@ async function runGeneration(options={}){
     if(shouldCreateBranchOutput) branchNode = createPendingOutputFromSource(node, expectedCount, pendingMeta, {connectSource:false, selectOutput:true, refs});
     undoSuppressed = false;
     const pendingNode = branchNode || node;
+    if(node.shotTableOrigin){
+        pendingNode.shotTableOrigin = {...node.shotTableOrigin};
+        const table = nodes.find(n=>n.id===node.shotTableOrigin.tableId);
+        const key = `${node.shotTableOrigin.sourceFingerprint}:${node.shotTableOrigin.rowId}`;
+        if(table?.shotTableData?.generationMap[key]) table.shotTableData.generationMap[key].outputId=pendingNode.id;
+    }
     if(extracted) pendingNode._runMetaTargetId = extracted.id;
     if(!branchNode){
         pendingNode.pending = Math.max(1, Number(expectedCount) || 1);
@@ -17515,6 +17540,12 @@ async function comfyNameForRef(ref){
 function smartMinimaxPrompt(node){
     const seg = smartMinimaxSelectedSegment(node);
     return String(seg?.prompt || '').trim() || String(node.promptDraftText || '').trim() || inputPromptTextFor(node) || 'Generate a cinematic video clip.';
+}
+function setMinimaxSegmentPrompt(node, segmentId, text){
+    const segment=(node.segments||[]).find(s=>s.id===segmentId);
+    if(!segment || typeof text!=='string')throw new Error('分段或提示词无效');
+    node.selectedSegmentId=segmentId;
+    segment.prompt=text;
 }
 async function smartMinimaxDynamicParams(node){
     const seg = smartMinimaxSelectedSegment(node);
@@ -20296,6 +20327,60 @@ async function smartAssistantGenerateImage(proposal,task){
     await runGeneration({assistantProposal:proposal,acceptedTask:task});
     await saveCanvas();
 }
+function invalidateSmartVideoDeconstruction(){
+    window.CanvasVideoDeconstructionBridge?.begin();
+    window.CanvasVideoDeconstructionUI?.closeAll(true);
+}
+function initSmartVideoDeconstructionBridge(){
+    if(!window.CanvasVideoDeconstructionHost || window.CanvasVideoDeconstructionBridge) return;
+    let generation=0;
+    const sourceFor=(nodeId,index,url,title)=>{
+        const node=nodes.find(item=>item.id===nodeId);
+        const item=imageForDisplay(node?.images?.[index]);
+        if(!node || !item?.url || item.url!==url || mediaKindForItem(item)!=='video') return null;
+        return {canvasId:canvasId,nodeId,resultId:item.id||item.resultId||item.url,sourceUrl:item.url,title:title||item.name||'视频'};
+    };
+    const bridge=window.CanvasVideoDeconstructionHost.create({
+        tableType:'smart-shot-table',
+        getState:()=>({canvas:canvas ? {...canvas,id:canvasId} : {id:canvasId},nodes,connections:canvas?.connections||[],generation,scale:viewport.scale}),
+        uid,
+        pushUndo,
+        save:()=>saveCanvas(),
+        render,
+        landFrames:(ctx,result)=>{
+            const operation=result.operationId||result.id;
+            let group=nodes.find(n=>n.frameGroupOperationId===operation);
+            const prior=new Set((group?.images||[]).map(item=>item.frameIndex));
+            const fresh=(result.frames||[]).filter(f=>f.url&&!prior.has(f.index));
+            if(!fresh.length)return [];
+            pushUndo();
+            if(!group){const rect=nodeRect(ctx.sourceNode);group={id:uid('group'),type:'smart-group',title:`拆自${ctx.source.title||'视频'}`,x:rect.x+rect.width+96,y:rect.y,items:[],images:[],scale:1,frameGroupOperationId:operation,created_at:Date.now()};nodes.push(group);}
+            const images=fresh.map(f=>({url:f.url,name:`${ctx.source.title||'视频'}·${window.CanvasVideoDeconstructionModel.formatTime(f.seconds||0)}`,kind:'image',frameIndex:f.index,frameOperationId:operation}));
+            group.images.push(...images);
+            group.w=Math.min(4,group.images.length)*292+16;
+            group.h=Math.ceil(group.images.length/4)*222+60;
+            selectedId=group.id;selectedIds=[];selectedImage={nodeId:'',index:-1};
+            saveCanvas();render();return images;
+        },
+        readSource:source=>{const node=nodes.find(item=>item.id===source.nodeId);const index=(node?.images||[]).findIndex(item=>{const value=imageForDisplay(item);return value?.url===source.sourceUrl&&(value.id||value.resultId||value.url)===source.resultId;});return index>=0?sourceFor(source.nodeId,index,source.sourceUrl,source.title):null;},
+        select:ids=>{selectedIds=ids.slice();selectedId=ids.length===1?ids[0]:'';selectedImage={nodeId:'',index:-1};syncSelectionUi?.();},
+        validateImageSettings:s=>{const provider=(imageProviders?.()||[]).find(p=>p.id===s.providerId);return !!provider && provider.enabled!==false && (providerImageModels?.(s.providerId)||[]).includes(s.model);},
+        createGenerationChain:({row,table,id,settings,x,y,uid:makeId})=>{
+            const prompt={id:makeId('prompt'),type:'smart-prompt',x,y,w:316,h:210,title:'Prompt',text:row.imagePrompt||row.cells.visual||'',promptSeparator:';',promptSplitEnabled:false,llmEnabled:false,created_at:Date.now()};
+            const image={id:makeId('smart'),type:'smart-image',x:x+380,y,w:316,h:260,title:`镜头 ${row.index} 生成`,images:[],runSettings:{...cloneSmartSettings(initialSmartSettings),engine:'api',apiKind:'image',provider_id:settings.providerId,model:settings.model,ratio:settings.ratio||'square',resolution:settings.resolution||'1k',quality:settings.quality||'auto',count:1},shotTableOrigin:{tableId:id,rowId:row.id,sourceFingerprint:table.shotTableData.source.fingerprint||table.shotTableData.source.sourceUrl,durationSeconds:row.durationSeconds,motionPrompt:row.motionPrompt||row.cells.motion||''},created_at:Date.now()};
+            return {nodes:[prompt,image],connections:[{from:prompt.id,to:image.id,kind:'input'}],promptId:prompt.id,generatorId:image.id,outputId:image.id};
+        },
+        runGenerators:async ids=>{
+            const owner=canvasId,epoch=generation;
+            for(const id of ids){if(canvasId!==owner||generation!==epoch)break;const node=nodes.find(item=>item.id===id);if(!node)continue;selectedId=id;selectedIds=[];selectedImage={nodeId:'',index:-1};await runGeneration({shotTableRun:true});}
+        },
+        ratioOptions:Object.keys(SIZE_MAP).map(id=>({id,label:API_RATIO_VALUES[id]||id}))
+    });
+    const begin=bridge.begin;bridge.begin=()=>{generation++;begin();};
+    bridge.ratioOptions=Object.keys(SIZE_MAP).map(id=>({id,label:API_RATIO_VALUES[id]||id}));
+    bridge.sourceFor=sourceFor;bridge.saveNow=async()=>{for(let attempt=0;attempt<8;attempt++){if(await saveCanvas())return true;await new Promise(resolve=>setTimeout(resolve,220));}return false;};bridge.onError=e=>toast(e.message||'视频拆解操作失败');
+    window.CanvasVideoDeconstructionBridge=bridge;
+}
 window.onload = async () => {
     applyTheme(localStorage.getItem('studio_theme') || localStorage.getItem('canvas_theme') || 'light');
     loadPromptPresets();
@@ -20308,8 +20393,21 @@ window.onload = async () => {
     await loadConfig();
     await loadAssetLibrary();
     await loadCanvas();
+    initSmartVideoDeconstructionBridge();
     syncApiKindToggleVisibility();
     render();
+    const nativeEditor=window.CanvasAssistantNative?.createEditor({
+        getState:()=>({id:canvasId,updatedAt:Number(canvas?.updated_at||0),nodes,readOnly:!!canvas?.readOnly}),
+        getSnapshot:()=>({nodes:canvasForStorage().nodes,connections:canvas?.connections||[]}),
+        save:()=>saveCanvas(),pushUndo:()=>pushUndo(),render:()=>render(),setLoopPrompts:setSmartLoopPromptFieldValues,setSegmentPrompt:setMinimaxSegmentPrompt,
+        shotHost:()=>window.CanvasVideoDeconstructionBridge,shotModel:window.CanvasVideoDeconstructionModel,
+        applyFields:(node,patch)=>{const fields={...patch};if(Object.hasOwn(fields,'promptDraftText')){setPromptDraftForNode(node,fields.promptDraftText);delete fields.promptDraftText;}Object.assign(node,fields);},
+        createNode:type=>{const point={x:(viewport?.x||0)+120,y:(viewport?.y||0)+120};
+            if(type==='smart-image')return createImageNodeAt(point);
+            const factory={'smart-prompt':createPromptNode,'smart-loop':createLoopNode,'smart-group':createSmartGroupNode,'smart-minimax':createMinimaxNode}[type];
+            return factory?.(point.x,point.y);},
+        check:proposal=>proposal.check(),
+    });
     window.CanvasAssistant?.mount({
         kind:'smart',
         getContext:()=>canvas ? {id:canvasId,title:canvas.title,updatedAt:Number(canvas.updated_at||0),nodes,selectedNodeIds:selectedNodeIds(),creationSettings:smartAssistantCreationSettings()} : null,
@@ -20317,6 +20415,8 @@ window.onload = async () => {
         refresh:()=>mergeReloadCanvasNow(),
         prepareImageRequest:smartAssistantImageRequest,
         generateImage:smartAssistantGenerateImage,
+        nativeSnapshot:()=>nativeEditor?.snapshot(),
+        executeNativeAction:proposal=>nativeEditor.execute(proposal),
         referencePreview:(item,size)=>item.kind==='video' ? smartVideoPreviewHtml(item,size,'preload="none"') : smartPreviewImgHtml(item.thumbnail||item.url,size,'loading="lazy" draggable="false"'),
         bindReferencePreviews:element=>bindSmartPreviewImageFallbacks(element),
         openPromptTemplates:async callback=>{canvasAssistantTemplateCallback=callback;await openPromptTemplatePanel('', '', {target:'assistant'});},

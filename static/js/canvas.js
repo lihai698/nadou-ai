@@ -262,7 +262,6 @@ window.addEventListener('studio-lang-change', () => {
     renderCanvasList();
     render();
 });
-window.addEventListener('studio-ui-scale-change', applyQuickToolbarState);
 const shell = document.getElementById('shell');
 const canvasGate = document.getElementById('canvasGate');
 const board = document.getElementById('board');
@@ -551,10 +550,8 @@ const CUSTOM_IMAGE_MODELS_KEY = 'canvas_custom_image_models';
 const MANAGED_IMAGE_MODELS_KEY = 'canvas_image_models_ordered';
 const MANAGED_CHAT_MODELS_KEY = 'canvas_chat_models_ordered';
 const CANVAS_THEME_KEY = 'canvas_theme';
-const QUICK_TOOLBAR_COLLAPSED_KEY = 'canvas_quick_toolbar_collapsed';
 const CANVAS_SESSION_VIEWPORTS_KEY = 'canvas_session_viewports_v1';
 let canvasSessionViewportFallback = {};
-let quickToolbarExpanded = false;
 const DEFAULT_VIDEO_MODELS = [
     // Veo
     'veo2', 'veo2-fast', 'veo2-pro',
@@ -615,26 +612,32 @@ function applyTheme(theme){
     document.body.classList.toggle('theme-dark', dark);
     shell.classList.toggle('theme-dark', dark);
 }
-function applyQuickToolbarState(){
-    const toolbar = document.getElementById('quickToolbar');
-    if(!toolbar) return;
-    const uiScale = Number(getComputedStyle(document.documentElement).getPropertyValue('--studio-ui-scale')) || 1;
-    const isScaledUi = uiScale < 0.995;
-    const collapsed = !quickToolbarExpanded;
-    toolbar.classList.toggle('scale-expanded', isScaledUi && quickToolbarExpanded);
-    toolbar.classList.toggle('collapsed', collapsed);
-    const btn = toolbar.querySelector('.toolbar-toggle');
-    if(btn){
-        btn.title = collapsed ? '展开快捷菜单' : '折叠快捷菜单';
-        btn.setAttribute('aria-label', btn.title);
-    }
-    refreshIcons();
+function closeCanvasMoreMenu(){
+    document.getElementById('canvasMoreMenu').hidden = true;
+    document.getElementById('canvasMoreToggle').setAttribute('aria-expanded', 'false');
 }
-function toggleQuickToolbar(){
-    const toolbar = document.getElementById('quickToolbar');
-    quickToolbarExpanded = Boolean(toolbar?.classList.contains('collapsed'));
-    applyQuickToolbarState();
+function toggleCanvasMoreMenu(){
+    const menu = document.getElementById('canvasMoreMenu');
+    const opening = menu.hidden;
+    closeCreateMenu();
+    menu.hidden = !opening;
+    document.getElementById('canvasMoreToggle').setAttribute('aria-expanded', String(opening));
 }
+function openCanvasNodeMenu(){
+    if(!ensureCanvas()) return;
+    closeCanvasMoreMenu();
+    const rect = board.getBoundingClientRect();
+    openCreateMenu(rect.left + rect.width / 2, rect.top + rect.height / 2);
+}
+document.addEventListener('pointerdown', event => {
+    if(!event.target.closest?.('#canvasMoreMenu, #canvasMoreToggle')) closeCanvasMoreMenu();
+});
+document.addEventListener('keydown', event => {
+    if(event.key === 'Escape') closeCanvasMoreMenu();
+});
+document.getElementById('canvasMoreMenu').addEventListener('click', event => {
+    if(event.target.closest('button')) closeCanvasMoreMenu();
+});
 function loadLocalModelLists(){
     try {
         const managedRaw = localStorage.getItem(MANAGED_IMAGE_MODELS_KEY);
@@ -1051,6 +1054,48 @@ function normalizeApiNodeSizeChoice(node){
     else if(!node.resolution) node.resolution = defaultApiImageResolution(node.model);
     if(!allowAuto && node.resolution === 'auto') node.resolution = '1k';
 }
+function setCanvasGeneratorSizeFields(node, patch){
+    Object.assign(node,patch);
+    if(Object.hasOwn(patch,'resolution')){
+        node._apiResolutionUserSet=true;
+        if(node.resolution==='custom')node.ratio='';
+        else{if(!node.ratio)node.ratio='square';node.customSize='';node.customWidth='';node.customHeight='';}
+    }
+    if(Object.hasOwn(patch,'ratio') && node.ratio!=='custom'){
+        node.customRatio='';node.customRatioWidth='';node.customRatioHeight='';
+    }
+    if(Object.hasOwn(patch,'customRatioWidth') || Object.hasOwn(patch,'customRatioHeight')){
+        node.customRatioWidth=String(node.customRatioWidth||'');node.customRatioHeight=String(node.customRatioHeight||'');
+        node.customRatio=node.customRatioWidth&&node.customRatioHeight?`${node.customRatioWidth}:${node.customRatioHeight}`:'';
+        node.ratio='custom';
+    }
+    if(Object.hasOwn(patch,'customWidth') || Object.hasOwn(patch,'customHeight')){
+        node.customWidth=String(node.customWidth||'');node.customHeight=String(node.customHeight||'');
+        node.customSize=node.customWidth&&node.customHeight?`${node.customWidth}x${node.customHeight}`:'';
+        node.resolution='custom';node._apiResolutionUserSet=true;node.ratio='';
+    }
+    normalizeApiNodeSizeChoice(node);
+}
+function setCanvasMsSizeFields(node, patch){
+    Object.assign(node,patch);
+    if(Object.hasOwn(patch,'msResolution')){
+        if(node.msResolution==='custom')node.msRatio='';
+        else{if(!node.msRatio)node.msRatio='square';node.msCustomSize='';node.msCustomWidth='';node.msCustomHeight='';}
+    }
+    if(Object.hasOwn(patch,'msRatio') && node.msRatio!=='custom'){
+        node.msCustomRatio='';node.msCustomRatioWidth='';node.msCustomRatioHeight='';
+    }
+    if(Object.hasOwn(patch,'msCustomRatioWidth') || Object.hasOwn(patch,'msCustomRatioHeight')){
+        node.msCustomRatioWidth=String(node.msCustomRatioWidth||'');node.msCustomRatioHeight=String(node.msCustomRatioHeight||'');
+        node.msCustomRatio=node.msCustomRatioWidth&&node.msCustomRatioHeight?`${node.msCustomRatioWidth}:${node.msCustomRatioHeight}`:'';
+        node.msRatio='custom';
+    }
+    if(Object.hasOwn(patch,'msCustomWidth') || Object.hasOwn(patch,'msCustomHeight')){
+        node.msCustomWidth=String(node.msCustomWidth||'');node.msCustomHeight=String(node.msCustomHeight||'');
+        node.msCustomSize=node.msCustomWidth&&node.msCustomHeight?`${node.msCustomWidth}x${node.msCustomHeight}`:'';
+        node.msResolution='custom';node.msRatio='';
+    }
+}
 async function generatorSizeForRun(gen, refs){
     if((gen.ratio || 'square') === 'source'){
         const ref = refs?.[0];
@@ -1206,6 +1251,7 @@ function screenToWorld(clientX, clientY){
 }
 function applyViewport(){
     world.style.transform = `translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.scale})`;
+    if(window.CanvasVideoDeconstructionBridge) window.CanvasVideoDeconstructionUI.updateScale(window.CanvasVideoDeconstructionBridge);
     scheduleMinimapRender();
     scheduleCanvasImageResolutionSync(nodesEl, 120);
 }
@@ -2056,6 +2102,8 @@ async function setCanvasTitle(id, title){
 }
 async function openCanvas(id){
     window.CanvasClipBridge?.begin?.();
+    window.CanvasVideoDeconstructionBridge?.begin?.();
+    window.CanvasVideoDeconstructionUI?.closeAll?.(true);
     setStatus('Opening...');
     try {
         const res = await fetch(`/api/canvases/${id}`);
@@ -2152,6 +2200,7 @@ function canvasLocalAssetUrls(nodeList=nodes, logList=canvas?.logs || []){
     };
     nodeList.forEach(node => {
         (window.CanvasClipHost?.collectUrls(node) || []).forEach(add);
+        (window.CanvasVideoDeconstructionBridge?.collectUrls(node) || []).forEach(add);
         if(node.url) add(node.url);
         (node.images || []).forEach(add);
         (node.generatedOutputs || []).forEach(add);
@@ -2987,12 +3036,7 @@ function renderMsGenBody(node){
         msRatioSelect.onclick = e => e.stopPropagation();
         msRatioSelect.onchange = e => {
             e.stopPropagation();
-            node.msRatio = e.target.value;
-            if(node.msRatio !== 'custom') {
-                node.msCustomRatio = '';
-                node.msCustomRatioWidth = '';
-                node.msCustomRatioHeight = '';
-            }
+            setCanvasMsSizeFields(node,{msRatio:e.target.value});
             syncMsCustomSizeControls();
             scheduleSave();
         };
@@ -3000,19 +3044,7 @@ function renderMsGenBody(node){
         msResolutionSelect.onclick = e => e.stopPropagation();
         msResolutionSelect.onchange = e => {
             e.stopPropagation();
-            node.msResolution = e.target.value;
-            if(node.msResolution === 'custom') {
-                node.msRatio = '';
-            } else if(!node.msRatio) {
-                node.msRatio = 'square';
-                node.msCustomSize = '';
-                node.msCustomWidth = '';
-                node.msCustomHeight = '';
-            } else {
-                node.msCustomSize = '';
-                node.msCustomWidth = '';
-                node.msCustomHeight = '';
-            }
+            setCanvasMsSizeFields(node,{msResolution:e.target.value});
             syncMsCustomSizeControls();
             scheduleSave();
         };
@@ -3020,10 +3052,7 @@ function renderMsGenBody(node){
             input.onmousedown = e => e.stopPropagation();
             input.onclick = e => e.stopPropagation();
             input.oninput = () => {
-                node.msCustomRatioWidth = msCustomRatioWInput.value;
-                node.msCustomRatioHeight = msCustomRatioHInput.value;
-                node.msCustomRatio = node.msCustomRatioWidth && node.msCustomRatioHeight ? `${node.msCustomRatioWidth}:${node.msCustomRatioHeight}` : '';
-                node.msRatio = 'custom';
+                setCanvasMsSizeFields(node,{msCustomRatioWidth:msCustomRatioWInput.value,msCustomRatioHeight:msCustomRatioHInput.value});
                 syncMsCustomSizeControls();
                 scheduleSave();
             };
@@ -3032,11 +3061,7 @@ function renderMsGenBody(node){
             input.onmousedown = e => e.stopPropagation();
             input.onclick = e => e.stopPropagation();
             input.oninput = () => {
-                node.msCustomWidth = msCustomWInput.value;
-                node.msCustomHeight = msCustomHInput.value;
-                node.msCustomSize = node.msCustomWidth && node.msCustomHeight ? `${node.msCustomWidth}x${node.msCustomHeight}` : '';
-                node.msResolution = 'custom';
-                node.msRatio = '';
+                setCanvasMsSizeFields(node,{msCustomWidth:msCustomWInput.value,msCustomHeight:msCustomHInput.value});
                 syncMsCustomSizeControls();
                 scheduleSave();
             };
@@ -3279,10 +3304,15 @@ function addOutputNode(point){
 function openCreateMenu(clientX, clientY){
     menuPoint = screenToWorld(clientX, clientY);
     closeLinkCreateMenu();
-    createMenu.style.left = `${clientX}px`;
-    createMenu.style.top = `${clientY}px`;
+    closeCanvasMoreMenu();
     createMenu.classList.add('open');
     refreshIcons();
+    const rect = board.getBoundingClientRect();
+    const scale = rect.width / board.clientWidth || 1;
+    const left = (clientX - rect.left) / scale;
+    const top = (clientY - rect.top) / scale;
+    createMenu.style.left = `${Math.max(10, Math.min(left, board.clientWidth - createMenu.offsetWidth - 10))}px`;
+    createMenu.style.top = `${Math.max(10, Math.min(top, board.clientHeight - createMenu.offsetHeight - 10))}px`;
 }
 function closeCreateMenu(){
     createMenu.classList.remove('open');
@@ -3472,7 +3502,13 @@ function latestCanvasDepthCapture(sourceId, sourceUrl){
         .sort((a,b) => Number(b.depthCapture.createdAt || 0) - Number(a.depthCapture.createdAt || 0))[0]?.depthCapture || null;
 }
 function openCanvasVideoEditor(sourceId, sourceUrl, title='视频'){
+    const bridge = window.CanvasVideoDeconstructionBridge;
+    const source = bridge?.sourceFor(sourceId, sourceUrl, title);
     CanvasDepthCapture.open({sourceUrl, title,
+        extensions:source ? {
+            onOpenCuts:() => window.CanvasVideoDeconstructionUI.openCuts(source, bridge),
+            onOpenTable:() => window.CanvasVideoDeconstructionUI.openTable(source, bridge)
+        } : undefined,
         getCurrent:() => latestCanvasDepthCapture(sourceId, sourceUrl) || {},
         onStart:() => startCanvasDepthCapture(sourceId, sourceUrl),
         onRetry:() => {
@@ -6255,6 +6291,31 @@ function canvasClipMediaItems(canvasNodes, libraryItems=[], localItems=[]){
     }
     return [...unique.values()];
 }
+function initCanvasVideoDeconstructionBridge(){
+    if(!window.CanvasVideoDeconstructionHost || window.CanvasVideoDeconstructionBridge) return;
+    let generation=0;
+    const sourceFor=(nodeId,url,title)=>{
+        const n=nodes.find(n=>n.id===nodeId);
+        const item=window.CanvasClipHost.mediaForNode(n,nodes).find(x=>x.kind==='video'&&x.url===url);
+        return item ? {canvasId:canvas?.id,nodeId,resultId:item.sourceResultId,sourceUrl:item.url,title:title||item.name} : null;
+    };
+    const bridge=window.CanvasVideoDeconstructionHost.create({
+        getState:()=>({canvas,nodes,connections,generation,scale:viewport.scale}),
+        uid,pushUndo,save:scheduleSave,render,
+        readSource:source=>sourceFor(source.nodeId,source.sourceUrl)?.resultId===source.resultId?source:null,
+        select:ids=>{selected.clear();ids.forEach(id=>selected.add(id));refreshSelectionVisuals();},
+        validateImageSettings:s=>imageApiProviders().some(p=>p.id===s.providerId&&p.enabled!==false&&(p.image_models||[]).includes(s.model)),
+        runGenerators:async ids=>{
+            const owner=canvas?.id,epoch=generation;
+            // 原生级联执行有自己的任务、并发和恢复，不另起生图接口。
+            for(const id of ids){if(canvas?.id!==owner||generation!==epoch)break;await runNodeCascade(id);}
+        }
+    });
+    const begin=bridge.begin;bridge.begin=()=>{generation++;begin();};
+    bridge.sourceFor=sourceFor;bridge.saveNow=saveCanvas;bridge.onError=e=>setStatus(e.message);
+    bridge.ratioOptions=Object.keys(SIZE_MAP).map(id=>({id,label:API_RATIO_VALUES[id]||id}));
+    window.CanvasVideoDeconstructionBridge=bridge;
+}
 function initCanvasClipBridge(){
     if(!window.CanvasClipHost || window.CanvasClipBridge) return;
     let generation=0;
@@ -6305,6 +6366,7 @@ function initCanvasClipBridge(){
     },true);
 }
 function render(){
+    if(window.CanvasVideoDeconstructionBridge) window.CanvasVideoDeconstructionUI.reconcile(window.CanvasVideoDeconstructionBridge,nodes.filter(n=>n.type==='shot-table').map(n=>n.id));
     if(window.CanvasClipBridge){
         window.CanvasClipNode?.reconcile(window.CanvasClipBridge.getContext(),nodes.filter(n=>n.type==='clip').map(n=>n.id));
         window.CanvasClipBridge.syncConnected();
@@ -6499,7 +6561,7 @@ function restoreOutputScrolls(state){
     });
 }
 function isNodeControl(target){
-    return !!target.closest('textarea, input, select, option, button, audio, video, [contenteditable="true"], .clip-axis-scroll, .clip-node-hint, .clip-panel, .seg, .gen-btn, .comfy-run, .input-item, .blank-image, .mode-tabs, .ms-model-tabs, .llm-provider, .llm-output, .llm-chat-log, .llm-pane-resizer, .loop-preview, .ltx-director-timeline-host, .minimax-canvas-workbench, .pr-wrapper, .pr-toolbar, .pr-viewport, .pr-canvas, .pr-player-controls, .pr-prompt-area');
+    return !!target.closest('textarea, input, select, option, button, audio, video, [contenteditable="true"], .shot-table-body, .video-deconstruction-modal, .clip-axis-scroll, .clip-node-hint, .clip-panel, .seg, .gen-btn, .comfy-run, .input-item, .blank-image, .mode-tabs, .ms-model-tabs, .llm-provider, .llm-output, .llm-chat-log, .llm-pane-resizer, .loop-preview, .ltx-director-timeline-host, .minimax-canvas-workbench, .pr-wrapper, .pr-toolbar, .pr-viewport, .pr-canvas, .pr-player-controls, .pr-prompt-area');
 }
 function destroyLTXEditor(node){
     if(!node?._ltxEditor) return;
@@ -6547,7 +6609,7 @@ function renderNode(node){
         else openGeneratorNodeMenu(node.id, e.clientX, e.clientY);
     };
     const title = node.type === 'image' ? 'Image' : node.type === 'prompt' ? 'Prompt' : node.type === 'loop' ? tr('canvas.loopNode') : node.type === 'promptGroup' ? 'Prompts' : node.type === 'group' ? 'Group' : node.type === 'output' ? 'Output' : node.type === 'llm' ? 'LLM' : node.type === 'comfy' ? 'ComfyUI' : node.type === 'ltxDirector' ? tr('canvas.ltxDirector') : node.type === 'rh' ? 'RunningHub' : node.type === 'minimax' ? 'MiniMax H3' : node.type === 'midjourney' ? 'Midjourney' : node.type === 'msgen' ? tr('canvas.modelscopeGenerate') : node.type === 'video' ? tr('canvas.videoGenerateNode') : tr('canvas.apiGenerate');
-    const displayTitle = node.depthCapture ? (node.depthCapture.role === 'pose' ? '骨骼姿态' : '灰度深度') : node.type === 'image' && node.url ? nodeTitleForMedia(node) : title;
+    const displayTitle = node.type === 'shot-table' ? '镜头表' : node.depthCapture ? (node.depthCapture.role === 'pose' ? '骨骼姿态' : '灰度深度') : node.type === 'image' && node.url ? nodeTitleForMedia(node) : title;
     // 失败徽章只在一键运行模式中显示，单节点失败已通过 alert 提示
     const showStatus = ['generator','midjourney','msgen','comfy','ltxDirector','llm','video','rh','minimax'].includes(node.type) && node.runStatus
         && (node.runStatus !== 'failed' || node._cascadeFailed);
@@ -6698,6 +6760,8 @@ function renderNode(node){
         const audioCount = items.filter(n => n.type === 'image' && mediaKindForNode(n) === 'audio').length;
         const promptCount = items.filter(n => n.type === 'prompt').length;
         const parts = [];
+        const otherCount = items.length - imgCount - videoCount - audioCount - promptCount;
+        if(otherCount) parts.push(langIsEn() ? `${items.length} nodes` : `${items.length} 个节点`);
         if(imgCount) parts.push(`${imgCount} ${tr('canvas.imageCount')}`);
         if(videoCount) parts.push(langIsEn() ? `${videoCount} video` : `${videoCount} 个视频`);
         if(audioCount) parts.push(langIsEn() ? `${audioCount} audio` : `${audioCount} 个音频`);
@@ -6750,7 +6814,10 @@ function renderNode(node){
     }
     el.appendChild(body);
     if(node.type==='clip' && window.CanvasClipBridge) window.CanvasClipNode.mount(el,node,window.CanvasClipBridge.forNode(node.id));
+    if(node.type==='shot-table' && window.CanvasVideoDeconstructionBridge) window.CanvasVideoDeconstructionUI.mount(el,node,window.CanvasVideoDeconstructionBridge);
     el.querySelectorAll('button, select, textarea, input').forEach(control => {
+        // 镜头表的控件由表格容器统一处理，保持事件能到达该容器。
+        if(control.closest('.shot-table-body')) return;
         control.addEventListener('mousedown', e => e.stopPropagation(), true);
         control.addEventListener('click', e => e.stopPropagation());
     });
@@ -6758,7 +6825,7 @@ function renderNode(node){
         if(e.button !== 0 || !isNodeDragSurface(e.target)) return;
         startNodeDrag(e, node);
     };
-    const canInput = Boolean(node.depthCapture) || ['clip','generator','midjourney','comfy','ltxDirector','output','llm','msgen','video','rh','minimax'].includes(node.type) || (node.type === 'loop' && (node.imageInput || node.showPrompt));
+    const canInput = Boolean(node.depthCapture) || node.type==='shot-table' || ['clip','generator','midjourney','comfy','ltxDirector','output','llm','msgen','video','rh','minimax'].includes(node.type) || (node.type === 'loop' && (node.imageInput || node.showPrompt));
     const canOutput = ['clip','image','prompt','loop','group','promptGroup','generator','midjourney','comfy','ltxDirector','llm','msgen','video','rh','minimax','output'].includes(node.type);
     if(canInput) el.insertAdjacentHTML('beforeend', `<div class="port in" title="${tr('canvas.connectHere')}"></div>`);
     if(canOutput) el.insertAdjacentHTML('beforeend', `<div class="port out" title="${tr('canvas.dragConnect')}"></div>`);
@@ -6952,6 +7019,7 @@ function refreshOutputNodeContent(node){
     return true;
 }
 function defaultNodeSize(type){
+    if(type === 'shot-table') return {w:1120,h:390};
     if(type === 'clip') return {w:760,h:196};
     if(type === 'image') return {w:260, h:336};
     if(type === 'prompt') return {w:310, h:0};
@@ -8950,17 +9018,7 @@ function renderGeneratorBody(node){
     ratioSelect.onclick = e => e.stopPropagation();
     ratioSelect.onchange = e => {
         e.stopPropagation();
-        node.ratio = e.target.value;
-        normalizeApiNodeSizeChoice(node);
-        if(node.ratio !== 'custom' && node.ratio !== 'source') {
-            node.customRatio = '';
-            node.customRatioWidth = '';
-            node.customRatioHeight = '';
-        } else if(node.ratio === 'source') {
-            node.customRatio = '';
-            node.customRatioWidth = '';
-            node.customRatioHeight = '';
-        }
+        setCanvasGeneratorSizeFields(node,{ratio:e.target.value});
         syncSizeControls();
         scheduleSave();
     };
@@ -8968,26 +9026,7 @@ function renderGeneratorBody(node){
     resolutionSelect.onclick = e => e.stopPropagation();
     resolutionSelect.onchange = e => {
         e.stopPropagation();
-        node.resolution = e.target.value;
-        node._apiResolutionUserSet = true;
-        if(node.resolution === 'custom') {
-            node.ratio = '';
-        } else if(node.resolution === 'auto') {
-            if(!node.ratio) node.ratio = 'square';
-            node.customSize = '';
-            node.customWidth = '';
-            node.customHeight = '';
-        } else if(!node.ratio) {
-            node.ratio = 'square';
-            node.customSize = '';
-            node.customWidth = '';
-            node.customHeight = '';
-        } else {
-            node.customSize = '';
-            node.customWidth = '';
-            node.customHeight = '';
-        }
-        normalizeApiNodeSizeChoice(node);
+        setCanvasGeneratorSizeFields(node,{resolution:e.target.value});
         syncSizeControls();
         scheduleSave();
     };
@@ -8995,10 +9034,7 @@ function renderGeneratorBody(node){
         input.onmousedown = e => e.stopPropagation();
         input.onclick = e => e.stopPropagation();
         input.oninput = e => {
-            node.customRatioWidth = customRatioWInput.value;
-            node.customRatioHeight = customRatioHInput.value;
-            node.customRatio = node.customRatioWidth && node.customRatioHeight ? `${node.customRatioWidth}:${node.customRatioHeight}` : '';
-            node.ratio = 'custom';
+            setCanvasGeneratorSizeFields(node,{customRatioWidth:customRatioWInput.value,customRatioHeight:customRatioHInput.value});
             syncSizeControls();
             scheduleSave();
         };
@@ -9007,12 +9043,7 @@ function renderGeneratorBody(node){
         input.onmousedown = e => e.stopPropagation();
         input.onclick = e => e.stopPropagation();
         input.oninput = e => {
-            node.customWidth = customWInput.value;
-            node.customHeight = customHInput.value;
-            node.customSize = node.customWidth && node.customHeight ? `${node.customWidth}x${node.customHeight}` : '';
-            node.resolution = 'custom';
-            node._apiResolutionUserSet = true;
-            node.ratio = '';
+            setCanvasGeneratorSizeFields(node,{customWidth:customWInput.value,customHeight:customHInput.value});
             syncSizeControls();
             scheduleSave();
         };
@@ -9377,6 +9408,12 @@ function miniMaxEnsureSegment(node){
 }
 function miniMaxSelectedSegment(node){
     return miniMaxEnsureSegment(node);
+}
+function setMinimaxSegmentPrompt(node, segmentId, text){
+    const segment=(node.segments||[]).find(s=>s.id===segmentId);
+    if(!segment || typeof text!=='string')throw new Error('分段或提示词无效');
+    node.selectedSegmentId=segmentId;
+    segment.prompt=text;
 }
 function miniMaxTimelineTotal(node){
     miniMaxEnsureSegment(node);
@@ -9785,7 +9822,7 @@ function bindMiniMaxWorkbench(wrap, node){
         prompt.oninput = e => {
             e.stopPropagation();
             const seg = miniMaxSelectedSegment(node);
-            if(seg) seg.prompt = prompt.value;
+            if(seg) setMinimaxSegmentPrompt(node,seg.id,prompt.value);
             scheduleSave();
         };
     }
@@ -16043,12 +16080,14 @@ function closeOutputLightbox(){
 }
 function groupSelectedImages(){
     if(!ensureCanvas()) return;
-    const targets = [...selected].map(id => nodes.find(n => n.id === id)).filter(n => n?.type === 'image' || n?.type === 'prompt');
+    const targets = [...selected].map(id => nodes.find(n => n.id === id)).filter(Boolean);
+    if(targets.length === 1 && ['group','promptGroup'].includes(targets[0].type)) return;
     let group;
     pushUndo();
     if(targets.length){
         const box = nodeBounds(targets.map(n => n.id));
-        group = {id:uid('grp'), type:'group', x:box.x - 24, y:box.y - 58, w:box.w + 48, h:box.h + 90, items:targets.map(n => n.id)};
+        group = {id:uid('grp'), type:'group', x:box.x - 24, y:box.y - 88, w:box.w + 48, h:box.h + 120, items:targets.map(n => n.id)};
+        if(targets.some(n => !['image','prompt'].includes(n.type))) group.groupMode = 'workflow';
     } else {
         const p = defaultPoint(0, 0);
         group = {id:uid('grp'), type:'group', x:p.x, y:p.y, w:300, h:220, items:[]};
@@ -16080,7 +16119,7 @@ function startSelection(e){
     e.preventDefault();
     e.stopPropagation();
     if(document.activeElement && document.activeElement !== document.body) document.activeElement.blur();
-    selectDrag = {sx:e.clientX, sy:e.clientY, x:e.clientX, y:e.clientY};
+    selectDrag = {sx:e.clientX, sy:e.clientY, x:e.clientX, y:e.clientY, autoGroup:Boolean(e.ctrlKey || e.metaKey)};
     document.body.classList.add('canvas-selecting');
     selectionBox.style.display = 'block';
     updateSelectionBox(e.clientX, e.clientY);
@@ -16099,6 +16138,7 @@ function updateSelectionBox(x, y){
 }
 function finishSelection(){
     if(!selectDrag) return;
+    const autoGroup = selectDrag.autoGroup;
     const rect = selectionBox.getBoundingClientRect();
     selectionBox.style.display = 'none';
     selected.clear();
@@ -16111,12 +16151,33 @@ function finishSelection(){
     document.body.classList.remove('canvas-selecting');
     window.onmousemove = null;
     window.onmouseup = null;
-    render();
+    if(autoGroup && selected.size > 1) groupSelectedImages();
+    else render();
     if(workflowTransferModal?.classList.contains('open')) updateWorkflowTransferMeta();
 }
 function renderSelectionHub(){
     selectionHub.innerHTML = '';
     selectionHub.classList.remove('open');
+    const targets = [...selected].filter(id => nodes.some(node => node.id === id));
+    if(targets.length < 2) return;
+    const groupButton = document.createElement('button');
+    groupButton.type = 'button';
+    groupButton.className = 'tool-btn';
+    groupButton.title = `${tr('canvas.group')} (Ctrl+G)`;
+    groupButton.innerHTML = `<i data-lucide="group" class="w-3.5 h-3.5"></i><span>${escapeHtml(tr('canvas.group'))}</span>`;
+    groupButton.onmousedown = event => event.stopPropagation();
+    groupButton.onclick = groupSelectedImages;
+    selectionHub.appendChild(groupButton);
+    selectionHub.classList.add('open');
+    const box = nodeBounds([...selected]);
+    const x = box.x * viewport.scale + viewport.x;
+    const y = box.y * viewport.scale + viewport.y;
+    const boardRect = board.getBoundingClientRect();
+    const boardScale = boardRect.width / board.clientWidth || 1;
+    const safeTop = (document.querySelector('.topbar').getBoundingClientRect().bottom - boardRect.top) / boardScale + 8;
+    selectionHub.style.left = `${Math.max(10, Math.min(x, board.clientWidth - selectionHub.offsetWidth - 10))}px`;
+    selectionHub.style.top = `${Math.max(safeTop, Math.min(y - selectionHub.offsetHeight - 8, board.clientHeight - selectionHub.offsetHeight - 10))}px`;
+    refreshIcons();
 }
 function startSelectionLink(e, kind){
     e.preventDefault();
@@ -16164,6 +16225,8 @@ function pushUndo(){
 function performUndo(){
     if(!canvas || !undoStack.length) return;
     const state = undoStack.pop();
+    window.CanvasVideoDeconstructionBridge?.begin?.();
+    window.CanvasVideoDeconstructionUI?.closeAll?.(true);
     nodes = state.nodes;
     connections = state.connections;
     selected.clear();
@@ -16203,6 +16266,7 @@ function duplicateNodesForAltDrag(node, preserveConnections=false){
     });
     remapCanvasDepthCopies(copies, idMap, preserveConnections);
     window.CanvasClipHost?.remapCopies(copies,idMap);
+    window.CanvasVideoDeconstructionModel?.remapCopies(copies,idMap);
     nodes.push(...copies);
     if(preserveConnections){
         const copiedConnections = (connections || [])
@@ -16262,6 +16326,7 @@ function pasteNodes(){
     });
     remapCanvasDepthCopies(copies, idMap);
     window.CanvasClipHost?.remapCopies(copies,idMap);
+    window.CanvasVideoDeconstructionModel?.remapCopies(copies,idMap);
     const newConnections = clipConnections
         .map(c => ({...c, id:uid('c'), from:idMap.get(c.from), to:idMap.get(c.to)}))
         .filter(c => c.from && c.to);
@@ -16478,6 +16543,7 @@ function insertWorkflowIntoCanvas(imported){
     });
     remapCanvasDepthCopies(newNodes, idMap);
     window.CanvasClipHost?.remapCopies(newNodes,idMap);
+    window.CanvasVideoDeconstructionModel?.remapCopies(newNodes,idMap);
     const newConnections = srcConnections
         .map(c => ({...c, id:uid('c'), from:idMap.get(c.from), to:idMap.get(c.to)}))
         .filter(c => c.from && c.to);
@@ -16708,6 +16774,8 @@ function canConnect(fromId, toId){
     const from = nodes.find(n => n.id === fromId);
     const to = nodes.find(n => n.id === toId);
     if(!from || !to) return false;
+    if(to.type==='shot-table') return to.shotTableData?.source?.nodeId===fromId && ['image','output',...CANVAS_MEDIA_OUTPUT_TYPES].includes(from.type);
+    if(from.type==='shot-table') return false;
     if(from.type==='clip') return to.type==='output'&&!wouldCreateGeneratorCycle(fromId,toId);
     if(to.type==='clip') return ['image','group','output',...CANVAS_MEDIA_OUTPUT_TYPES].includes(from.type)&&!wouldCreateGeneratorCycle(fromId,toId);
     if(to.depthCapture?.sourceId === fromId && from.type !== 'image' && from.type !== 'output') return false;
@@ -16872,7 +16940,7 @@ function arrangeSelectedCanvasNodes(){
     scheduleSave();
 }
 function handoffExistingInputsToGroup(group, children){
-    if(!group || group.type !== 'group') return false;
+    if(!group || group.type !== 'group' || group.groupMode === 'workflow') return false;
     const childIds = new Set((children || []).filter(n => ['image','prompt'].includes(n?.type)).map(n => n.id));
     if(!childIds.size) return false;
     const targetIds = new Set();
@@ -16894,11 +16962,12 @@ function updateGroupMembership(movedNodes){
     const pairs = [
         {childType:'image', groupType:'group'},
         {childType:'prompt', groupType:'group'},
-        {childType:'prompt', groupType:'promptGroup'}
+        {childType:'prompt', groupType:'promptGroup'},
+        {childType:null, groupType:'group', workflow:true}
     ];
     let changed = false;
     const handoffGroupConnections = (group, child) => {
-        if(!group || group.type !== 'group' || !['image','prompt'].includes(child?.type)) return;
+        if(!group || group.type !== 'group' || group.groupMode === 'workflow' || !['image','prompt'].includes(child?.type)) return;
         const directTargets = connections
             .filter(c => c.from === child.id)
             .map(c => nodes.find(n => n.id === c.to))
@@ -16918,9 +16987,9 @@ function updateGroupMembership(movedNodes){
             }
         });
     };
-    pairs.forEach(({childType, groupType}) => {
-        const groups = nodes.filter(n => n.type === groupType);
-        const children = movedNodes.filter(n => n?.type === childType);
+    pairs.forEach(({childType, groupType, workflow=false}) => {
+        const groups = nodes.filter(n => n.type === groupType && (n.groupMode === 'workflow') === workflow);
+        const children = movedNodes.filter(n => n && (childType ? n.type === childType : !['group','promptGroup'].includes(n.type)));
         if(!children.length || !groups.length) return;
         children.forEach(child => {
             const cr = nodeRect(child);
@@ -17247,6 +17316,7 @@ function startBoardPan(e, opts={}){
         viewport.x = dragBoard.ox + e2.clientX - dragBoard.sx;
         viewport.y = dragBoard.oy + e2.clientY - dragBoard.sy;
         applyViewport();
+        renderSelectionHub();
     };
     window.onmouseup = e2 => {
         const shouldClearSelection = dragBoard?.clearSelectionOnClick && !dragBoard.moved && selected.size;
@@ -17313,6 +17383,7 @@ board.addEventListener('mousedown', e => {
 });
 board.onwheel = e => {
     if(!canvas) return;
+    if(e.target.closest?.('#createMenu')) return;
     e.preventDefault();
     const before = screenToWorld(e.clientX, e.clientY);
     viewport.scale = viewport.scale * (e.deltaY > 0 ? .92 : 1.08);
@@ -17573,8 +17644,8 @@ async function canvasAssistantGenerateImage(proposal,task){
 }
 window.onload = async () => {
     initCanvasClipBridge();
+    initCanvasVideoDeconstructionBridge();
     applyTheme(localStorage.getItem('studio_theme') || localStorage.getItem(CANVAS_THEME_KEY) || 'light');
-    applyQuickToolbarState();
     if(window.StudioI18n) StudioI18n.apply();
     document.title = tr('canvas.title');
     initOutputCompareEvents();
@@ -17587,6 +17658,15 @@ window.onload = async () => {
     if(openId){
         await openCanvas(openId);
         await loadCanvasPromptTemplates();
+        const nativeEditor=window.CanvasAssistantNative?.createEditor({
+            getState:()=>({id:canvas?.id,updatedAt:Number(canvas?.updated_at||0),nodes,readOnly:!!canvas?.readOnly}),
+            getSnapshot:()=>({nodes:serializableCanvasNodes(),connections}),
+            save:()=>saveCanvas(),pushUndo:()=>pushUndo(),render:()=>render(),clipModel:window.CanvasClipModel,setSegmentPrompt:setMinimaxSegmentPrompt,
+            applyFields:(node,patch)=>{if(node.type==='generator')setCanvasGeneratorSizeFields(node,patch);else if(node.type==='msgen')setCanvasMsSizeFields(node,patch);else Object.assign(node,patch);},
+            createNode:type=>createNodeByType(type,defaultPoint(0,0)),
+            shotHost:()=>window.CanvasVideoDeconstructionBridge,shotModel:window.CanvasVideoDeconstructionModel,
+            check:proposal=>proposal.check(),
+        });
         window.CanvasAssistant?.mount({
             kind:'classic',
             getContext:()=>canvas ? {id:canvas.id,title:canvas.title,updatedAt:Number(canvas.updated_at||0),nodes,selectedNodeIds:[...selected],creationSettings:canvasAssistantCreationSettings()} : null,
@@ -17594,6 +17674,8 @@ window.onload = async () => {
             refresh:()=>syncRemoteCanvasNow(),
             prepareImageRequest:canvasAssistantImageRequest,
             generateImage:canvasAssistantGenerateImage,
+            nativeSnapshot:()=>nativeEditor?.snapshot(),
+            executeNativeAction:proposal=>nativeEditor.execute(proposal),
             referencePreview:(item,size)=>item.kind==='video' ? canvasVideoPreviewHtml(item.url,size,'preload="none"') : canvasPreviewImgHtml(item.thumbnail||item.url,size,'loading="lazy" draggable="false"'),
             bindReferencePreviews:element=>bindCanvasPreviewImageFallbacks(element),
             openPromptTemplates:async callback=>{canvasAssistantTemplateCallback=callback;await openPromptTemplateModal('');},

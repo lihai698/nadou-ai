@@ -64,6 +64,8 @@ let rhWorkflowEditorZoom = document.getElementById('rhWorkflowEditorZoom');
 const imageModelList = document.getElementById('imageModelList');
 const chatModelList = document.getElementById('chatModelList');
 const videoModelList = document.getElementById('videoModelList');
+const audioModelsInput = document.getElementById('audioModelsInput');
+const audioTimestampModelsInput = document.getElementById('audioTimestampModelsInput');
 const msLoraBlock = document.getElementById('msLoraBlock');
 const msLoraList = document.getElementById('msLoraList');
 const recommendApiOverlay = document.getElementById('recommendApiOverlay');
@@ -751,6 +753,8 @@ function syncEditor(){
     item.id = nextId;
     if(oldId !== item.id) selectedId = item.id;
     item.name = nameInput.value.trim() || item.id;
+    if(audioModelsInput) item.audio_models = unique(audioModelsInput.value.split(/\r?\n/).map(x=>x.trim()).filter(Boolean));
+    if(audioTimestampModelsInput) item.audio_timestamp_models = unique(audioTimestampModelsInput.value.split(/\r?\n/).map(x=>x.trim()).filter(x=>x && item.audio_models.includes(x)));
     const lockedApi = lockedRecommendedApi(item);
     const selectedProtocol = lockedApi
         ? lockedApi.protocol
@@ -2464,6 +2468,8 @@ function renderEditor(){
     if(!item) return;
     editorTitle.textContent = item.name || item.id;
     nameInput.value = item.name || '';
+    if(audioModelsInput) audioModelsInput.value = (item.audio_models || []).join('\n');
+    if(audioTimestampModelsInput) audioTimestampModelsInput.value = (item.audio_timestamp_models || []).join('\n');
     idInput.value = item.id || '';
     updateIdPreview();
     clearVerifyResult();
@@ -3805,6 +3811,8 @@ async function saveProviders(){
                 image_models:item.image_models || [],
                 chat_models:item.chat_models || [],
                 video_models:item.video_models || [],
+                audio_models:item.audio_models || [],
+                audio_timestamp_models:item.audio_timestamp_models || [],
                 model_names:(item.model_names && typeof item.model_names === 'object') ? item.model_names : {},
                 model_protocols:(item.model_protocols && typeof item.model_protocols === 'object') ? item.model_protocols : {},
                 ms_loras:item.id === 'modelscope' ? (item.ms_loras || []) : [],

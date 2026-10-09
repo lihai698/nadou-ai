@@ -16,12 +16,12 @@
             } catch(e) {}
         })();
     </script>
-    <script src="/static/vendor/js/tailwindcss-cdn.js?v=2026.10.07.1790740572"></script>
-    <script src="/static/vendor/js/lucide.js?v=2026.10.07.1790740572"></script>
-    <script src="/static/js/theme.js?v=2026.10.07.1790740572"></script>
-    <script src="/static/js/i18n.js?v=2026.10.07.1791325378"></script>
-    <link rel="stylesheet" href="/static/css/theme.css?v=2026.10.07.1790740572">
-    <link rel="stylesheet" href="/static/css/api-settings.css?v=2026.10.07.1791013280">
+    <script src="/static/vendor/js/tailwindcss-cdn.js?v=2026.10.08.1.1791376126"></script>
+    <script src="/static/vendor/js/lucide.js?v=2026.10.08.1.1791376125"></script>
+    <script src="/static/js/theme.js?v=2026.10.08.1.1791376089"></script>
+    <script src="/static/js/i18n.js?v=2026.10.08.1.1791474092"></script>
+    <link rel="stylesheet" href="/static/css/theme.css?v=2026.10.08.1.1791376028">
+    <link rel="stylesheet" href="/static/css/api-settings.css?v=2026.10.08.1.1791376021">
 </head>
 <body>
     <div class="page">
@@ -368,6 +368,14 @@
                             <div id="videoModelList" class="model-list"></div>
                         </section>
 
+                        <section id="audioModelBlock" class="block">
+                            <div class="block-head"><div><div class="block-title">音频转写模型</div><div class="block-desc">视频镜头表的对白转写，复用当前平台的 API Key。仅支持 OpenAI 兼容转写协议。</div></div></div>
+                            <label class="field-label" for="audioModelsInput">音频模型 ID（每行一个）</label>
+                            <textarea id="audioModelsInput" class="input" rows="3" placeholder="填写当前平台实际支持的转写模型"></textarea>
+                            <label class="field-label" for="audioTimestampModelsInput">支持时间戳的模型 ID（每行一个）</label>
+                            <textarea id="audioTimestampModelsInput" class="input" rows="2" placeholder="仅填写能返回 verbose_json / segments 的音频模型"></textarea>
+                            <div class="block-desc">时间戳列表必须是音频模型列表的子集。只有明确兼容的模型可用于镜头对白；不会自动选择或添加外来模型。</div>
+                        </section>
                         <section id="msLoraBlock" class="block ms-lora-block">
                             <div class="block-head">
                                 <div>
@@ -566,6 +574,6 @@
         </div>
     </div>
 
-    <script src="/static/js/api-settings.js?v=2026.10.07.2.1791441969"></script>
+    <script src="/static/js/api-settings.js?v=2026.10.08.1.1791519629"></script>
 </body>
 </html>

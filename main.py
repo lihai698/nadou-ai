@@ -168,6 +168,9 @@ from backend.storage_paths import (
 from backend import local_env
 from backend.depth_capture import DepthCaptureManager
 from backend.canvas_clip import CanvasClipManager, CanvasClipConflict
+from backend.canvas_video_media import VideoMedia
+from backend.canvas_video_deconstruction import VideoDeconstructionManager, create_video_deconstruction_router
+from backend.canvas_video_speech import VideoSpeech
 
 QUIET_ACCESS_PATHS = {
     "/api/queue_status",
@@ -1613,6 +1616,8 @@ def normalize_provider(item):
         "primary": bool(item.get("primary", False)),
         "image_models": model_list_from_values(item.get("image_models") or []),
         "chat_models": model_list_from_values(item.get("chat_models") or []),
+        "audio_models": model_list_from_values(item.get("audio_models") or []),
+        "audio_timestamp_models": [m for m in model_list_from_values(item.get("audio_timestamp_models") or []) if m in model_list_from_values(item.get("audio_models") or [])],
         "video_models": video_models,
         "model_names": normalize_model_name_map(item.get("model_names")),
         "model_protocols": normalize_model_protocols(item.get("model_protocols")),
@@ -3360,6 +3365,8 @@ class ApiProviderPayload(BaseModel):
     image_models: List[str] = []
     chat_models: List[str] = []
     video_models: List[str] = []
+    audio_models: List[str] = []
+    audio_timestamp_models: List[str] = []
     model_names: Dict[str, str] = {}
     model_protocols: Dict[str, str] = {}
     ms_loras: List[Dict[str, Any]] = []
@@ -3417,6 +3424,8 @@ class CanvasLLMRequest(BaseModel):
     ms_model: str = ""
     images: List[str] = []   # 可以是 /output/*.png、/assets/*.png 本地路径 或 http(s) URL 或 data URL
     videos: List[str] = []   # 可以是 /output/*.mp4、/assets/*.mp4 本地路径 或 http(s) URL 或 data URL
+    temperature: Optional[float] = Field(default=None, ge=0, le=2)
+    max_tokens: Optional[int] = Field(default=None, ge=1, le=32000)
 
 class ConversationCreateRequest(BaseModel):
     title: str = "新对话"
@@ -19498,6 +19507,10 @@ async def canvas_llm(payload: CanvasLLMRequest):
     try:
         async with httpx.AsyncClient(timeout=AI_REQUEST_TIMEOUT) as client:
             req_body = {"model": model, "messages": upstream_messages}
+            if payload.temperature is not None:
+                req_body["temperature"] = payload.temperature
+            if payload.max_tokens is not None:
+                req_body["max_tokens"] = payload.max_tokens
             if _is_apimart:
                 req_body["stream"] = False   # APIMart 默认流式，强制关闭
             response = await client.post(

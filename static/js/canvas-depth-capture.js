@@ -81,6 +81,13 @@
             if(event.target === modal){ close(); return; }
             const tab = event.target.closest('[data-tab]');
             if(tab){ setTab(tab.dataset.tab); return; }
+            const extension = event.target.closest('[data-depth-extension]');
+            if(extension && current?.extensions){
+                const callback = current.extensions[extension.dataset.depthExtension];
+                close();
+                try { await callback?.(); } catch(error){ window.alert(error.message || '无法打开视频拆解'); }
+                return;
+            }
             const button = event.target.closest('[data-action]');
             if(!button || !current) return;
             if(button.dataset.action === 'close'){ close(); return; }
@@ -115,6 +122,13 @@
     function open(options){
         ensureModal();
         current = options;
+        modal.querySelector('.video-deconstruction-menu')?.remove();
+        if(options.extensions){
+            const menu = document.createElement('details');
+            menu.className = 'video-deconstruction-menu';
+            menu.innerHTML = `<summary>${icon('scissors')}拆解视频${icon('chevron-down')}</summary><div><button type="button" data-depth-extension="onOpenCuts">按镜头拆</button><button type="button" data-depth-extension="onOpenTable">拆成镜头表</button></div>`;
+            modal.querySelector('.depth-capture-tabs').append(menu);
+        }
         modal.querySelector('#depthCaptureTitle').textContent = options.title || '';
         const video = modal.querySelector('video');
         video.src = options.sourceUrl;
