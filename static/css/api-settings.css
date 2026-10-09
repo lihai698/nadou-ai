@@ -6022,3 +6022,17 @@ html.studio-theme-dark body .recommend-tag.recommend-free-tag svg {
         display:none !important;
     }
 }
+
+/* 音频模型复用模型列表，仅补齐折叠参数的原生表单样式。 */
+.audio-provider-options { margin-top:12px; color:var(--muted); font-size:12px; }
+.audio-provider-options summary { cursor:pointer; font-weight:700; padding:4px 0; }
+.audio-provider-options[open] summary { margin-bottom:12px; }
+.audio-provider-options .field-label { display:block; margin:12px 0 6px; color:var(--muted); font-size:12px; font-weight:650; }
+.audio-provider-options .field-frame select,.audio-provider-options .field-frame textarea { width:100%; min-width:0; padding:8px 10px; border:0; background:transparent; color:var(--text); font:inherit; outline:none; }
+.audio-provider-options .field-frame select { height:34px; }
+.audio-provider-options select option { background:var(--panel); color:var(--text); }
+.audio-provider-options textarea { resize:vertical; }
+.audio-provider-options .block-desc { margin-top:10px; }
+#modelPickerOverlay .picker-toolbar { flex-wrap:wrap; }
+#modelPickerOverlay .picker-cat-tabs { flex-wrap:wrap; }
+#modelPickerOverlay .picker-search { min-width:140px; }

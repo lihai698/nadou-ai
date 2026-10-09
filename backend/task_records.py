@@ -22,7 +22,7 @@ from .process_lock import interprocess_file_lock
 from .task_states import interrupted_task_update
 
 
-TASK_ID_RE = re.compile(r"canvas_(?:img|comfy|video)_[A-Za-z0-9_-]{8,87}\Z")
+TASK_ID_RE = re.compile(r"canvas_(?:img|comfy|video|audio)_[A-Za-z0-9_-]{8,87}\Z")
 TASK_STATUSES = frozenset({
     "queued",
     "running",

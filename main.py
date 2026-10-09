@@ -42,6 +42,7 @@ from fastapi.responses import FileResponse, Response, StreamingResponse, JSONRes
 from pydantic import BaseModel, Field
 from fastapi.middleware.cors import CORSMiddleware
 from backend.versioning import version_gt
+from backend.canvas_audio import AudioConfigError, AudioResultError, build_audio_request, audio_input_summary, validate_audio_bytes, build_audio_recognition_request, validate_recognition_references, audio_text_result
 from backend.versioning import version_tuple
 from backend.provider_protocols import (
     effective_protocol,
@@ -1023,6 +1024,10 @@ def volcengine_access_key_env():
 def volcengine_secret_key_env():
     return "VOLCENGINE_SECRET_ACCESS_KEY"
 
+def volcengine_voice_api_key_env():
+    """豆包语音独立 API Key，不与方舟 API Key 共用。"""
+    return "VOLCENGINE_DOUBAO_VOICE_API_KEY"
+
 def read_api_env_value(key: str) -> str:
     return local_env.read_env_value(API_ENV_FILE, key)
 
@@ -1046,6 +1051,10 @@ def volcengine_access_key_value() -> str:
 
 def volcengine_secret_key_value() -> str:
     env_key = volcengine_secret_key_env()
+    return os.getenv(env_key, "") or read_api_env_value(env_key)
+
+def volcengine_voice_api_key_value() -> str:
+    env_key = volcengine_voice_api_key_env()
     return os.getenv(env_key, "") or read_api_env_value(env_key)
 
 def volcengine_provider_api_key(explicit_key: str = "") -> str:
@@ -1617,6 +1626,10 @@ def normalize_provider(item):
         "image_models": model_list_from_values(item.get("image_models") or []),
         "chat_models": model_list_from_values(item.get("chat_models") or []),
         "audio_models": model_list_from_values(item.get("audio_models") or []),
+        "audio_generation_models": model_list_from_values(item.get("audio_generation_models") or []),
+        "audio_generation_protocol": item.get("audio_generation_protocol") if item.get("audio_generation_protocol") in {"openai-speech", "minimax-speech", "minimax-music"} else "openai-speech",
+        "audio_generation_voices": model_list_from_values(item.get("audio_generation_voices") or []),
+        "audio_generation_instructions": bool(item.get("audio_generation_instructions", False)),
         "audio_timestamp_models": [m for m in model_list_from_values(item.get("audio_timestamp_models") or []) if m in model_list_from_values(item.get("audio_models") or [])],
         "video_models": video_models,
         "model_names": normalize_model_name_map(item.get("model_names")),
@@ -1763,6 +1776,7 @@ def public_provider(provider):
     if provider.get("id") == "volcengine":
         ak = volcengine_access_key_value()
         sk = volcengine_secret_key_value()
+        voice_key = volcengine_voice_api_key_value()
         item.update({
             "has_volcengine_access_key": bool(ak),
             "volcengine_access_key_preview": mask_secret(ak),
@@ -1770,6 +1784,9 @@ def public_provider(provider):
             "has_volcengine_secret_key": bool(sk),
             "volcengine_secret_key_preview": mask_secret(sk),
             "volcengine_secret_key_env": volcengine_secret_key_env(),
+            "has_volcengine_voice_api_key": bool(voice_key),
+            "volcengine_voice_api_key_preview": mask_secret(voice_key),
+            "volcengine_voice_api_key_env": volcengine_voice_api_key_env(),
             "volcengine_project_name": provider.get("volcengine_project_name") or VOLCENGINE_DEFAULT_PROJECT_NAME,
             "volcengine_region": provider.get("volcengine_region") or VOLCENGINE_DEFAULT_REGION,
         })
@@ -3248,13 +3265,13 @@ _CANVAS_TASK_PERSISTED_FIELDS = frozenset({
     "trace_id", "request_id", "upstream_task_id", "remote_query_mode",
     "upstream_task_ids", "remote_query_modes", "upstream_task_statuses", "upstream_task_errors", "upstream_task_results",
     "jimeng_pending", "submit_id",
-    "kind", "queue_info", "message",
+    "kind", "queue_info", "message", "operation",
 })
 _CANVAS_RESULT_PERSISTED_FIELDS = frozenset({
     "images", "image_items", "videos", "audios", "texts", "files", "items",
     "outputs", "urls", "timestamp", "type", "model", "provider_id",
     "provider_name", "task_id", "request_id", "raw_usage", "seed", "prompt_id",
-    "backend",
+    "backend", "text", "kind",
 })
 
 class CanvasVideoRequest(BaseModel):
@@ -3366,6 +3383,10 @@ class ApiProviderPayload(BaseModel):
     chat_models: List[str] = []
     video_models: List[str] = []
     audio_models: List[str] = []
+    audio_generation_models: List[str] = Field(default_factory=list)
+    audio_generation_protocol: str = "openai-speech"
+    audio_generation_voices: List[str] = Field(default_factory=list)
+    audio_generation_instructions: bool = False
     audio_timestamp_models: List[str] = []
     model_names: Dict[str, str] = {}
     model_protocols: Dict[str, str] = {}
@@ -3377,12 +3398,14 @@ class ApiProviderPayload(BaseModel):
     volcengine_region: str = VOLCENGINE_DEFAULT_REGION
     volcengine_access_key_id: Optional[str] = None
     volcengine_secret_access_key: Optional[str] = None
+    volcengine_voice_api_key: Optional[str] = None
     api_key: Optional[str] = None
     wallet_api_key: Optional[str] = None
     clear_key: bool = False
     clear_wallet_key: bool = False
     clear_volcengine_access_key_id: bool = False
     clear_volcengine_secret_access_key: bool = False
+    clear_volcengine_voice_api_key: bool = False
 
 class ChatRequest(BaseModel):
     conversation_id: str = ""
@@ -3424,6 +3447,7 @@ class CanvasLLMRequest(BaseModel):
     ms_model: str = ""
     images: List[str] = []   # 可以是 /output/*.png、/assets/*.png 本地路径 或 http(s) URL 或 data URL
     videos: List[str] = []   # 可以是 /output/*.mp4、/assets/*.mp4 本地路径 或 http(s) URL 或 data URL
+    audios: List[str] = []   # 可以是 /output/*.wav、/assets/*.mp3 本地路径或 http(s) URL
     temperature: Optional[float] = Field(default=None, ge=0, le=2)
     max_tokens: Optional[int] = Field(default=None, ge=1, le=32000)
 
@@ -14876,6 +14900,7 @@ async def save_providers(payload: List[ApiProviderPayload]):
         if provider["id"] == "volcengine":
             ak_env = volcengine_access_key_env()
             sk_env = volcengine_secret_key_env()
+            voice_env = volcengine_voice_api_key_env()
             if item.clear_volcengine_access_key_id:
                 env_updates[ak_env] = ""
             elif item.volcengine_access_key_id is not None and item.volcengine_access_key_id.strip():
@@ -14884,6 +14909,10 @@ async def save_providers(payload: List[ApiProviderPayload]):
                 env_updates[sk_env] = ""
             elif item.volcengine_secret_access_key is not None and item.volcengine_secret_access_key.strip():
                 env_updates[sk_env] = item.volcengine_secret_access_key.strip()
+            if item.clear_volcengine_voice_api_key:
+                env_updates[voice_env] = ""
+            elif item.volcengine_voice_api_key is not None and item.volcengine_voice_api_key.strip():
+                env_updates[voice_env] = item.volcengine_voice_api_key.strip()
         if provider["id"] == "comfly":
             env_updates["COMFLY_BASE_URL"] = provider["base_url"]
             env_updates["IMAGE_MODELS"] = ",".join(provider["image_models"])
@@ -15177,6 +15206,8 @@ async def probe_openai_models_endpoint(client, base_url: str, api_key: str):
             "image_models": grouped["image"],
             "chat_models": grouped["chat"],
             "video_models": grouped["video"],
+            "audio_models": grouped.get("audio", []),
+            "audio_generation_models": grouped.get("audioGeneration", []),
             "all": ids,
         }
     if 400 <= response.status_code < 500:
@@ -15212,6 +15243,11 @@ def classify_upstream_model(mid):
     image_keys = ["banana", "image", "dalle", "dall-e", "imagen", "flux", "stable", "sdxl", "midjourney", "nano-banana", "ideogram", "fal-ai", "z-image", "qwen-image", "klein", "seedream", "doubao-seedream", "text-to-image", "image-to-image"]
     if any(k in lc for k in image_keys):
         return "image"
+    # 音频聊天模型仍走聊天接口；这里只建议专用转写/生成模型。
+    if any(k in lc for k in ("whisper", "transcribe", "sensevoice", "speech-to-text")) or re.search(r"(?:^|[/_-])asr(?:$|[/_-])", lc):
+        return "audio"
+    if any(k in lc for k in ("text-to-speech", "speech-01", "speech-02", "speech-2", "music-")) or re.search(r"(?:^|[/_-])tts(?:$|[/_-])", lc):
+        return "audioGeneration"
     return "chat"
 
 def parse_upstream_models(raw, protocol="openai"):
@@ -15234,7 +15270,7 @@ def parse_upstream_models(raw, protocol="openai"):
                 mid = mid[len("models/"):]
             ids.append(mid)
     ids = sorted(set(ids))
-    grouped = {"image": [], "chat": [], "video": []}
+    grouped = {"image": [], "chat": [], "video": [], "audio": [], "audioGeneration": []}
     for mid in ids:
         grouped[classify_upstream_model(mid)].append(mid)
     return grouped, ids
@@ -15330,6 +15366,8 @@ async def test_provider_connection(payload: TestConnectionPayload):
                 "image_models": grouped["image"],
                 "chat_models": grouped["chat"],
                 "video_models": grouped["video"],
+                "audio_models": grouped.get("audio", []),
+                "audio_generation_models": grouped.get("audioGeneration", []),
                 "all": ids,
                 "image_request_mode": detect_image_request_mode(base_url, ids) or normalize_image_request_mode(getattr(payload, "image_request_mode", "")),
             }
@@ -15639,6 +15677,8 @@ async def fetch_models_from_upstream(base_url: str, api_key: str, protocol: str 
         "image_models": grouped["image"],
         "chat_models": grouped["chat"],
         "video_models": grouped["video"],
+        "audio_models": grouped.get("audio", []),
+        "audio_generation_models": grouped.get("audioGeneration", []),
         "all": ids,
         "image_request_mode": detect_image_request_mode(base_url, ids) or normalize_image_request_mode(image_request_mode),
     }
@@ -16535,6 +16575,184 @@ async def _run_canvas_image_task(task_id: str, payload: OnlineImageRequest):
                 "image succeeded task record write failed "
                 f"error={type(record_exc).__name__}"
             )
+
+class CanvasAudioTaskRequest(BaseModel):
+    client_task_id: str = Field(min_length=20, max_length=100, pattern=r"^canvas_audio_[A-Za-z0-9_-]+$")
+    provider_id: str = Field(min_length=1, max_length=120)
+    model: str = Field(min_length=1, max_length=240)
+    prompt: str = Field(default="", max_length=10000)
+    settings: Dict[str, Any] = Field(default_factory=dict)
+    references: List[Dict[str, Any]] = Field(default_factory=list, max_length=3)
+    operation: str = Field(default="generation", pattern=r"^(generation|recognition)$")
+
+
+CANVAS_AUDIO_TASK_GATE = asyncio.Semaphore(3)
+
+
+async def build_canvas_audio_result(payload: CanvasAudioTaskRequest):
+    provider = get_api_provider_exact(payload.provider_id)
+    if payload.operation == 'recognition':
+        endpoint, fields = build_audio_recognition_request(provider, payload.model, payload.settings)
+        validate_recognition_references(payload.references)
+        media = video_deconstruction_media()
+        # 沿用本项目本地目录边界及公网下载防护，不接收任意本机路径。
+        path = await asyncio.to_thread(media.resolve, {'source_url': payload.references[0]['url']})
+        if path.stat().st_size > 100 * 1024 * 1024:
+            raise AudioConfigError('音频文件超过 100MB 上限')
+        name = str(payload.references[0].get('name') or path.name)
+        mime = mimetypes.guess_type(name)[0] or 'application/octet-stream'
+        headers = api_headers(provider=provider, model=payload.model)
+        headers.pop('Content-Type', None)
+        headers.pop('Accept', None)
+        async with httpx.AsyncClient(timeout=httpx.Timeout(1800, connect=20), follow_redirects=False) as client:
+            with path.open('rb') as stream:
+                response = await client.post(endpoint, headers=headers, data=fields, files={'file': (name, stream, mime)})
+            if response.status_code >= 400:
+                raise HTTPException(502, safe_upstream_http_detail(response))
+            try:
+                result = audio_text_result(response.json())
+            except ValueError as exc:
+                raise AudioResultError('音频识别未返回有效文字，请检查模型和转写协议') from exc
+        return {**result, 'model': payload.model, 'provider_id': payload.provider_id}
+    endpoint, body = build_audio_request(provider, payload.model, payload.prompt, payload.settings, payload.references)
+    headers = api_headers(provider=provider, model=payload.model)
+    # 音频生成的协议独立于平台的图片/对话协议，认证使用同一平台 Key。
+    headers.pop("Accept", None)
+    async with httpx.AsyncClient(timeout=httpx.Timeout(180, connect=20), follow_redirects=False) as client:
+        async with client.stream("POST", endpoint, json=body, headers=headers) as response:
+            chunks, size = [], 0
+            async for chunk in response.aiter_bytes():
+                size += len(chunk)
+                if size > 100 * 1024 * 1024:
+                    raise AudioResultError("音频响应超过 100MB 上限")
+                chunks.append(chunk)
+            content = b"".join(chunks)
+            if response.status_code >= 400:
+                detail = public_comfy_error_detail(content[:20000].decode("utf-8", "replace"), fallback="音频供应商请求失败")
+                raise HTTPException(status_code=502, detail=f"音频平台返回 {response.status_code}：{detail}")
+            if "json" in response.headers.get("content-type", ""):
+                try:
+                    raw = json.loads(content)
+                    base_resp = raw.get("base_resp") or {}
+                    if base_resp.get("status_code", 0) != 0:
+                        raise AudioResultError("音频平台返回业务错误：" + public_comfy_error_detail(base_resp.get("status_msg"), fallback="请检查模型配置"))
+                    encoded = (raw.get("data") or {}).get("audio")
+                    if not isinstance(encoded, str) or not encoded:
+                        raise AudioResultError("音频任务完成但没有返回真实音频")
+                    content = bytes.fromhex(encoded)
+                except (ValueError, TypeError, AttributeError) as exc:
+                    raise AudioResultError("音频平台响应格式与所选协议不匹配") from exc
+    fmt = str(body.get("response_format") or (body.get("audio_setting") or {}).get("format") or "mp3")
+    validate_audio_bytes(content, fmt)
+    filename = f"audio_{payload.client_task_id.removeprefix('canvas_audio_')}.{fmt}"
+    path = output_path_for(filename, "output")
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    # 文件落盘后才暴露播放地址；崩溃时不会生成半个可播放结果。
+    temp_path = path + ".part"
+    try:
+        with open(temp_path, "wb") as stream:
+            stream.write(content)
+        os.replace(temp_path, path)
+    finally:
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+    item = {"url": output_url_for(filename, "output"), "name": filename, "kind": "audio",
+            "mime": "audio/mpeg" if fmt == "mp3" else f"audio/{'ogg' if fmt == 'opus' else fmt}", "sizeBytes": len(content)}
+    return {"audios": [item], "items": [item], "model": payload.model, "provider_id": payload.provider_id}
+
+
+async def run_canvas_audio_task(task_id, payload):
+    async with CANVAS_AUDIO_TASK_GATE:
+        with CANVAS_TASK_LOCK:
+            task = _load_canvas_task_for_worker(task_id)
+            if not task or task.get("status") != "queued":
+                return
+            task.update(task_state_update(task, "running", time.time()))
+            try:
+                _write_canvas_task_record(task, required=True)
+            except TaskRecordError:
+                _mark_canvas_worker_start_failed(task, task_id)
+                return
+        try:
+            result = await build_canvas_audio_result(payload)
+        except Exception as exc:
+            uncertain = isinstance(exc, (httpx.TransportError, httpx.TimeoutException))
+            detail = "供应商响应中断，提交状态未知；请核对平台记录，勿重复生成" if uncertain else public_comfy_error_detail(getattr(exc, "detail", None) or exc, fallback="音频生成失败")
+            with CANVAS_TASK_LOCK:
+                task.update(task_state_update(task, "unknown" if uncertain else "failed", time.time(), error=detail))
+                try:
+                    _write_canvas_task_record(task, required=True)
+                except TaskRecordError:
+                    task['_audioResultSavePending'] = True
+            return
+        with CANVAS_TASK_LOCK:
+            task.update(task_state_update(task, "succeeded", time.time(), result=result))
+            try:
+                _write_canvas_task_record(task, required=True)
+            except TaskRecordError:
+                task['_audioResultSavePending'] = True
+
+
+@app.post("/api/canvas-audio-tasks")
+async def create_canvas_audio_task(payload: CanvasAudioTaskRequest, request: Request):
+    task_id = payload.client_task_id
+    digest = hashlib.sha256(json.dumps(payload.model_dump(), ensure_ascii=False, sort_keys=True).encode()).hexdigest()
+    with CANVAS_TASK_LOCK, task_records_lock(CANVAS_TASK_DIR):
+        try:
+            previous = CANVAS_TASKS.get(task_id) or _read_task_record_unlocked(CANVAS_TASK_DIR, task_id)
+        except TaskRecordError as exc:
+            raise HTTPException(500, "音频任务记录无法读取，已停止重复提交") from exc
+        if previous:
+            if previous.get("type") != "audio-generation" or (previous.get("input_summary") or {}).get("request_hash") != digest:
+                raise HTTPException(409, "同一任务编号的音频参数不一致，请先查询原任务")
+            return {"task_id": task_id, "status": previous.get("status", "unknown")}
+        provider = get_api_provider_exact(payload.provider_id)
+        if provider.get("enabled") is False:
+            raise HTTPException(400, "音频平台已禁用")
+        try:
+            if payload.operation == 'recognition':
+                build_audio_recognition_request(provider, payload.model, payload.settings)
+                validate_recognition_references(payload.references)
+            else:
+                build_audio_request(provider, payload.model, payload.prompt, payload.settings, payload.references)
+        except AudioConfigError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        api_headers(provider=provider, model=payload.model)
+        trace = task_context(task_id, trace_id=getattr(request.state, "trace_id", ""), request_id=getattr(request.state, "request_id", ""))
+        task = {"id": task_id, "type": "audio-generation", "status": "queued", "created_at": time.time(),
+                "updated_at": time.time(), "result": None, "error": "", "provider_id": payload.provider_id,
+                "model": payload.model, "operation": payload.operation, "process_id": CANVAS_TASK_PROCESS_ID,
+                "input_summary": {"prompt_length": len(payload.prompt), "request_hash": digest, "reference_audio_count": len(payload.references)}, **trace}
+        try:
+            _write_task_record_unlocked(CANVAS_TASK_DIR, _durable_canvas_task(task))
+        except (OSError, TaskRecordError) as exc:
+            raise HTTPException(503, "音频任务记录无法保存，本次未提交") from exc
+        CANVAS_TASKS[task_id] = task
+    asyncio.create_task(run_canvas_audio_task(task_id, payload))
+    return {"task_id": task_id, "status": "queued"}
+
+
+@app.get("/api/canvas-audio-tasks/{task_id}")
+async def get_canvas_audio_task(task_id: str):
+    with CANVAS_TASK_LOCK:
+        task = dict(CANVAS_TASKS.get(task_id) or _read_canvas_task_record(task_id) or {})
+        if task.get('_audioResultSavePending'):
+            try:
+                _write_canvas_task_record(task, required=True)
+            except TaskRecordError as exc:
+                raise HTTPException(503, '音频任务结果尚未保存，请勿重复提交；恢复磁盘后查询原任务') from exc
+            task.pop('_audioResultSavePending', None)
+            CANVAS_TASKS[task_id].pop('_audioResultSavePending', None)
+    if not task or task.get("type") != "audio-generation":
+        raise HTTPException(404, "音频任务记录不存在；请勿直接重复提交")
+    return _public_canvas_task(_interrupted_canvas_task(task))
+
+
+@app.post("/api/canvas-audio-tasks/{task_id}/refresh")
+async def refresh_canvas_audio_task(task_id: str):
+    # 同步音频协议没有远端查询编号；刷新只查询本地记录，绝不二次提交。
+    return await get_canvas_audio_task(task_id)
+
 
 @app.post("/api/canvas-image-tasks")
 async def create_canvas_image_task(payload: OnlineImageRequest, request: Request):
@@ -19469,7 +19687,8 @@ async def canvas_llm(payload: CanvasLLMRequest):
     # 构造用户消息：有图片/视频时用 OpenAI/Gemini 多模态格式
     image_inputs = [img for img in (payload.images or []) if is_image_reference_value(img)]
     video_inputs = [video for video in (payload.videos or []) if is_video_reference_value(video)]
-    if image_inputs or video_inputs:
+    audio_inputs = [audio for audio in (payload.audios or []) if isinstance(audio, str) and audio.strip()]
+    if image_inputs or video_inputs or audio_inputs:
         content_parts = [{"type": "text", "text": payload.message}]
         ok_imgs = 0
         for img in image_inputs[:8]:
@@ -19496,9 +19715,18 @@ async def canvas_llm(payload: CanvasLLMRequest):
                     continue
                 content_parts.append({"type": "video_url", "video_url": {"url": ref_url}})
                 ok_videos += 1
+        ok_audios = 0
+        for audio in audio_inputs[:3]:
+            if not audio:
+                continue
+            ref_url = media_reference_to_url(audio)
+            if not ref_url:
+                continue
+            content_parts.append({"type": "audio_url", "audio_url": {"url": ref_url}})
+            ok_audios += 1
         write_diagnostic(
             f"canvas llm input provider={str(payload.provider or '')[:80]} "
-            f"text_len={len(payload.message)} images={ok_imgs}/{len(payload.images)} videos={ok_videos}/{len(payload.videos)}"
+            f"text_len={len(payload.message)} images={ok_imgs}/{len(payload.images)} videos={ok_videos}/{len(payload.videos)} audios={ok_audios}/{len(payload.audios)}"
         )
         upstream_messages.append({"role": "user", "content": content_parts})
     else:

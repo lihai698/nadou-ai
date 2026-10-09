@@ -166,6 +166,27 @@
                                     <div class="rh-key-item">
                                         <div class="rh-key-head">
                                             <div>
+                                                <div class="rh-key-title" data-i18n="api.volcengineVoiceKey">豆包语音 API Key · 语音合成 / 声音克隆</div>
+                                                <div class="rh-key-desc" data-i18n="api.volcengineVoiceKeyDesc">独立用于语音合成、声音克隆和音频生成，使用 x-api-key，不替换方舟 API Key。</div>
+                                            </div>
+                                            <div class="rh-key-links">
+                                                <span data-i18n="api.get">获取</span>
+                                                <a href="https://console.volcengine.com/speech/new/setting/apikeys?projectName=default" target="_blank" rel="noopener"><i data-lucide="key-round" class="w-3 h-3"></i><span data-i18n="api.volcengineVoiceKeyGet">获取 Key</span></a>
+                                                <a href="https://docs.volcengine.com/docs/DoubaoVoice/APIKeyUsage?lang=zh" target="_blank" rel="noopener"><i data-lucide="external-link" class="w-3 h-3"></i><span data-i18n="api.volcengineVoiceKeyLink">官方配置说明</span></a>
+                                            </div>
+                                        </div>
+                                        <div class="key-input-line">
+                                            <div class="field-frame"><input id="volcVoiceKeyInput" type="password" placeholder="输入豆包语音 API Key"></div>
+                                            <div class="key-actions">
+                                                <button class="key-btn" type="button" onclick="saveVolcengineVoiceKey()" title="保存豆包语音 API Key"><i data-lucide="check" class="w-4 h-4"></i></button>
+                                                <button class="key-btn key-clear" type="button" onclick="clearVolcengineVoiceKey()" title="清除豆包语音 API Key"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                                            </div>
+                                        </div>
+                                        <span id="volcVoiceKeyHint" class="hint"></span>
+                                    </div>
+                                    <div class="rh-key-item">
+                                        <div class="rh-key-head">
+                                            <div>
                                                 <div class="rh-key-title" data-i18n="api.volcengineAssetKeys">素材库 AK/SK · 上传素材</div>
                                                 <div class="rh-key-desc" data-i18n="api.volcengineAssetKeysDesc">用于 CreateAssetGroup / CreateAsset / GetAsset 的 Access Key 鉴权。</div>
                                             </div>
@@ -320,7 +341,7 @@
                     <div id="modelsHead" class="block models-toolbar">
                         <div>
                             <div class="block-title" data-i18n="api.modelsTitle">模型列表</div>
-                            <div class="block-desc" data-i18n="api.modelsDesc">从上游 API 自动拉取所有可用模型并按类型分类（image / chat / video）</div>
+                            <div class="block-desc" data-i18n="api.modelsDesc">从上游 API 自动拉取所有可用模型并按类型分类（图片 / 文本 / 视频 / 音频）</div>
                         </div>
                         <div class="models-toolbar-actions">
                             <button id="fetchModelsBtn" class="action-btn primary-btn" type="button" onclick="fetchModels()">
@@ -368,13 +389,24 @@
                             <div id="videoModelList" class="model-list"></div>
                         </section>
 
+                        <section class="block">
+                            <div class="block-head">
+                                <div><div class="block-title">音频生成模型</div><div class="block-desc">API 生成节点使用，选择语音或音乐生成模型</div></div>
+                                <button class="ghost-btn" type="button" onclick="addModel('audioGeneration')"><i data-lucide="plus" class="w-3.5 h-3.5"></i><span data-i18n="api.model">模型</span></button>
+                            </div>
+                            <div id="audioGenerationModelList" class="model-list"></div>
+                        </section>
                         <section id="audioModelBlock" class="block">
-                            <div class="block-head"><div><div class="block-title">音频转写模型</div><div class="block-desc">视频镜头表的对白转写，复用当前平台的 API Key。仅支持 OpenAI 兼容转写协议。</div></div></div>
-                            <label class="field-label" for="audioModelsInput">音频模型 ID（每行一个）</label>
-                            <textarea id="audioModelsInput" class="input" rows="3" placeholder="填写当前平台实际支持的转写模型"></textarea>
-                            <label class="field-label" for="audioTimestampModelsInput">支持时间戳的模型 ID（每行一个）</label>
-                            <textarea id="audioTimestampModelsInput" class="input" rows="2" placeholder="仅填写能返回 verbose_json / segments 的音频模型"></textarea>
-                            <div class="block-desc">时间戳列表必须是音频模型列表的子集。只有明确兼容的模型可用于镜头对白；不会自动选择或添加外来模型。</div>
+                            <div class="block-head">
+                                <div><div class="block-title">音频识别模型</div><div class="block-desc">API 音频识别和视频镜头对白转写使用（OpenAI 兼容接口）</div></div>
+                                <button class="ghost-btn" type="button" onclick="addModel('audio')"><i data-lucide="plus" class="w-3.5 h-3.5"></i><span data-i18n="api.model">模型</span></button>
+                            </div>
+                            <div id="audioModelList" class="model-list"></div>
+                            <details class="audio-provider-options"><summary>音频识别高级设置</summary>
+                                <label class="field-label" for="audioTimestampModelsInput">支持时间戳的模型 ID（每行一个）</label>
+                                <div class="field-frame"><textarea id="audioTimestampModelsInput" rows="2" placeholder="填写识别列表中可返回 verbose_json / segments 的模型"></textarea></div>
+                                <div class="block-desc">仅影响视频镜头对白时间轴，需平台明确支持时间戳。</div>
+                            </details>
                         </section>
                         <section id="msLoraBlock" class="block ms-lora-block">
                             <div class="block-head">
@@ -436,6 +468,8 @@
                     <button class="picker-cat-tab" data-cat="image" onclick="selectPickerCat('image')">生图 <span class="cat-count">0</span></button>
                     <button class="picker-cat-tab" data-cat="chat" onclick="selectPickerCat('chat')">LLM <span class="cat-count">0</span></button>
                     <button class="picker-cat-tab" data-cat="video" onclick="selectPickerCat('video')">视频 <span class="cat-count">0</span></button>
+                    <button class="picker-cat-tab" data-cat="audio" onclick="selectPickerCat('audio')">音频识别 <span class="cat-count">0</span></button>
+                    <button class="picker-cat-tab" data-cat="audioGeneration" onclick="selectPickerCat('audioGeneration')">音频生成 <span class="cat-count">0</span></button>
                 </div>
             </div>
             <div id="pickerList" class="picker-body"></div>
@@ -444,6 +478,8 @@
                 <span id="sumImage" class="picker-sum-chip picker-sum-chip-empty">生图 0</span>
                 <span id="sumChat" class="picker-sum-chip picker-sum-chip-empty">聊天 0</span>
                 <span id="sumVideo" class="picker-sum-chip picker-sum-chip-empty">视频 0</span>
+                <span id="sumAudio" class="picker-sum-chip picker-sum-chip-empty">音频识别 0</span>
+                <span id="sumAudioGeneration" class="picker-sum-chip picker-sum-chip-empty">音频生成 0</span>
                 <span id="sumUnsel" style="margin-left:auto;color:var(--faint)">未选 0</span>
             </div>
             <div class="picker-foot">
@@ -574,6 +610,6 @@
         </div>
     </div>
 
-    <script src="/static/js/api-settings.js?v=2026.10.09.video.3"></script>
+    <script src="/static/js/api-settings.js?v=2026.10.08.1.1791574037"></script>
 </body>
 </html>

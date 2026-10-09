@@ -852,6 +852,7 @@ function serializableSmartNode(node){
     if(Array.isArray(copy.images)) copy.images = copy.images.map(img => mediaItemForStorage(stripImageGenerationMeta(img))).filter(Boolean);
     if(copy.runSettings) copy.runSettings = settingsForStorage(copy.runSettings);
     clearSmartNodeTransientRunState(copy);
+    window.CanvasAudio.detachTask(copy);
     delete copy._dom;
     return copy;
 }
@@ -1045,6 +1046,8 @@ function recentSmartSettingsForMode(modeKey=''){
     return saved && typeof saved === 'object' ? cloneSmartSettings(saved) : {};
 }
 function rememberRecentSmartSettings(source=settings, node=null){
+    // 音频分析使用当前节点的文本模型选择，不应覆盖图片模式的最近配置。
+    if(smartApiAudioMode(node,source) || smartHasAudioAnalysisInput(node))return;
     const clean = stripOutpaintDisplaySettings(settingsForStorage(source), node);
     sanitizeSmartApiSelection(clean);
     if(clean.outpaintResolutionLocked === true && clean.resolution === 'custom'){
@@ -1944,6 +1947,7 @@ function promptTextItemsForNode(node, ctx=smartLoopContext){
     }
     if(node.type === 'smart-group') return smartGroupMembers(node).flatMap(member => promptTextItemsForNode(member, ctx));
     return [];
+    if(isSmartImageNode(node)&&node.audioOutputText)return [node.audioOutputText];
 }
 function promptNodeUpstreamPromptItems(node, ctx=smartLoopContext){
     const seen = new Set();
@@ -2994,7 +2998,8 @@ function renderDynamicParams(){
     engineSelect.value = settings.engine;
     syncApiKindToggleVisibility();
     if(settings.engine === 'api'){
-        if(settings.apiKind === 'video') renderApiVideoParams();
+        if(smartApiAudioMode(activeSettingsSubject(),settings))renderSmartApiAudioParams();
+        else if(settings.apiKind === 'video') renderApiVideoParams();
         else renderApiParams();
     }
     else if(settings.engine === 'volcengine'){
@@ -3012,20 +3017,21 @@ function renderDynamicParams(){
     if(window.lucide) lucide.createIcons();
 }
 function renderApiParams(){
-    const providers = imageProviders();
+    const audioAnalysis = smartHasAudioAnalysisInput();
+    const providers = audioAnalysis ? chatApiProviders() : imageProviders();
     if(!settings.provider_id || !providers.some(p => p.id === settings.provider_id)) settings.provider_id = providers[0]?.id || '';
-    const models = filterJimengImageModels(providerImageModels(settings.provider_id));
+    const models = audioAnalysis ? providerChatModels(settings.provider_id) : filterJimengImageModels(providerImageModels(settings.provider_id));
+    // renderApiParams 会根据上游音频重新整理文本模型，整理完成后再同步图片/视频切换按钮。
+    syncApiKindToggleVisibility();
     if(!settings.model || !models.includes(settings.model)) settings.model = models[0] || '';
+    syncRunButtonState();
     // 切换平台/模型时保留用户已选的分辨率（记忆），normalizeApiSizeSettings 只会修正非法的 auto。
     normalizeApiSizeSettings('');
     const outpaintLocked = settings.outpaintResolutionLocked === true;
     dynamicParams.innerHTML = `
         ${renderProviderControl(providers)}
-        ${renderModelControl(models)}
-        ${renderSizePickerControl('', true)}
-        ${renderQualityControl()}
-        ${renderCountVisualControl()}
-        ${isJimengProviderId(settings.provider_id) ? renderJimengUpscaleControl() : ''}
+        ${renderModelControl(models,{audioAnalysis})}
+        ${audioAnalysis ? '' : `${renderSizePickerControl('', true)}${renderQualityControl()}${renderCountVisualControl()}${isJimengProviderId(settings.provider_id) ? renderJimengUpscaleControl() : ''}`}
     `;
 }
 function renderJimengUpscaleControl(){
@@ -3363,11 +3369,15 @@ function renderProviderControl(providers){
         </div>
     </div>`;
 }
-function renderModelControl(models){
+function smartHasAudioAnalysisInput(node=activeSettingsSubject(),refs=null){
+    return (refs || smartAudioSources(node)).some(ref=>ref?.kind==='audio');
+}
+function renderModelControl(models, options={}){
+    const audioAnalysis = options.audioAnalysis === true;
     return `<div class="smart-control model-control">
         <button class="smart-pill" type="button"><i data-lucide="sparkles"></i><span class="sub">${escapeHtml(settings.model || tr('smart.model'))}</span></button>
         <div class="smart-popover compact-popover">
-            <div class="smart-popover-title">${escapeHtml(tr('smart.imageModel'))}</div>
+            <div class="smart-popover-title">${escapeHtml(audioAnalysis ? '文本模型' : tr('smart.imageModel'))}</div>
             <div class="model-list">
                 ${models.map(m => `<button type="button" class="direct-option ${m === settings.model ? 'active' : ''}" data-smart-param="model" data-smart-value="${escapeHtml(m)}"><span>${escapeHtml(m)}</span></button>`).join('') || `<div class="muted-note">${escapeHtml(tr('smart.noImageModel'))}</div>`}
             </div>
@@ -3377,6 +3387,7 @@ function renderModelControl(models){
 function msModelLabel(key){
     if(key === 'custom') return tr('smart.custom');
     return MS_GEN_MODELS[key]?.label || key;
+                ${audioAnalysis ? '' : window.CanvasAudio.models(apiProviders.find(p=>p.id===settings.provider_id)).map(m=>`<button class="direct-option" type="button" data-smart-param="model" data-smart-value="audio:${escapeAttr(m)}"><span>音频 · ${escapeHtml(window.CanvasAudio.modelName(apiProviders.find(p=>p.id===settings.provider_id),m))}</span></button>`).join('')}
 }
 function renderMsFunctionControl(){
     return `<div class="smart-control provider-control">
@@ -3753,6 +3764,14 @@ function rhFieldIndexes(fields){
     const counters = {image:0, video:0, audio:0};
     const map = {};
     sortRunningHubFields(fields).forEach(field => {
+    if(smartHasAudioAnalysisInput()){
+        promptInput.dataset.placeholder='输入音频分析指令（可选）…';
+        return;
+    }
+    if(smartApiAudioMode(activeSettingsSubject(),settings)){
+        promptInput.dataset.placeholder=window.CanvasAudio.operation(settings,apiProviders)==='recognition'?'连接音频后点击运行识别；无需填写提示词':'输入台词或音乐描述…';
+        return;
+    }
         const kind = rhFieldKind(field);
         if(['image','video','audio'].includes(kind)){
             map[rhParamKey(field.nodeId, field.fieldName)] = counters[kind]++;
@@ -4202,6 +4221,11 @@ function setDynamicSetting(key, value){
     if(key === 'videoProvider') settings.videoModel = '';
     if(key === 'videoMultimodal') settings._videoMultimodalUserSet = true;
     if(key === 'videoMultimodal' && settings.videoMultimodal) settings.videoUseFrameRoles = false;
+    if(key==='audioModel' && value==='__image__'){settings.audioManualSelection=false;persistActiveSmartSettings();renderDynamicParams();scheduleSave();return;}
+    if(key.startsWith('audio')){settings[key]=value;if(key==='audioProvider'){settings.audioModel='';settings.audioVoice='';}persistActiveSmartSettings();renderDynamicParams();scheduleSave();return;}
+    if(key==='provider_id' && smartHasAudioAnalysisInput()){settings.provider_id=value;settings.model='';persistActiveSmartSettings();renderDynamicParams();scheduleSave();return;}
+    if(key==='model' && String(value).startsWith('audio:')){settings.audioProvider=settings.provider_id;settings.audioModel=String(value).slice(6);settings.audioManualSelection=true;persistActiveSmartSettings();renderDynamicParams();scheduleSave();return;}
+    if(key==='provider_id' && !imageProviders().some(p=>p.id===value) && window.CanvasAudio.providers(apiProviders).some(p=>p.id===value)){settings.audioProvider=value;settings.audioManualSelection=true;persistActiveSmartSettings();renderDynamicParams();scheduleSave();return;}
     normalizeSmartVideoModeSettings(settings, key === 'videoUseFrameRoles');
     if(key === 'comfyMode') applyRecentSmartSettingsForCurrentMode();
     if(key === 'resolution'){
@@ -5490,7 +5514,8 @@ function syncRunButtonState(node=selectedNode()){
     if(!runBtn) return;
     // 只在“当前选中节点自己”忙时禁用运行：节点正在生成/排队，或它本身是正在跑的循环。
     // 不再因为“画布上有任意循环/级联在跑”就全局禁用——跑循环时仍可对其他节点点生成。
-    runBtn.disabled = !isSmartRunnableNode(node) || smartNodeInFlight(node) || smartCascadeIsLoopRunning(node?.id);
+    const missingAudioModel=smartApiAudioMode(node,settings) && !window.CanvasAudio.isActive(node || {}) && !window.CanvasAudio.ready(settings,apiProviders);
+    runBtn.disabled = !isSmartRunnableNode(node) || smartNodeInFlight(node) || smartCascadeIsLoopRunning(node?.id) || missingAudioModel;
 }
 function mergeSmartNode(local, remote, base=null, conflictCopies=null){
     const images = mergeSmartImageLists(local.images, remote.images);
@@ -5610,6 +5635,7 @@ async function mergeReloadCanvasNow(){
     if(!canvasId) return;
     if(dragState || selectionState){
         // 用户正在拖拽/框选，稍后再合并，别打断操作
+    resumeSmartAudioTasks();
         scheduleCanvasMergeReload(600);
         return;
     }
@@ -6198,6 +6224,7 @@ async function loadCanvas(){
                 n.running = false;
             } else if(smartNodeHasDisplayResult(n)){
                 markSmartNodeComplete(n, {hideTimer:true});
+            if(window.CanvasAudio.isActive(n))n.running=false;
             } else if(n.pending || n.queued){
                 clearSmartNodeBusyState(n);
             }
@@ -6230,6 +6257,7 @@ async function loadCanvas(){
 function scheduleSave(){
     // Field edits can bypass pushUndo; viewport-only and no-op saves must keep redo.
     if(!undoSuppressed && redoStack.length && historyContentSignature() !== redoBaseContent){
+    resumeSmartAudioTasks();
         redoStack.length = 0;
         redoBaseContent = '';
     }
@@ -6475,6 +6503,7 @@ function copySelectedNodes(){
     if(!canvas || isEditableTarget(document.activeElement)) return;
     const ids = selectedNodeIds();
     const copiedNodes = ids.map(id => nodes.find(n => n.id === id)).filter(Boolean);
+    window.CanvasAudio.detachTask(copy);
     if(!copiedNodes.length) return;
     const idSet = new Set(copiedNodes.map(n => n.id));
     const copiedConnections = (canvas.connections || []).filter(c => idSet.has(c.from) && idSet.has(c.to));
@@ -7278,6 +7307,7 @@ function smartRunRequestMeta(run){
         webapp_id:s.rhAppId || '',
         task_id:s.rhTaskId || '',
         mode:s.rhMode || 'workflow',
+    if(run?.audioRequest) return {...run.audioRequest};
         duration:s.duration || '',
         aspect_ratio:s.aspectRatio || '',
         megapixels:s.megapixels || '',
@@ -8416,6 +8446,7 @@ function nodeBodyHtml(node, layout){
         return `<div class="canvas-depth-task" style="width:${layout.width}px;min-height:${layout.height}px"><strong>${capture.role === 'pose' ? '骨骼姿态参考' : '灰度深度参考'}</strong><span>${escapeHtml(capture.stage || '准备处理')}${capture.error ? `：${escapeHtml(capture.error)}` : ''}</span><span class="canvas-depth-progress-label">进度 ${progress}%</span><div class="canvas-depth-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${progress}"><i style="width:${progress}%"></i></div><div class="canvas-depth-task-actions">${running && capture.taskId ? '<button type="button" data-depth-action="cancel">取消</button>' : ''}${capture.sourceId && ['failed','cancelled'].includes(capture.status) ? '<button type="button" data-depth-action="retry">重试</button>' : ''}</div></div>`;
     }
     const media = nodeMediaBodyHtml(node, layout);
+    if(isSmartImageNode(node)){const audioBody=smartAudioBodyHtml(node);if(audioBody)return audioBody;}
     const videoEdit = (node.type === 'smart-image' || !node.type) && (node.images || []).length === 1
         && mediaKindForItem(imageForDisplay(node.images[0])) === 'video'
         ? '<button type="button" class="smart-video-edit-direct" data-smart-video-edit="0"><i data-lucide="scan-face"></i><span>编辑</span></button>' : '';
@@ -8958,7 +8989,7 @@ function render(){
         .map(node => {
         const imgs = node.images || [];
         const isShotTable = node.type === 'smart-shot-table';
-        const title = isShotTable ? '镜头表' : node.depthCapture ? (node.depthCapture.role === 'pose' ? '骨骼姿态' : '灰度深度') : node.viewAdjust ? `API · ${node.viewAdjust.kind === 'angle' ? '多角度' : '打光'}` : node.type === 'smart-group' ? (node.title === '万能分组' ? '智能分组' : (node.title || '智能分组')) : node.type === 'smart-prompt' ? 'Prompt' : node.type === 'smart-loop' ? 'Loop' : node.type === 'smart-minimax' ? 'MiniMax H3' : (imgs.length > 1 ? 'Group' : imgs.length ? 'Image' : escapeHtml(tr('smart.createImportNode')));
+        const title = node.audioTaskId ? 'API生成' : isShotTable ? '镜头表' : node.depthCapture ? (node.depthCapture.role === 'pose' ? '骨骼姿态' : '灰度深度') : node.viewAdjust ? `API · ${node.viewAdjust.kind === 'angle' ? '多角度' : '打光'}` : node.type === 'smart-group' ? (node.title === '万能分组' ? '智能分组' : (node.title || '智能分组')) : node.type === 'smart-prompt' ? 'Prompt' : node.type === 'smart-loop' ? 'Loop' : node.type === 'smart-minimax' ? 'MiniMax H3' : (imgs.length > 1 ? 'Group' : imgs.length ? 'Image' : escapeHtml(tr('smart.createImportNode')));
         const scale = nodeScale(node);
         const layout = imageLayout(imgs, scale, node);
         const isPrompt = node.type === 'smart-prompt';
@@ -8969,7 +9000,8 @@ function render(){
         const isImageNode = node.type === 'smart-image' || !node.type;
         const isJimengPending = Boolean(node.jimengPending && node.jimengPending.submitId && imgs.length === 0);
         const isQueued = Boolean(node.queued && imgs.length === 0 && !node.pending && !isJimengPending);
-        const isEmpty = !isShotTable && isImageNode && imgs.length === 0 && !node.pending && !isQueued && !isJimengPending && !node.depthCapture;
+        const hasAudioText=Boolean(node.audioOutputText);
+        const isEmpty = !isShotTable && isImageNode && imgs.length === 0 && !node.pending && !isQueued && !isJimengPending && !node.depthCapture && !node.audioTaskId && !node.audioOutputText;
         const isHistory = isHistoryGroupNode(node);
         const isGroup = isImageNode && imgs.length > 1;
         const isPending = ((node.pending || isQueued || isJimengPending) && imgs.length === 0);
@@ -8981,7 +9013,7 @@ function render(){
             ? `<button class="smart-submission-warning" type="button" title="${escapeAttr(node.submissionWarning)}" data-smart-submission-warning="1">${node.submissionUnknown ? '提交状态未知' : '部分受理'}</button>` : '';
         const taskFailureHtml = node.taskFailureNotice
             ? `<button class="smart-submission-warning" type="button" title="${escapeAttr(node.taskFailureNotice)}" data-smart-task-failure="1">任务已失效</button>` : '';
-        const hint = isSmartGroup ? '双击添加 · 拖入归组 · 选中后生成' : isMinimax ? 'Timeline editing' : isPending ? escapeHtml(tr('smart.hintPending')) : (imgs.length > 1 ? escapeHtml(tr('smart.hintMulti')) : imgs.length ? escapeHtml(tr('smart.hintSingle')) : node.viewAdjust ? '在下方 API 面板调整模型并运行' : escapeHtml(tr('smart.hintEmpty')));
+        const hint = hasAudioText ? '识别文字 · 可连接现有 LLM' : isSmartGroup ? '双击添加 · 拖入归组 · 选中后生成' : isMinimax ? 'Timeline editing' : isPending ? escapeHtml(tr('smart.hintPending')) : (imgs.length > 1 ? escapeHtml(tr('smart.hintMulti')) : imgs.length ? escapeHtml(tr('smart.hintSingle')) : node.viewAdjust ? '在下方 API 面板调整模型并运行' : escapeHtml(tr('smart.hintEmpty')));
         const html = `<div class="image-node ${isShotTable ? 'shot-table-node smart-shot-table-node' : ''} ${isEmpty ? 'empty-node' : ''} ${isGroup ? 'group-node' : ''} ${isHistory ? 'history-group-node' : ''} ${isPrompt ? 'prompt-smart-node' : ''} ${isLoop ? 'loop-smart-node' : ''} ${isMinimax ? 'minimax-smart-node' : ''} ${isSmartGroup ? 'smart-group-node' : ''} ${isCompactMember ? 'smart-group-member-node' : ''} ${isNodeSelected(node.id) ? 'selected' : ''} ${(dragState?.groupIds?.includes(node.id) || dragState?.id === node.id) ? 'dragging' : ''} ${node.running ? 'node-running' : ''} ${isPending ? 'node-pending' : ''}" data-id="${escapeHtml(node.id)}" style="left:${node.x || 0}px;top:${node.y || 0}px;width:${layout.width}px;height:${layout.height}px">
 
             <div class="node-head"><div class="node-title">${title}</div><div class="node-actions">${deleteBtn}</div></div>
@@ -10205,6 +10237,7 @@ function bindNodeEvents(){
                 e.stopPropagation();
                 selectedId = id;
                 selectedIds = [];
+        if(nodeForControls)bindSmartAudioMedia(el,nodeForControls);
                 selectedImage = {nodeId:'', index:-1};
                 openCreateMenu(e, {groupId:id});
             };
@@ -14643,7 +14676,7 @@ function textForNode(node, ctx=smartLoopContext){
     return '';
 }
 function promptInputNodesFor(node){
-    return inputNodesFor(node).filter(input => input?.type === 'smart-prompt' || input?.type === 'smart-loop' || input?.type === 'smart-group');
+    return inputNodesFor(node).filter(input => input?.type === 'smart-prompt' || input?.type === 'smart-loop' || input?.type === 'smart-group' || !!input?.audioOutputText);
 }
 function inputPromptTextFor(node, ctx=smartLoopContext){
     const directText = promptInputNodesFor(node).map(input => textForNode(input, ctx)).filter(Boolean);
@@ -14651,6 +14684,7 @@ function inputPromptTextFor(node, ctx=smartLoopContext){
         ? ctx.relayPromptNodeIds.map(id => nodes.find(n => n.id === id)).map(input => textForNode(input, ctx)).filter(Boolean)
         : [];
     const seen = new Set();
+    if(isSmartImageNode(node)&&node.audioOutputText)return node.audioOutputText;
     return [...directText, ...relayText].filter(text => {
         const key = String(text || '').trim();
         if(!key || seen.has(key)) return false;
@@ -15466,6 +15500,7 @@ function finalizePendingNode(pendingNode, urls, meta, kind='image'){
     // 生成完成不抢占选择:仅当用户仍停留在该生成节点上(或当前无选择)时才切换选择;
     // 否则保留用户当前选择 —— 支持并发生成时去调整/编辑别的卡片,A 节点的参数栏不被打断。
     const afterRunSelection = pendingNode._selectAfterRunId || pendingNode.id;
+    if(imgs.length)delete pendingNode.audioOutputText;
     if(!selectedId || selectedId === pendingNode.id) selectedId = afterRunSelection;
     delete pendingNode._runMetaTargetId;
     delete pendingNode._selectAfterRunId;
@@ -15916,6 +15951,7 @@ function replaceOutputsToNodeWithHistory(node, additions, kind='image', meta=nul
     markSmartNodeComplete(node, meta);
     node.outputKind = kind;
     node.title = cascadeOutputTitle(kind, node.images.length);
+    delete node.audioOutputText;
     node.scale = node.images.length > 1 ? MEDIA_GROUP_DEFAULT_SCALE : MEDIA_NODE_DEFAULT_SCALE;
     delete node.w;
     delete node.h;
@@ -15954,6 +15990,7 @@ function appendLoopOutputsToNode(node, additions, kind='image', ctx=smartLoopCon
     if(!node || !additions?.length) return [];
     const runState = ctx?.runState;
     if(runState && !runState.loopAppendInitialized) runState.loopAppendInitialized = new Set();
+    delete node.audioOutputText;
     const initialized = runState?.loopAppendInitialized;
     if(initialized && !initialized.has(node.id)){
         initialized.add(node.id);
@@ -16191,6 +16228,31 @@ async function generateUrlsForCurrentSettings(node, prompt, refs, runSettings=se
         const taskResult = await runApiGeneration(prompt, refs, runningHubModelApiSettings(activeSettings));
         const warning = recordSmartTaskSubmission(node, taskResult, ctx?.runState);
         const taskIds = Array.isArray(taskResult?.taskIds) ? taskResult.taskIds : [];
+    const audioRefs = audioRefsOnly(refs || []);
+    if(isApiLikeEngine(activeSettings.engine)
+        && activeSettings.apiKind !== 'video'
+        && audioRefs.length
+        && providerChatModels(activeSettings.provider_id).includes(activeSettings.model)){
+        const message = String(prompt || '').trim() || '请分析这段音频，概括主要内容、说话人和关键信息。';
+        const response = await fetch('/api/canvas-llm', {
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({
+                message,
+                messages:[],
+                audios:audioRefs.map(ref => ref.url).filter(Boolean),
+                model:activeSettings.model,
+                provider:activeSettings.provider_id,
+                ms_model:activeSettings.provider_id === 'modelscope' ? activeSettings.model : '',
+                system_prompt:''
+            })
+        }).then(async response => {
+            if(!response.ok) throw new Error(await response.text());
+            return response.json();
+        });
+        return {urls:[], kind:'text', text:String(response.text || '').trim()};
+    }
+    if(smartApiAudioMode(node,activeSettings,refs)){const item=await runSmartApiAudio(node,prompt,refs,activeSettings);if(!item)throw new Error('音频任务结果尚未确认');return {urls:item.url?[item]:[],kind:item.kind,text:item.text};}
         if(taskIds.length){
             const urls = await waitSmartCanvasTaskBatch(node, taskResult);
             return {urls, kind:mediaKindForUrls(urls, 'image')};
@@ -16283,7 +16345,10 @@ async function runCascadeStepIntoNode(sourceNode, targetNode, inputRefs, ctx=sma
     if(ctx?.runState?.submissionUnknown || smartUnknownSubmissionForNode(sourceNode) || smartUnknownSubmissionForNode(targetNode)){
         throw new Error(smartUnknownResubmissionNotice(true));
     }
-    const requestNode = sourceNode?.type === 'smart-loop' ? targetNode : sourceNode;
+    const targetSettings=smartSettingsForNode(targetNode);
+    const audioInputTarget=smartHasAudioAnalysisInput(targetNode,inputRefs)
+        || (smartApiAudioMode(targetNode,targetSettings) && smartAudioSources(targetNode).some(ref=>ref.kind==='audio'));
+    const requestNode = sourceNode?.type === 'smart-loop' || audioInputTarget ? targetNode : sourceNode;
     const previousSettings = cloneSmartSettings(settings);
     const runSettings = smartLoopRoundSettings({...cloneSmartSettings(settings), ...cloneSmartSettings(smartSettingsForNode(requestNode) || {})}, ctx);
     settings = runSettings;
@@ -16300,7 +16365,10 @@ async function runCascadeStepIntoNode(sourceNode, targetNode, inputRefs, ctx=sma
     );
     const prompt = (request.prompt || '').trim();
     const displayPrompt = (request.displayPrompt || '').trim();
-    if((!prompt || !displayPrompt) && smartRunNeedsPrompt(runSettings)){
+    const audioAnalysisInput = smartHasAudioAnalysisInput(requestNode, request.refs);
+    if((!prompt || !displayPrompt) && smartRunNeedsPrompt(runSettings)
+        && !audioAnalysisInput
+        && !(smartApiAudioMode(requestNode,runSettings,request.refs) && window.CanvasAudio.operation(runSettings,apiProviders)==='recognition')){
         settings = previousSettings;
         throw new Error('链路节点缺少提示词');
     }
@@ -16346,6 +16414,7 @@ async function runCascadeStepIntoNode(sourceNode, targetNode, inputRefs, ctx=sma
         addSmartGenerationLog({run:{...runLog, kind:result.kind || logKind}, outputs:result.urls, runMs:nowMs() - runLogStart});
         const ext = result.kind === 'video' ? 'mp4' : result.kind === 'audio' ? 'mp3' : result.kind === 'text' ? 'txt' : 'png';
         const additions = result.urls.map((item, i) => {
+        if(result.kind==='text'){outputNode.audioOutputText=result.text;outputNode.running=false;outputNode.pending=0;render();scheduleSave();return [];}
             const url = typeof item === 'string' ? item : item?.url || '';
             return stripImageGenerationMeta(copyMediaSizeFields(item, {url, name:(typeof item === 'object' && item.name) || `output-${i + 1}.${ext}`, kind:(typeof item === 'object' && item.kind) || result.kind, generatedResult:true}));
         }).filter(item => item.url);
@@ -16403,7 +16472,10 @@ async function runLoopRoundIntoSlot(loopNode, rootNode, outputSlot, loopIndex, c
         const request = buildPromptRequestForNode(rootNode, refsForRequest.length ? refsForRequest : null, ctx);
         const prompt = (request.prompt || '').trim();
         const displayPrompt = (request.displayPrompt || '').trim();
-        if((!prompt || !displayPrompt) && smartRunNeedsPrompt(runSettings)) throw new Error('链路节点缺少提示词');
+        const audioAnalysisInput = smartHasAudioAnalysisInput(rootNode, request.refs);
+        if((!prompt || !displayPrompt) && smartRunNeedsPrompt(runSettings)
+            && !audioAnalysisInput
+            && !(smartApiAudioMode(rootNode,runSettings,request.refs) && window.CanvasAudio.operation(runSettings,apiProviders)==='recognition')) throw new Error('链路节点缺少提示词');
         const meta = {
             prompt,
             displayPrompt:request.displayPrompt || '',
@@ -16434,7 +16506,7 @@ async function runLoopRoundIntoSlot(loopNode, rootNode, outputSlot, loopIndex, c
         render();
         settings = previousSettings;
         let result;
-        if(isApiLikeEngine(runSettings.engine) && runSettings.apiKind !== 'video'){
+        if(isApiLikeEngine(runSettings.engine) && runSettings.apiKind !== 'video' && !smartApiAudioMode(outputSlot,runSettings,request.refs || [])){
             const taskResult = await runApiGeneration(prompt, request.refs || [], runSettings);
             const warning = recordSmartTaskSubmission(outputSlot, taskResult, ctx?.runState);
             const taskIds = Array.isArray(taskResult?.taskIds) ? taskResult.taskIds : [];
@@ -16472,6 +16544,7 @@ async function runLoopRoundIntoSlot(loopNode, rootNode, outputSlot, loopIndex, c
         if(isApiLikeEngine(runSettings.engine) && runSettings.apiKind !== 'video'){
             additions = (outputSlot.images || []).map(img => stripImageGenerationMeta({...img})).filter(img => img?.url);
             if(meta) attachRunMeta(outputSlot, meta);
+        if(result.kind==='text'){outputSlot.audioOutputText=result.text;markSmartNodeComplete(outputSlot,meta);render();scheduleSave();return [];}
         } else {
             const ext = result.kind === 'video' ? 'mp4' : result.kind === 'audio' ? 'mp3' : result.kind === 'text' ? 'txt' : 'png';
             additions = result.urls.map((item, i) => {
@@ -16825,6 +16898,8 @@ async function runGeneration(options={}){
         settings = previousSettings;
         toast(tr('smart.toastNeedPrompt'));
         return;
+    // 自动识别只看上游连接；当前节点已生成的音频不能把手动返回的图片选择再次切回音频。
+    if(smartApiAudioMode(node,runSettings)){try{await runSmartApiAudio(node,prompt,refs,runSettings);}catch(error){toast(error.message || '音频处理失败');}return;}
     }
     const outpaintSize = node?.outpaintSize && Number(node.outpaintSize.width) > 0 && Number(node.outpaintSize.height) > 0
         ? {width:Math.round(Number(node.outpaintSize.width)), height:Math.round(Number(node.outpaintSize.height))}
@@ -18394,6 +18469,7 @@ function finalizeSmartPendingTask(node, taskId, images, kind='image'){
         if(seen.has(key)) return false;
         seen.add(key);
         return true;
+    if(mediaItems.length) delete node.audioOutputText;
     });
     node.images = [...existing, ...additions];
     if(additions.length) node.outputKind = kind;
@@ -19539,6 +19615,7 @@ if(apiKindToggle){
             const kind = btn.dataset.kind;
             if(kind === settings.apiKind) return;
             settings.apiKind = kind;
+    if(smartApiAudioMode(activeSettingsSubject(),settings) || smartHasAudioAnalysisInput()){apiKindToggle.style.display='none';return;}
             applyRecentSmartSettingsForCurrentMode();
             syncApiKindToggleVisibility();
             renderDynamicParams();

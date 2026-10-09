@@ -723,6 +723,27 @@ function providerChatModels(providerId){
 function resolveImageProviderId(id){
     const providers = imageApiProviders();
     return providers.find(p => p.id === id)?.id || providers[0]?.id || '';
+function providerAudioAnalysisModels(providerId){
+    const provider = apiProviders.find(p => p.id === providerId);
+    return uniqueModels(provider?.chat_models || []);
+}
+function audioAnalysisApiProviders(){
+    return (apiProviders.length ? apiProviders : defaultApiProviders())
+        .filter(provider => provider.enabled !== false && providerAudioAnalysisModels(provider.id).length);
+}
+function audioAnalysisProviderOptions(selectedId){
+    const providers = audioAnalysisApiProviders();
+    if(!providers.length) return `<option value="" disabled selected>${tr('canvas.noApiProviders') || '暂无 API 平台'}</option>`;
+    const selected = providers.some(provider => provider.id === selectedId) ? selectedId : providers[0].id;
+    return providers.map(provider => `<option value="${escapeHtml(provider.id)}" ${provider.id === selected ? 'selected' : ''}>${escapeHtml(provider.name || provider.id)}</option>`).join('');
+}
+function audioAnalysisModelOptions(selectedModel, providerId){
+    const models = providerAudioAnalysisModels(providerId);
+    if(!models.length) return `<option value="" disabled selected>${tr('canvas.noModelsHint') || '暂无模型，请到 API 设置添加'}</option>`;
+    const selected = String(selectedModel || '');
+    const options = uniqueModels([selected, ...models]).filter(Boolean);
+    return `<optgroup label="文本模型">${options.map(model => `<option value="${escapeHtml(model)}" ${model === selected ? 'selected' : ''}>${escapeHtml(model)}</option>`).join('')}</optgroup>`;
+}
 }
 function providerOptions(selectedId){
     const selected = resolveImageProviderId(selectedId);
@@ -1979,7 +2000,7 @@ async function createCanvas(){
         canvas = data.canvas;
         canvas.logs = canvas.logs || [];
         canvasOrphanUnknownSubmissionCount = 0;
-        nodes = canvas.nodes || [];
+        nodes = (canvas.nodes || []).map(n=>window.CanvasAudio.migrate(n));
         connections = canvas.connections || [];
         viewport = localViewportForCanvas(canvas.id, canvas.viewport || {x:0, y:0, scale:1});
         canvas.viewport = {...viewport};
@@ -2074,7 +2095,7 @@ async function openCanvas(id){
             return;
         }
         canvas.logs = canvas.logs || [];
-        nodes = canvas.nodes || [];
+        nodes = (canvas.nodes || []).map(n=>window.CanvasAudio.migrate(n));
         connections = canvas.connections || [];
         viewport = localViewportForCanvas(canvas.id, canvas.viewport || {x:0, y:0, scale:1});
         canvas.viewport = {...viewport};
@@ -2116,7 +2137,7 @@ function applyRemoteCanvasData(remote){
         const localSelectedIds = new Set(selected);
         canvas = remote;
         canvas.logs = canvas.logs || [];
-        nodes = canvas.nodes || [];
+        nodes = (canvas.nodes || []).map(n=>window.CanvasAudio.migrate(n));
         connections = canvas.connections || [];
         viewport = localViewport;
         canvas.viewport = {...viewport};
@@ -2136,6 +2157,7 @@ function applyRemoteCanvasData(remote){
     } finally {
         applyingRemoteCanvas = false;
     }
+        resumeCanvasAudioTasks();
 }
 function resetTransientRunState(list=nodes){
     (list || []).forEach(node => {
@@ -2175,6 +2197,7 @@ async function refreshMissingCanvasAssets(){
     missingAssetUrls.clear();
     const urls = canvasLocalAssetUrls();
     if(!urls.length) return;
+        resumeCanvasAudioTasks();
     try {
         const data = await fetch('/api/canvas-assets/check', {
             method:'POST',
@@ -2183,6 +2206,7 @@ async function refreshMissingCanvasAssets(){
         }).then(r => r.json());
         const exists = data.exists || {};
         Object.entries(exists).forEach(([url, ok]) => { if(!ok) missingAssetUrls.add(url); });
+    list.forEach(n=>window.CanvasAudio.migrate(n));
     } catch(e) {
         console.warn('canvas asset check failed', e);
     }
@@ -4084,6 +4108,7 @@ const IMAGE_DROP_TEXT_TYPES = [
 const IMAGE_DROP_TYPE_HINT_RE = /^(?:files?|image\/.+|text\/(?:uri-list|html|plain|x-moz-url|x-file-url)|downloadurl|public\.(?:file-url|url)|uniformresourcelocator|filenamew?)$|application\/x-qt-(?:windows-mime|image)|application\/x-moz-file|com\.eagle/i;
 function dropDataTypes(dataTransfer){
     return [...(dataTransfer?.types || [])].map(type => String(type || ''));
+    if(node?.type==='audio')return 'audio';
 }
 function readDropData(dataTransfer, type){
     try { return dataTransfer?.getData?.(type) || ''; } catch(_) { return ''; }
@@ -4199,7 +4224,7 @@ function layoutUploadedMediaNodes(created, base){
     });
 }
 function createGroupForUploadedNodes(created, point){
-    const targets = [...(created || [])].filter(n => n?.type === 'image');
+    const targets = [...(created || [])].filter(n => ['image','audio'].includes(n?.type));
     if(targets.length < 2) return null;
     render();
     const box = nodeBounds(targets.map(n => n.id));
@@ -4248,7 +4273,7 @@ async function uploadMediaFiles(files, point, onlyImages=false, opts={}){
             y:base.y + i * 36,
             url:file.url,
             name:file.name,
-            mediaKind:kind
+            mediaKind:kind, mime:supported[i]?.type || '',sizeBytes:supported[i]?.size || 0
         };
         nodes.push(node);
         created.push(node);
@@ -4278,6 +4303,7 @@ function createImageCardFromUrl(url, point, name='image'){
 async function createImageCardsFromLocalPaths(paths, point){
     if(!ensureCanvas()) return [];
     setStatus(langIsEn() ? 'Importing images...' : '导入图片...');
+        window.CanvasAudio.migrate(node);
     try {
         const files = await importLocalImages((paths || []).slice(0, CANVAS_UPLOAD_MAX));
         const base = point || screenToWorld(window.innerWidth / 2, window.innerHeight / 2);
@@ -4300,6 +4326,7 @@ async function applyImageDropPayloadToBoard(payload, point){
     if(payload.type === 'files'){
         if(payload.files.length > 1) return uploadImageGroup(payload.files, point);
         return uploadImages(payload.files, point);
+    window.CanvasAudio.migrate(nodes[nodes.length-1]);
     }
     if(payload.type === 'localPaths') return createImageCardsFromLocalPaths(payload.localPaths, point);
     if(payload.type === 'url') {
@@ -4310,7 +4337,8 @@ async function applyImageDropPayloadToBoard(payload, point){
 }
 async function applyImageDropPayloadToNode(nodeId, payload){
     const node = nodes.find(n => n.id === nodeId);
-    if(!node || node.type !== 'image') return;
+    if(!node || !['image','audio'].includes(node.type)) return;
+    if(node.type==='audio' && payload.type==='files' && payload.files.some(file=>mediaKindForUpload(file)!=='audio'))throw new Error('音频素材节点只能替换为音频文件');
     if(payload.type === 'files') {
         await fillImageNode(nodeId, payload.files, {group:payload.files.length > 1});
         return;
@@ -4361,6 +4389,8 @@ async function handleImageNodeDropEvent(e, nodeId, highlightEl){
     const payload = await resolveImageDropPayload(e.dataTransfer);
     clearImageNodeDropState(e, highlightEl);
     if(payload.type === 'none') return;
+        if(node.type==='audio' && node.mediaKind!=='audio')node.type='image';
+        window.CanvasAudio.migrate(node);
     try {
         await applyImageDropPayloadToNode(nodeId, payload);
     } catch(err) {
@@ -4419,7 +4449,7 @@ async function fillImageNode(nodeId, files, opts={}){
 }
 function setImageNodeFromOutput(nodeId, url){
     const node = nodes.find(n => n.id === nodeId);
-    if(!node || node.type !== 'image' || !url || isVideoUrl(url) || isAudioUrl(url)) return;
+    if(!node || !['image','audio'].includes(node.type) || !url || isVideoUrl(url)) return;
     pushUndo();
     node.url = url;
     node.name = outputImageName(url);
@@ -4437,10 +4467,13 @@ function clearImageNode(nodeId, event=null){
     if(!node || node.type !== 'image') return;
     pushUndo();
     node.url = '';
-    node.mediaKind = 'image';
+    node.mediaKind=isAudioUrl(url)?'audio':'image';node.type=node.mediaKind==='audio'?'audio':'image';
     node.name = '空白图片';
     render();
     scheduleSave();
+        node.mime=imgs[0].type;node.sizeBytes=imgs[0].size;
+        if(node.type==='audio' && node.mediaKind!=='audio')node.type='image';
+        window.CanvasAudio.migrate(node);
 }
 function pickImageForNode(nodeId){
     pickMediaForNode(nodeId);
@@ -6582,7 +6615,7 @@ function renderNode(node){
         if(node.type === 'output') openOutputNodeMenu(node.id, e.clientX, e.clientY);
         else openGeneratorNodeMenu(node.id, e.clientX, e.clientY);
     };
-    const title = node.type === 'image' ? 'Image' : node.type === 'prompt' ? 'Prompt' : node.type === 'loop' ? tr('canvas.loopNode') : node.type === 'promptGroup' ? 'Prompts' : node.type === 'group' ? 'Group' : node.type === 'output' ? 'Output' : node.type === 'llm' ? 'LLM' : node.type === 'comfy' ? 'ComfyUI' : node.type === 'ltxDirector' ? tr('canvas.ltxDirector') : node.type === 'rh' ? 'RunningHub' : node.type === 'minimax' ? 'MiniMax H3' : node.type === 'midjourney' ? 'Midjourney' : node.type === 'msgen' ? tr('canvas.modelscopeGenerate') : node.type === 'video' ? tr('canvas.videoGenerateNode') : tr('canvas.apiGenerate');
+    const title = node.type === 'audio' ? '音频素材' : node.type === 'image' ? 'Image' : node.type === 'prompt' ? 'Prompt' : node.type === 'loop' ? tr('canvas.loopNode') : node.type === 'promptGroup' ? 'Prompts' : node.type === 'group' ? 'Group' : node.type === 'output' ? 'Output' : node.type === 'llm' ? 'LLM' : node.type === 'comfy' ? 'ComfyUI' : node.type === 'ltxDirector' ? tr('canvas.ltxDirector') : node.type === 'rh' ? 'RunningHub' : node.type === 'minimax' ? 'MiniMax H3' : node.type === 'midjourney' ? 'Midjourney' : node.type === 'msgen' ? tr('canvas.modelscopeGenerate') : node.type === 'video' ? tr('canvas.videoGenerateNode') : tr('canvas.apiGenerate');
     const displayTitle = node.type === 'shot-table' ? '镜头表' : node.depthCapture ? (node.depthCapture.role === 'pose' ? '骨骼姿态' : '灰度深度') : node.type === 'image' && node.url ? nodeTitleForMedia(node) : title;
     // 失败徽章只在一键运行模式中显示，单节点失败已通过 alert 提示
     const showStatus = ['generator','midjourney','msgen','comfy','ltxDirector','llm','video','rh','minimax'].includes(node.type) && node.runStatus
@@ -6731,11 +6764,12 @@ function renderNode(node){
         const items = (node.items || []).map(id => nodes.find(n => n.id === id)).filter(Boolean);
         const imgCount = items.filter(n => n.type === 'image' && mediaKindForNode(n) === 'image').length;
         const videoCount = items.filter(n => n.type === 'image' && mediaKindForNode(n) === 'video').length;
-        const audioCount = items.filter(n => n.type === 'image' && mediaKindForNode(n) === 'audio').length;
+        const audioCount = items.filter(n => ['image','audio'].includes(n.type) && mediaKindForNode(n) === 'audio').length;
         const promptCount = items.filter(n => n.type === 'prompt').length;
         const parts = [];
         if(imgCount) parts.push(`${imgCount} ${tr('canvas.imageCount')}`);
         if(videoCount) parts.push(langIsEn() ? `${videoCount} video` : `${videoCount} 个视频`);
+    if(node.type==='audio')body.appendChild(renderCanvasAudioMaterial(node));
         if(audioCount) parts.push(langIsEn() ? `${audioCount} audio` : `${audioCount} 个音频`);
         if(promptCount) parts.push(`${promptCount} ${tr('canvas.promptCount')}`);
         if(!parts.length && items.length) parts.push(langIsEn() ? `${items.length} items` : `${items.length} 项素材`);
@@ -6762,6 +6796,8 @@ function renderNode(node){
         }
     }
     if(node.type === 'promptGroup') {
+        const otherCount = items.length - imgCount - videoCount - audioCount - promptCount;
+        if(otherCount) parts.push(langIsEn() ? `${items.length} nodes` : `${items.length} 个节点`);
         const promptNodes = (node.items || []).map(id => nodes.find(n => n.id === id)).filter(Boolean);
         body.innerHTML = `<div class="text-[11px] text-gray-400">${promptNodes.length} ${tr('canvas.promptCount')} ${tr('canvas.grouped')}</div>`;
     }
@@ -6778,7 +6814,7 @@ function renderNode(node){
         const pendingHtml = (node._pending || []).map(p =>
             renderPendingOutput(p)
         ).join('');
-        body.innerHTML = renderOutputGrid(node, pendingHtml);
+        body.innerHTML = renderOutputGrid(node, pendingHtml)+(node.audioOutputText?`<div class="audio-recognition-result">${escapeHtml(node.audioOutputText)}</div>`:'');
         body.onwheel = e => {
             e.stopPropagation();
         };
@@ -6798,7 +6834,7 @@ function renderNode(node){
         startNodeDrag(e, node);
     };
     const canInput = Boolean(node.depthCapture) || node.type==='shot-table' || ['clip','generator','midjourney','comfy','ltxDirector','output','llm','msgen','video','rh','minimax'].includes(node.type) || (node.type === 'loop' && (node.imageInput || node.showPrompt));
-    const canOutput = ['clip','image','prompt','loop','group','promptGroup','generator','midjourney','comfy','ltxDirector','llm','msgen','video','rh','minimax','output'].includes(node.type);
+    const canOutput = ['clip','image','audio','prompt','loop','group','promptGroup','generator','midjourney','comfy','ltxDirector','llm','msgen','video','rh','minimax','output'].includes(node.type);
     if(canInput) el.insertAdjacentHTML('beforeend', `<div class="port in" title="${tr('canvas.connectHere')}"></div>`);
     if(canOutput) el.insertAdjacentHTML('beforeend', `<div class="port out" title="${tr('canvas.dragConnect')}"></div>`);
     el.insertAdjacentHTML('beforeend', `<div class="resize-handle" title="${tr('canvas.resize')}"></div>`);
@@ -6815,7 +6851,7 @@ function renderNode(node){
         startNodeDrag(e, node);
     };
     el.querySelector('.resize-handle').onmousedown = e => { if(e.button === 0 && !e.shiftKey) startNodeResize(e, node); };
-    el.ondragstart = e => { e.preventDefault(); e.stopPropagation(); };
+    el.ondragstart = e => { if(e.target.closest('[data-audio-drag]'))return; e.preventDefault(); e.stopPropagation(); };
     const out = el.querySelector('.port.out');
     if(out) out.onmousedown = e => { if(e.button === 0 && !e.shiftKey) startLink(e, node.id, 'out'); };
     const inp = el.querySelector('.port.in');
@@ -7021,6 +7057,7 @@ function splitPromptIntoItems(text){
     return [trimmed];
 }
 const loopPromptVisiting = new Set();
+    if(type === 'audio') return {w:330,h:0};
 function loopInputPromptItems(node){
     if(!node?.showPrompt) return [];
     if(loopPromptVisiting.has(node.id)) return [];
@@ -8510,9 +8547,10 @@ function renderLLMBody(node){
     const videos = llmInputVideos(node);
     const mediaBadgeText = [
         imgs.length ? `${imgs.length} 张图片` : '',
-        videos.length ? `${videos.length} 个视频` : ''
+        videos.length ? `${videos.length} 个视频` : '',
+        audios.length ? `${audios.length} 个音频` : ''
     ].filter(Boolean).join(' · ');
-    const imgBadge = mediaBadgeText ? `<div style="display:flex;align-items:center;gap:6px;padding:5px 10px;border-radius:8px;background:rgba(16,185,129,.12);color:#047857;font-size:10.5px;font-weight:700;width:fit-content;line-height:1.4"><i data-lucide="${videos.length && !imgs.length ? 'video' : 'image'}" class="w-3 h-3"></i>已连接 ${mediaBadgeText} · 需选支持视觉/视频的模型</div>` : '';
+    const imgBadge = mediaBadgeText ? `<div style="display:flex;align-items:center;gap:6px;padding:5px 10px;border-radius:8px;background:rgba(16,185,129,.12);color:#047857;font-size:10.5px;font-weight:700;width:fit-content;line-height:1.4"><i data-lucide="${audios.length && !imgs.length && !videos.length ? 'audio-lines' : videos.length && !imgs.length ? 'video' : 'image'}" class="w-3 h-3"></i>已连接 ${mediaBadgeText} · 请选择文本模型进行分析</div>` : '';
     node.showSystem = Boolean(node.showSystem);
     wrap.innerHTML = `
         <div class="llm-row">
@@ -8536,6 +8574,7 @@ function renderLLMBody(node){
     });
     providerSelect.onchange = e => {
         e.stopPropagation();
+    const audios = llmInputAudios(node);
         node.llmProvider = e.target.value;
         const models = providerChatModels(node.llmProvider);
         node.model = models[0] || '';
@@ -8779,6 +8818,7 @@ function llmInputVideos(node){
         }
         if(n.type === 'group'){
             (n.items || []).map(id => nodes.find(x => x.id === id)).filter(x => x?.type === 'image' && x?.url && mediaKindForNode(x) === 'video').forEach(video => urls.push(video.url));
+        if(n.type==='generator' || n.type==='output')return n.audioOutputText || '';
         }
     });
     return urls;
@@ -8790,19 +8830,24 @@ function renderGeneratorBody(node){
     const ordered = orderedSources(node, inputSources);
     const mediaInputs = ordered.filter(src => src.refs?.some(ref => ['image','video','audio'].includes(mediaKindForRef(ref))));
     const promptInputs = ordered.filter(src => src.prompt && !src.refs?.length && src.id !== `${node.id}:view-adjust`);
-    sanitizeImageNodeProviderModel(node);
+    if(hasAudioAnalysisInput){
+        const providers = audioAnalysisApiProviders();
+        if(!providers.some(provider => provider.id === node.apiProvider)) node.apiProvider = providers[0]?.id || '';
+        const models = providerAudioAnalysisModels(node.apiProvider);
+        if(models.length && !models.includes(node.model)) node.model = models[0];
+    }else sanitizeImageNodeProviderModel(node);
     normalizeApiNodeSizeChoice(node);
     wrap.innerHTML = `
         ${typeof node.viewAdjustPrompt === 'string' ? `<div class="prompt-editor view-adjust-node-prompt"><textarea data-view-adjust-prompt aria-label="视角调整提示词">${escapeHtml(node.viewAdjustPrompt)}</textarea></div>` : ''}
         <div class="prompt-list mb-3"></div>
-        <div class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">${tr('canvas.images')}</div>
+        <div class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">${hasAudioAnalysisInput ? '音频输入 · 文本模型分析' : tr('canvas.images')}</div>
         <div class="input-list"></div>
         <div class="gen-settings">
             <div class="gen-settings-row">
-                <select class="select-lite provider-select">${providerOptions(node.apiProvider)}</select>
-                <select class="select-lite model-select">${imageModelOptions(node.model, node.apiProvider)}</select>
+                <select class="select-lite provider-select">${hasAudioAnalysisInput ? audioAnalysisProviderOptions(node.apiProvider) : `${providerOptions(node.apiProvider)}${canvasAudioProviderOptions(node.apiProvider)}`}</select>
+                <select class="select-lite model-select">${hasAudioAnalysisInput ? audioAnalysisModelOptions(node.model, node.apiProvider) : `${imageModelOptions(node.model, node.apiProvider)}${canvasAudioModelOptions(node.apiProvider)}`}</select>
             </div>
-            <div class="gen-settings-row api-size-row">
+            <div class="gen-settings-row api-size-row"${hasAudioAnalysisInput ? ' style="display:none"' : ''}>
                 <select class="select-lite resolution compact-select" data-field="resolution">
                     <option value="auto">自动</option>
                     <option value="1k">1K</option>
@@ -8811,12 +8856,33 @@ function renderGeneratorBody(node){
                     <option value="custom">${tr('canvas.custom')}</option>
                 </select>
                 <select class="select-lite ratio compact-select" data-field="ratio">
+function llmInputAudios(node){
+    const urls = [];
+    connections.filter(c => c.to === node.id).map(c => nodes.find(n => n.id === c.from)).filter(Boolean).forEach(n => {
+        if(n.type === 'audio' && n.url) urls.push(n.url);
+        if(n.type === 'generator' && (n.generatedOutputs || []).length){
+            const item = [...n.generatedOutputs].reverse().find(output => mediaKindForOutputItem(output) === 'audio' && outputUrlValue(output));
+            if(item) urls.push(outputUrlValue(item));
+        }
+        if(n.type === 'output' && (n.images||[]).length){
+            const last = [...n.images].reverse().map(outputUrlValue).find(url => url && isAudioUrl(url));
+            if(last) urls.push(last);
+        }
+        if(n.type === 'group'){
+            (n.items || []).map(id => nodes.find(x => x.id === id)).filter(x => x?.url && mediaKindForNode(x) === 'audio').forEach(audio => urls.push(audio.url));
+        }
+    });
+    return [...new Set(urls)];
+}
                     <option value="square">1:1</option>
+    const audioSources=orderedSources(node,generatorSources(node));
+    if(canvasApiAudioMode(node,audioSources))return renderCanvasApiAudio(node,audioSources);
                     <option value="portrait">2:3</option>
                     <option value="landscape">3:2</option>
                     <option value="portrait43">3:4</option>
                     <option value="landscape43">4:3</option>
                     <option value="story">9:16</option>
+    const hasAudioAnalysisInput = audioSources.some(src => src.refs?.some(ref => mediaKindForRef(ref) === 'audio'));
                     <option value="wide">16:9</option>
                     <option value="ultrawide">21:9</option>
                     <option value="ultratall">9:21</option>
@@ -8881,7 +8947,7 @@ function renderGeneratorBody(node){
         if(!providerModels.includes(resolveImageModel(node.model))) node.model = providerModels[0] || '';
         node._apiResolutionUserSet = false;
         node.resolution = defaultApiImageResolution(node.model);
-        modelSelect.innerHTML = imageModelOptions(node.model, node.apiProvider);
+        modelSelect.innerHTML = imageModelOptions(node.model, node.apiProvider)+canvasAudioModelOptions(node.apiProvider);
         syncSizeControls();
         syncQualityControls();
         scheduleSave();
@@ -8904,6 +8970,15 @@ function renderGeneratorBody(node){
     const customSizeRow = wrap.querySelector('.custom-size-row');
     const customRatioWInput = wrap.querySelector('.custom-ratio-w-input');
     const customRatioHInput = wrap.querySelector('.custom-ratio-h-input');
+        if(hasAudioAnalysisInput){
+            node.apiProvider = e.target.value;
+            const models = providerAudioAnalysisModels(node.apiProvider);
+            node.model = models[0] || '';
+            modelSelect.innerHTML = audioAnalysisModelOptions(node.model, node.apiProvider);
+            scheduleSave();
+            return;
+        }
+        if(!imageApiProviders().some(p=>p.id===e.target.value)){node.audioProvider=e.target.value;node.audioManualSelection=true;refreshNodes([node.id]);scheduleSave();return;}
     const customWInput = wrap.querySelector('.custom-w-input');
     const customHInput = wrap.querySelector('.custom-h-input');
     const fitSizeBtn = wrap.querySelector('.fit-size-btn');
@@ -8918,6 +8993,12 @@ function renderGeneratorBody(node){
             const raw = String(node.customRatio || '');
             if(raw.includes(':')){
                 const [w,h] = raw.split(':');
+        if(hasAudioAnalysisInput){
+            node.model = e.target.value;
+            scheduleSave();
+            return;
+        }
+        if(e.target.value.startsWith('audio:')){node.audioProvider=node.apiProvider;node.audioModel=e.target.value.slice(6);node.audioManualSelection=true;refreshNodes([node.id]);scheduleSave();return;}
                 node.customRatioWidth = node.customRatioWidth || w;
                 node.customRatioHeight = node.customRatioHeight || h;
             }
@@ -11630,7 +11711,7 @@ function syncConnectedOutputsFromGenerated(node, outputs){
     outputNodesForSource(node.id).forEach(out => appendOutputImagesWithoutDuplicates(out, list));
 }
 function generatedImageRefs(node){
-    const keepGeneratedMedia = ['rh','ltxDirector','video','minimax'].includes(node?.type);
+    const keepGeneratedMedia = ['rh','ltxDirector','video','minimax'].includes(node?.type) || !!node?.audioTaskId;
     return (node?.generatedOutputs || [])
         .map((item, i) => {
             const url = outputUrlValue(item);
@@ -11639,7 +11720,7 @@ function generatedImageRefs(node){
             return {url, name:outputImageName(url) || `${node.type || 'generated'}-${i + 1}`, kind, index:i};
         })
         .filter(Boolean)
-        .filter(ref => keepGeneratedMedia || ref.kind === 'image')
+        .filter(ref => keepGeneratedMedia || ref.kind === 'image' || (node.type === 'generator' && ref.kind === 'audio'))
         .map(ref => {
             const {index, ...clean} = ref;
             return clean;
@@ -11647,14 +11728,14 @@ function generatedImageRefs(node){
 }
 function mediaRefsFromNode(node){
     if(!node) return [];
-    if(node.type === 'image' && node.url){
+    if(['image','audio'].includes(node.type) && node.url){
         const kind = mediaKindForNode(node);
         return [{url:node.url, name:node.name || kind, role:node.role || '', kind}];
     }
     if(node.type === 'group'){
         return (node.items || [])
             .map(id => nodes.find(x => x.id === id))
-            .filter(x => x?.type === 'image' && x?.url)
+            .filter(x => ['image','audio'].includes(x?.type) && x?.url)
             .map(item => ({url:item.url, name:item.name || mediaKindForNode(item), role:item.role || '', kind:mediaKindForNode(item)}));
     }
     if(node.type === 'output'){
@@ -11694,13 +11775,13 @@ function generatorSources(gen){
                 }));
             }
         }
-        if(n.type === 'image' && n.url) {
+        if(['image','audio'].includes(n.type) && n.url) {
             const kind = mediaKindForNode(n);
             return {id:n.id, type:kind, label:n.name || kind, preview:n.url, refs:[{url:n.url, name:n.name || kind, role:n.role || '', kind}], prompt:''};
         }
         if(n.type === 'group') {
             const items = (n.items || []).map(id => nodes.find(x => x.id === id)).filter(Boolean);
-            const sources = items.filter(x => x.type === 'image' && x.url).map(img => ({
+            const sources = items.filter(x => ['image','audio'].includes(x.type) && x.url).map(img => ({
                 id:`${n.id}:${img.id}`,
                 type:`group-${mediaKindForNode(img)}`,
                 groupId:n.id,
@@ -11801,6 +11882,7 @@ function refreshGeneratorInputViews(){
         if(gen.type === 'generator') renderImageInputList(el.querySelector('.input-list'), gen, imageInputs);
         if(gen.type === 'midjourney') renderImageInputList(el.querySelector('.mj-input-list'), gen, imageInputs);
         if(gen.type === 'msgen') renderImageInputList(el.querySelector('.ms-img-list'), gen, imageInputs);
+        if(gen.type==='generator' && (canvasApiAudioMode(gen,sources) || el.querySelector('.api-audio-body'))){refreshNodes([gen.id]);return;}
         if(gen.type === 'comfy') renderComfyImages(el.querySelector('.input-list'), gen, imageInputs);
         if(gen.type === 'ltxDirector'){
             ltxSyncConnectedImagesToTimeline(gen);
@@ -11831,10 +11913,27 @@ async function runGenerator(genId, opts={}){
     const cascadeTargetId = cascadeTargetIdFromOptions(opts);
     const sources = orderedSources(gen, generatorSources(gen));
     const prompt = opts.assistantProposal?.prompt ?? sources.map(s => s.prompt).filter(Boolean).join('\n\n');
+    if(!opts.acceptedTask && canvasApiAudioMode(gen)){
+        if(opts.assistantNativeActionId || opts.assistantProposal){
+            const error = new Error('此节点当前使用音频分支，助手图片运行确认不适用；未提交任务');
+            error.submissionKnownRejected = true;
+            throw error;
+        }
+        try{return await runCanvasApiAudio(gen,opts);}catch(error){if(opts.cascade)throw error;showErrorModal(error.message,'音频处理失败');return;}
+    }
     const refs = opts.assistantProposal ? opts.assistantProposal.referenceImages.map(url=>({url,kind:'image'})) : imageRefsOnly(sources.flatMap(s => s.refs || []));
     if(!prompt && !refs.length){ alert(tr('canvas.needPromptOrImage')); return; }
     if(!confirmCanvasUnknownResubmission(gen, opts)) return;
     const count = opts.acceptedTask ? 1 : Math.max(1, Math.min(8, Number(gen.count || 1)));
+    const audioRefs = audioRefsOnly(sources.flatMap(source => source.refs || []));
+    if(!opts.acceptedTask && audioRefs.length && providerChatModels(gen.apiProvider).includes(gen.model)){
+        if(opts.assistantNativeActionId || opts.assistantProposal){
+            const error = new Error('此节点当前使用音频识别分支，助手图片运行确认不适用；未提交任务');
+            error.submissionKnownRejected = true;
+            throw error;
+        }
+        return runAudioAnalysisGenerator(gen, prompt, audioRefs, opts);
+    }
     let out = outputForNode(gen, 460);
     const run = runSnapshot(gen, prompt || 'Edit the reference images.', refs);
     const payload = {
@@ -13579,10 +13678,12 @@ async function callCanvasLLM(node, message, messages=[], options={}){
 }
 async function runLLMNode(nodeId, opts={}){
     const node = nodes.find(n => n.id === nodeId);
+    const audios = llmInputAudios(node);
     if(!node || (node.running && !opts.cascade)) return;
     const cascadeTargetId = cascadeTargetIdFromOptions(opts);
     const input = llmInputText(node) || node.userInput || '';
-    if(!input){
+    const audios = llmInputAudios(node);
+    if(!input && !audios.length){
         if(opts.cascade) throw new Error('LLM 缺少提示词输入');
         alert(tr('canvas.needPromptToLLM')); return;
     }
@@ -13593,6 +13694,7 @@ async function runLLMNode(nodeId, opts={}){
         node.runStatus = 'done'; node.runError = '';
         refreshNodes([node.id]);
         scheduleSave();
+            audios,
     } catch(err) {
         if(!opts.cascade) node.running = false;
         if(isCascadeAbortError(err)){
@@ -13602,6 +13704,25 @@ async function runLLMNode(nodeId, opts={}){
         }
         node.runStatus = 'failed'; node.runError = err.message || String(err);
         refreshNodes([node.id]);
+async function runAudioAnalysisGenerator(node, prompt, audios, opts={}){
+    const message = String(prompt || '').trim() || '请分析这段音频，概括主要内容、说话人和关键信息。';
+    if(!audios.length) throw new Error('请先连接音频素材');
+    if(!opts.cascade){ node.running = true; refreshNodes([node.id]); }
+    try{
+        node.audioOutputText = await callCanvasLLM(node, message, [], {cascadeTargetId:cascadeTargetIdFromOptions(opts), audios});
+        outputNodesForSource(node.id).forEach(out => { out.audioOutputText = node.audioOutputText; });
+        node.running = false; node.runStatus = 'done'; node.runError = '';
+        refreshNodes([node.id, ...outputNodesForSource(node.id).map(out => out.id)]);
+        scheduleSave();
+        return node.audioOutputText;
+    }catch(error){
+        node.running = false; node.runStatus = 'failed'; node.runError = error.message || String(error);
+        refreshNodes([node.id]);
+        if(opts.cascade) throw error;
+        alert(error.message || '音频分析失败');
+        return '';
+    }
+}
         if(opts.cascade) throw err;
         alert(err.message || 'LLM 运行失败');
     }
@@ -14055,11 +14176,11 @@ function deleteNode(id, event){
 function clearNodeContentBeforeDelete(id){
     const node = nodes.find(n => n.id === id);
     if(!node) return false;
-    if(node.type === 'image' && node.url){
+    if(['image','audio'].includes(node.type) && node.url){
         pushUndo();
         node.url = '';
         node.mediaKind = 'image';
-        node.name = tr('canvas.imageCard');
+        node.name = node.type==='audio'?'音频素材':tr('canvas.imageCard');
         render();
         scheduleSave();
         return true;
@@ -14269,7 +14390,7 @@ function renderCanvasLog(){
             const safe = escapeAttr(url);
             if(isMissingAssetUrl(url)) return `<div class="missing-asset compact" data-url="${safe}"><i data-lucide="image-off" class="w-4 h-4"></i></div>`;
             const kind = mediaKindForOutputItem(item);
-            return kind === 'video' ? canvasVideoPreviewHtml(url, 256, 'alt="output"') : canvasPreviewImgHtml(url, 256, 'alt="output"');
+            return kind === 'audio' ? `<div class="audio-input-thumb"><i data-lucide="file-audio"></i></div>` : kind === 'video' ? canvasVideoPreviewHtml(url, 256, 'alt="output"') : canvasPreviewImgHtml(url, 256, 'alt="output"');
         }).join('');
         const date = new Date(log.createdAt || Date.now()).toLocaleString(window.StudioI18n?.lang() === 'en' ? 'en-US' : 'zh-CN');
         const req = log.request || {};
@@ -14384,7 +14505,7 @@ function makePendingForRun(id, run, node, options={}, task={}){
 }
 function mergeGeneratedOutputs(node, outputs, append=false){
     if(!node) return;
-    const keepGeneratedMedia = ['rh','ltxDirector','video','minimax'].includes(node.type);
+    const keepGeneratedMedia = ['rh','ltxDirector','video','minimax'].includes(node.type) || Boolean(node.audioTaskId);
     const clean = (outputs || []).map(item => {
         const url = outputUrlValue(item);
         if(!url) return null;
@@ -14393,8 +14514,8 @@ function mergeGeneratedOutputs(node, outputs, append=false){
             : ['rh','ltxDirector'].includes(node.type) && isVideoUrl(url)
                 ? 'video'
                 : mediaKindForOutputItem(item);
-        if(!keepGeneratedMedia && kind !== 'image') return null;
-        return kind === 'image' ? url : {url, kind};
+        if(!keepGeneratedMedia && kind !== 'image' && !(node.type === 'generator' && kind === 'audio')) return null;
+        return kind === 'image' ? url : {...(typeof item==='object'?item:{}),url, kind};
     }).filter(Boolean);
     if(!append){
         node.generatedOutputs = clean;
@@ -14422,6 +14543,7 @@ function collectRunMeta(out, id){
     return collectRunMetas(out, [id])[0] || {runMs:0, run:{}};
 }
 function findOutputByPendingId(pendingId){
+    if(clean.length){delete node.audioOutputText;outputNodesForSource(node.id).forEach(out=>delete out.audioOutputText);}
     return nodes.find(n => n.type === 'output' && (n._pending || []).some(p => p.id === pendingId));
 }
 function findPendingTask(taskId){
@@ -15376,9 +15498,9 @@ function navigateOutputLightbox(direction){
 }
 function createImageCardFromOutput(url, point){
     if(!ensureCanvas() || !url) return;
-    if(mediaKindForRef(url) !== 'image') return;
+    if(!['image','audio'].includes(mediaKindForRef(url))) return;
     const p = point || defaultPoint(0, 0);
-    nodes.push({id:uid('img'), type:'image', x:p.x, y:p.y, url, name:outputImageName(url)});
+    nodes.push({id:uid('img'), type:isAudioUrl(url)?'audio':'image', x:p.x, y:p.y, url, name:outputImageName(url)});
     render();
     scheduleSave();
 }
@@ -16288,6 +16410,7 @@ function clipboardNodeCount(){
 }
 function pasteNodes(){
     if(!canvas || !clipboard) return;
+    window.CanvasAudio.detachTask(copy);
     const clipNodes = Array.isArray(clipboard) ? clipboard : (Array.isArray(clipboard.nodes) ? clipboard.nodes : []);
     const clipConnections = Array.isArray(clipboard?.connections) ? clipboard.connections : [];
     if(!clipNodes.length) return;
@@ -16579,6 +16702,8 @@ function startNodeDrag(e, node){
     }
     const isGroup = dragTarget.type === 'group' || dragTarget.type === 'promptGroup';
     const collected = new Map();
+        window.CanvasAudio.detachTask(copy);
+        window.CanvasAudio.migrate(copy);
     const collect = n => {
         if(!n || collected.has(n.id) || n.id === dragTarget.id) return;
         collected.set(n.id, {node:n, ox:n.x, oy:n.y});
@@ -16829,6 +16954,8 @@ function connectedClusterIds(seedId){
         });
     }
     return [...seen];
+    if(from.type==='generator' && to.type==='llm' && (from.audioOutputText || canvasApiAudioMode(from)))return !wouldCreateGeneratorCycle(fromId,toId);
+    if(from.type==='audio')return ['generator','video','rh','comfy','minimax','ltxDirector'].includes(to.type)&&!wouldCreateGeneratorCycle(fromId,toId);
 }
 function canvasArrangeAtomicIds(ids){
     const out = new Set((ids || []).filter(id => nodes.some(n => n.id === id)));
@@ -16945,7 +17072,7 @@ function updateGroupMembership(movedNodes){
     ];
     let changed = false;
     const handoffGroupConnections = (group, child) => {
-        if(!group || group.type !== 'group' || !['image','prompt'].includes(child?.type)) return;
+        if(!group || group.type !== 'group' || group.groupMode === 'workflow' || !['image','audio','prompt'].includes(child?.type)) return;
         const directTargets = connections
             .filter(c => c.from === child.id)
             .map(c => nodes.find(n => n.id === c.to))
@@ -17010,6 +17137,7 @@ function portPoint(id, kind){
     const nx = Number(n.x) || 0, ny = Number(n.y) || 0;
     return kind === 'out' ? {x:nx + w, y:ny + h / 2} : {x:nx, y:ny + h / 2};
 }
+        {childType:'audio', groupType:'group'},
 function canResolvePort(id){
     // 只跳过“真正的孤儿连线”（端点节点已不存在）；节点存在但暂时没 DOM 的，portPoint 会用几何坐标兜底。
     return Boolean(nodes.find(x => x.id === id));

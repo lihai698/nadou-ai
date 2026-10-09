@@ -4,7 +4,7 @@
         '/static/js/i18n-core.js',
         '/static/js/i18n/common.js',
         '/static/js/i18n/studio.js',
-        '/static/js/i18n/api-settings.js',
+        '/static/js/i18n/api-settings.js?audio-models=2026.10.10.2',
         '/static/js/i18n/canvas.js',
         '/static/js/i18n/smart-canvas.js',
         '/static/js/i18n/asset-manager.js',
