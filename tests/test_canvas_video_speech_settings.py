@@ -2,6 +2,12 @@ import asyncio,unittest
 from unittest.mock import patch
 
 class VideoSettingsTests(unittest.TestCase):
+ def test_video_routes_registered_at_real_application_entrypoint(self):
+  import main
+  routes={(method,route.path) for route in main.app.routes for method in getattr(route,'methods',[]) or []}
+  prefix='/api/canvas-video-deconstruction'
+  expected={('POST',prefix+'/prepare'),('GET',prefix+'/tasks/{task_id}'),('POST',prefix+'/tasks/{task_id}/cancel'),('POST',prefix+'/tasks/{task_id}/confirm'),('GET',prefix+'/models'),('POST',prefix+'/speech/install'),('GET',prefix+'/speech/install')}
+  self.assertTrue(expected.issubset(routes),expected-routes)
  def test_multi_output_identity_matches_frontend_id_priority(self):
   import main
   doc={'nodes':[{'id':'out','type':'output','images':[{'id':'native-id','resultId':'provider-id','url':'/assets/v.mp4'}]}]}

@@ -262,6 +262,7 @@ window.addEventListener('studio-lang-change', () => {
     renderCanvasList();
     render();
 });
+window.addEventListener('studio-ui-scale-change', applyQuickToolbarState);
 const shell = document.getElementById('shell');
 const canvasGate = document.getElementById('canvasGate');
 const board = document.getElementById('board');
@@ -550,8 +551,10 @@ const CUSTOM_IMAGE_MODELS_KEY = 'canvas_custom_image_models';
 const MANAGED_IMAGE_MODELS_KEY = 'canvas_image_models_ordered';
 const MANAGED_CHAT_MODELS_KEY = 'canvas_chat_models_ordered';
 const CANVAS_THEME_KEY = 'canvas_theme';
+const QUICK_TOOLBAR_COLLAPSED_KEY = 'canvas_quick_toolbar_collapsed';
 const CANVAS_SESSION_VIEWPORTS_KEY = 'canvas_session_viewports_v1';
 let canvasSessionViewportFallback = {};
+let quickToolbarExpanded = false;
 const DEFAULT_VIDEO_MODELS = [
     // Veo
     'veo2', 'veo2-fast', 'veo2-pro',
@@ -612,32 +615,26 @@ function applyTheme(theme){
     document.body.classList.toggle('theme-dark', dark);
     shell.classList.toggle('theme-dark', dark);
 }
-function closeCanvasMoreMenu(){
-    document.getElementById('canvasMoreMenu').hidden = true;
-    document.getElementById('canvasMoreToggle').setAttribute('aria-expanded', 'false');
+function applyQuickToolbarState(){
+    const toolbar = document.getElementById('quickToolbar');
+    if(!toolbar) return;
+    const uiScale = Number(getComputedStyle(document.documentElement).getPropertyValue('--studio-ui-scale')) || 1;
+    const isScaledUi = uiScale < 0.995;
+    const collapsed = !quickToolbarExpanded;
+    toolbar.classList.toggle('scale-expanded', isScaledUi && quickToolbarExpanded);
+    toolbar.classList.toggle('collapsed', collapsed);
+    const btn = toolbar.querySelector('.toolbar-toggle');
+    if(btn){
+        btn.title = collapsed ? '展开快捷菜单' : '折叠快捷菜单';
+        btn.setAttribute('aria-label', btn.title);
+    }
+    refreshIcons();
 }
-function toggleCanvasMoreMenu(){
-    const menu = document.getElementById('canvasMoreMenu');
-    const opening = menu.hidden;
-    closeCreateMenu();
-    menu.hidden = !opening;
-    document.getElementById('canvasMoreToggle').setAttribute('aria-expanded', String(opening));
+function toggleQuickToolbar(){
+    const toolbar = document.getElementById('quickToolbar');
+    quickToolbarExpanded = Boolean(toolbar?.classList.contains('collapsed'));
+    applyQuickToolbarState();
 }
-function openCanvasNodeMenu(){
-    if(!ensureCanvas()) return;
-    closeCanvasMoreMenu();
-    const rect = board.getBoundingClientRect();
-    openCreateMenu(rect.left + rect.width / 2, rect.top + rect.height / 2);
-}
-document.addEventListener('pointerdown', event => {
-    if(!event.target.closest?.('#canvasMoreMenu, #canvasMoreToggle')) closeCanvasMoreMenu();
-});
-document.addEventListener('keydown', event => {
-    if(event.key === 'Escape') closeCanvasMoreMenu();
-});
-document.getElementById('canvasMoreMenu').addEventListener('click', event => {
-    if(event.target.closest('button')) closeCanvasMoreMenu();
-});
 function loadLocalModelLists(){
     try {
         const managedRaw = localStorage.getItem(MANAGED_IMAGE_MODELS_KEY);
@@ -1053,48 +1050,6 @@ function normalizeApiNodeSizeChoice(node){
     if(allowAuto && node._apiResolutionUserSet !== true && (!node.resolution || node.resolution === '1k' || node.resolution === 'auto')) node.resolution = defaultApiImageResolution(node.model);
     else if(!node.resolution) node.resolution = defaultApiImageResolution(node.model);
     if(!allowAuto && node.resolution === 'auto') node.resolution = '1k';
-}
-function setCanvasGeneratorSizeFields(node, patch){
-    Object.assign(node,patch);
-    if(Object.hasOwn(patch,'resolution')){
-        node._apiResolutionUserSet=true;
-        if(node.resolution==='custom')node.ratio='';
-        else{if(!node.ratio)node.ratio='square';node.customSize='';node.customWidth='';node.customHeight='';}
-    }
-    if(Object.hasOwn(patch,'ratio') && node.ratio!=='custom'){
-        node.customRatio='';node.customRatioWidth='';node.customRatioHeight='';
-    }
-    if(Object.hasOwn(patch,'customRatioWidth') || Object.hasOwn(patch,'customRatioHeight')){
-        node.customRatioWidth=String(node.customRatioWidth||'');node.customRatioHeight=String(node.customRatioHeight||'');
-        node.customRatio=node.customRatioWidth&&node.customRatioHeight?`${node.customRatioWidth}:${node.customRatioHeight}`:'';
-        node.ratio='custom';
-    }
-    if(Object.hasOwn(patch,'customWidth') || Object.hasOwn(patch,'customHeight')){
-        node.customWidth=String(node.customWidth||'');node.customHeight=String(node.customHeight||'');
-        node.customSize=node.customWidth&&node.customHeight?`${node.customWidth}x${node.customHeight}`:'';
-        node.resolution='custom';node._apiResolutionUserSet=true;node.ratio='';
-    }
-    normalizeApiNodeSizeChoice(node);
-}
-function setCanvasMsSizeFields(node, patch){
-    Object.assign(node,patch);
-    if(Object.hasOwn(patch,'msResolution')){
-        if(node.msResolution==='custom')node.msRatio='';
-        else{if(!node.msRatio)node.msRatio='square';node.msCustomSize='';node.msCustomWidth='';node.msCustomHeight='';}
-    }
-    if(Object.hasOwn(patch,'msRatio') && node.msRatio!=='custom'){
-        node.msCustomRatio='';node.msCustomRatioWidth='';node.msCustomRatioHeight='';
-    }
-    if(Object.hasOwn(patch,'msCustomRatioWidth') || Object.hasOwn(patch,'msCustomRatioHeight')){
-        node.msCustomRatioWidth=String(node.msCustomRatioWidth||'');node.msCustomRatioHeight=String(node.msCustomRatioHeight||'');
-        node.msCustomRatio=node.msCustomRatioWidth&&node.msCustomRatioHeight?`${node.msCustomRatioWidth}:${node.msCustomRatioHeight}`:'';
-        node.msRatio='custom';
-    }
-    if(Object.hasOwn(patch,'msCustomWidth') || Object.hasOwn(patch,'msCustomHeight')){
-        node.msCustomWidth=String(node.msCustomWidth||'');node.msCustomHeight=String(node.msCustomHeight||'');
-        node.msCustomSize=node.msCustomWidth&&node.msCustomHeight?`${node.msCustomWidth}x${node.msCustomHeight}`:'';
-        node.msResolution='custom';node.msRatio='';
-    }
 }
 async function generatorSizeForRun(gen, refs){
     if((gen.ratio || 'square') === 'source'){
@@ -3036,7 +2991,12 @@ function renderMsGenBody(node){
         msRatioSelect.onclick = e => e.stopPropagation();
         msRatioSelect.onchange = e => {
             e.stopPropagation();
-            setCanvasMsSizeFields(node,{msRatio:e.target.value});
+            node.msRatio = e.target.value;
+            if(node.msRatio !== 'custom') {
+                node.msCustomRatio = '';
+                node.msCustomRatioWidth = '';
+                node.msCustomRatioHeight = '';
+            }
             syncMsCustomSizeControls();
             scheduleSave();
         };
@@ -3044,7 +3004,19 @@ function renderMsGenBody(node){
         msResolutionSelect.onclick = e => e.stopPropagation();
         msResolutionSelect.onchange = e => {
             e.stopPropagation();
-            setCanvasMsSizeFields(node,{msResolution:e.target.value});
+            node.msResolution = e.target.value;
+            if(node.msResolution === 'custom') {
+                node.msRatio = '';
+            } else if(!node.msRatio) {
+                node.msRatio = 'square';
+                node.msCustomSize = '';
+                node.msCustomWidth = '';
+                node.msCustomHeight = '';
+            } else {
+                node.msCustomSize = '';
+                node.msCustomWidth = '';
+                node.msCustomHeight = '';
+            }
             syncMsCustomSizeControls();
             scheduleSave();
         };
@@ -3052,7 +3024,10 @@ function renderMsGenBody(node){
             input.onmousedown = e => e.stopPropagation();
             input.onclick = e => e.stopPropagation();
             input.oninput = () => {
-                setCanvasMsSizeFields(node,{msCustomRatioWidth:msCustomRatioWInput.value,msCustomRatioHeight:msCustomRatioHInput.value});
+                node.msCustomRatioWidth = msCustomRatioWInput.value;
+                node.msCustomRatioHeight = msCustomRatioHInput.value;
+                node.msCustomRatio = node.msCustomRatioWidth && node.msCustomRatioHeight ? `${node.msCustomRatioWidth}:${node.msCustomRatioHeight}` : '';
+                node.msRatio = 'custom';
                 syncMsCustomSizeControls();
                 scheduleSave();
             };
@@ -3061,7 +3036,11 @@ function renderMsGenBody(node){
             input.onmousedown = e => e.stopPropagation();
             input.onclick = e => e.stopPropagation();
             input.oninput = () => {
-                setCanvasMsSizeFields(node,{msCustomWidth:msCustomWInput.value,msCustomHeight:msCustomHInput.value});
+                node.msCustomWidth = msCustomWInput.value;
+                node.msCustomHeight = msCustomHInput.value;
+                node.msCustomSize = node.msCustomWidth && node.msCustomHeight ? `${node.msCustomWidth}x${node.msCustomHeight}` : '';
+                node.msResolution = 'custom';
+                node.msRatio = '';
                 syncMsCustomSizeControls();
                 scheduleSave();
             };
@@ -3304,15 +3283,10 @@ function addOutputNode(point){
 function openCreateMenu(clientX, clientY){
     menuPoint = screenToWorld(clientX, clientY);
     closeLinkCreateMenu();
-    closeCanvasMoreMenu();
+    createMenu.style.left = `${clientX}px`;
+    createMenu.style.top = `${clientY}px`;
     createMenu.classList.add('open');
     refreshIcons();
-    const rect = board.getBoundingClientRect();
-    const scale = rect.width / board.clientWidth || 1;
-    const left = (clientX - rect.left) / scale;
-    const top = (clientY - rect.top) / scale;
-    createMenu.style.left = `${Math.max(10, Math.min(left, board.clientWidth - createMenu.offsetWidth - 10))}px`;
-    createMenu.style.top = `${Math.max(10, Math.min(top, board.clientHeight - createMenu.offsetHeight - 10))}px`;
 }
 function closeCreateMenu(){
     createMenu.classList.remove('open');
@@ -6760,8 +6734,6 @@ function renderNode(node){
         const audioCount = items.filter(n => n.type === 'image' && mediaKindForNode(n) === 'audio').length;
         const promptCount = items.filter(n => n.type === 'prompt').length;
         const parts = [];
-        const otherCount = items.length - imgCount - videoCount - audioCount - promptCount;
-        if(otherCount) parts.push(langIsEn() ? `${items.length} nodes` : `${items.length} 个节点`);
         if(imgCount) parts.push(`${imgCount} ${tr('canvas.imageCount')}`);
         if(videoCount) parts.push(langIsEn() ? `${videoCount} video` : `${videoCount} 个视频`);
         if(audioCount) parts.push(langIsEn() ? `${audioCount} audio` : `${audioCount} 个音频`);
@@ -9018,7 +8990,17 @@ function renderGeneratorBody(node){
     ratioSelect.onclick = e => e.stopPropagation();
     ratioSelect.onchange = e => {
         e.stopPropagation();
-        setCanvasGeneratorSizeFields(node,{ratio:e.target.value});
+        node.ratio = e.target.value;
+        normalizeApiNodeSizeChoice(node);
+        if(node.ratio !== 'custom' && node.ratio !== 'source') {
+            node.customRatio = '';
+            node.customRatioWidth = '';
+            node.customRatioHeight = '';
+        } else if(node.ratio === 'source') {
+            node.customRatio = '';
+            node.customRatioWidth = '';
+            node.customRatioHeight = '';
+        }
         syncSizeControls();
         scheduleSave();
     };
@@ -9026,7 +9008,26 @@ function renderGeneratorBody(node){
     resolutionSelect.onclick = e => e.stopPropagation();
     resolutionSelect.onchange = e => {
         e.stopPropagation();
-        setCanvasGeneratorSizeFields(node,{resolution:e.target.value});
+        node.resolution = e.target.value;
+        node._apiResolutionUserSet = true;
+        if(node.resolution === 'custom') {
+            node.ratio = '';
+        } else if(node.resolution === 'auto') {
+            if(!node.ratio) node.ratio = 'square';
+            node.customSize = '';
+            node.customWidth = '';
+            node.customHeight = '';
+        } else if(!node.ratio) {
+            node.ratio = 'square';
+            node.customSize = '';
+            node.customWidth = '';
+            node.customHeight = '';
+        } else {
+            node.customSize = '';
+            node.customWidth = '';
+            node.customHeight = '';
+        }
+        normalizeApiNodeSizeChoice(node);
         syncSizeControls();
         scheduleSave();
     };
@@ -9034,7 +9035,10 @@ function renderGeneratorBody(node){
         input.onmousedown = e => e.stopPropagation();
         input.onclick = e => e.stopPropagation();
         input.oninput = e => {
-            setCanvasGeneratorSizeFields(node,{customRatioWidth:customRatioWInput.value,customRatioHeight:customRatioHInput.value});
+            node.customRatioWidth = customRatioWInput.value;
+            node.customRatioHeight = customRatioHInput.value;
+            node.customRatio = node.customRatioWidth && node.customRatioHeight ? `${node.customRatioWidth}:${node.customRatioHeight}` : '';
+            node.ratio = 'custom';
             syncSizeControls();
             scheduleSave();
         };
@@ -9043,7 +9047,12 @@ function renderGeneratorBody(node){
         input.onmousedown = e => e.stopPropagation();
         input.onclick = e => e.stopPropagation();
         input.oninput = e => {
-            setCanvasGeneratorSizeFields(node,{customWidth:customWInput.value,customHeight:customHInput.value});
+            node.customWidth = customWInput.value;
+            node.customHeight = customHInput.value;
+            node.customSize = node.customWidth && node.customHeight ? `${node.customWidth}x${node.customHeight}` : '';
+            node.resolution = 'custom';
+            node._apiResolutionUserSet = true;
+            node.ratio = '';
             syncSizeControls();
             scheduleSave();
         };
@@ -9408,12 +9417,6 @@ function miniMaxEnsureSegment(node){
 }
 function miniMaxSelectedSegment(node){
     return miniMaxEnsureSegment(node);
-}
-function setMinimaxSegmentPrompt(node, segmentId, text){
-    const segment=(node.segments||[]).find(s=>s.id===segmentId);
-    if(!segment || typeof text!=='string')throw new Error('分段或提示词无效');
-    node.selectedSegmentId=segmentId;
-    segment.prompt=text;
 }
 function miniMaxTimelineTotal(node){
     miniMaxEnsureSegment(node);
@@ -9822,7 +9825,7 @@ function bindMiniMaxWorkbench(wrap, node){
         prompt.oninput = e => {
             e.stopPropagation();
             const seg = miniMaxSelectedSegment(node);
-            if(seg) setMinimaxSegmentPrompt(node,seg.id,prompt.value);
+            if(seg) seg.prompt = prompt.value;
             scheduleSave();
         };
     }
@@ -16080,14 +16083,12 @@ function closeOutputLightbox(){
 }
 function groupSelectedImages(){
     if(!ensureCanvas()) return;
-    const targets = [...selected].map(id => nodes.find(n => n.id === id)).filter(Boolean);
-    if(targets.length === 1 && ['group','promptGroup'].includes(targets[0].type)) return;
+    const targets = [...selected].map(id => nodes.find(n => n.id === id)).filter(n => n?.type === 'image' || n?.type === 'prompt');
     let group;
     pushUndo();
     if(targets.length){
         const box = nodeBounds(targets.map(n => n.id));
-        group = {id:uid('grp'), type:'group', x:box.x - 24, y:box.y - 88, w:box.w + 48, h:box.h + 120, items:targets.map(n => n.id)};
-        if(targets.some(n => !['image','prompt'].includes(n.type))) group.groupMode = 'workflow';
+        group = {id:uid('grp'), type:'group', x:box.x - 24, y:box.y - 58, w:box.w + 48, h:box.h + 90, items:targets.map(n => n.id)};
     } else {
         const p = defaultPoint(0, 0);
         group = {id:uid('grp'), type:'group', x:p.x, y:p.y, w:300, h:220, items:[]};
@@ -16119,7 +16120,7 @@ function startSelection(e){
     e.preventDefault();
     e.stopPropagation();
     if(document.activeElement && document.activeElement !== document.body) document.activeElement.blur();
-    selectDrag = {sx:e.clientX, sy:e.clientY, x:e.clientX, y:e.clientY, autoGroup:Boolean(e.ctrlKey || e.metaKey)};
+    selectDrag = {sx:e.clientX, sy:e.clientY, x:e.clientX, y:e.clientY};
     document.body.classList.add('canvas-selecting');
     selectionBox.style.display = 'block';
     updateSelectionBox(e.clientX, e.clientY);
@@ -16138,7 +16139,6 @@ function updateSelectionBox(x, y){
 }
 function finishSelection(){
     if(!selectDrag) return;
-    const autoGroup = selectDrag.autoGroup;
     const rect = selectionBox.getBoundingClientRect();
     selectionBox.style.display = 'none';
     selected.clear();
@@ -16151,33 +16151,12 @@ function finishSelection(){
     document.body.classList.remove('canvas-selecting');
     window.onmousemove = null;
     window.onmouseup = null;
-    if(autoGroup && selected.size > 1) groupSelectedImages();
-    else render();
+    render();
     if(workflowTransferModal?.classList.contains('open')) updateWorkflowTransferMeta();
 }
 function renderSelectionHub(){
     selectionHub.innerHTML = '';
     selectionHub.classList.remove('open');
-    const targets = [...selected].filter(id => nodes.some(node => node.id === id));
-    if(targets.length < 2) return;
-    const groupButton = document.createElement('button');
-    groupButton.type = 'button';
-    groupButton.className = 'tool-btn';
-    groupButton.title = `${tr('canvas.group')} (Ctrl+G)`;
-    groupButton.innerHTML = `<i data-lucide="group" class="w-3.5 h-3.5"></i><span>${escapeHtml(tr('canvas.group'))}</span>`;
-    groupButton.onmousedown = event => event.stopPropagation();
-    groupButton.onclick = groupSelectedImages;
-    selectionHub.appendChild(groupButton);
-    selectionHub.classList.add('open');
-    const box = nodeBounds([...selected]);
-    const x = box.x * viewport.scale + viewport.x;
-    const y = box.y * viewport.scale + viewport.y;
-    const boardRect = board.getBoundingClientRect();
-    const boardScale = boardRect.width / board.clientWidth || 1;
-    const safeTop = (document.querySelector('.topbar').getBoundingClientRect().bottom - boardRect.top) / boardScale + 8;
-    selectionHub.style.left = `${Math.max(10, Math.min(x, board.clientWidth - selectionHub.offsetWidth - 10))}px`;
-    selectionHub.style.top = `${Math.max(safeTop, Math.min(y - selectionHub.offsetHeight - 8, board.clientHeight - selectionHub.offsetHeight - 10))}px`;
-    refreshIcons();
 }
 function startSelectionLink(e, kind){
     e.preventDefault();
@@ -16940,7 +16919,7 @@ function arrangeSelectedCanvasNodes(){
     scheduleSave();
 }
 function handoffExistingInputsToGroup(group, children){
-    if(!group || group.type !== 'group' || group.groupMode === 'workflow') return false;
+    if(!group || group.type !== 'group') return false;
     const childIds = new Set((children || []).filter(n => ['image','prompt'].includes(n?.type)).map(n => n.id));
     if(!childIds.size) return false;
     const targetIds = new Set();
@@ -16962,12 +16941,11 @@ function updateGroupMembership(movedNodes){
     const pairs = [
         {childType:'image', groupType:'group'},
         {childType:'prompt', groupType:'group'},
-        {childType:'prompt', groupType:'promptGroup'},
-        {childType:null, groupType:'group', workflow:true}
+        {childType:'prompt', groupType:'promptGroup'}
     ];
     let changed = false;
     const handoffGroupConnections = (group, child) => {
-        if(!group || group.type !== 'group' || group.groupMode === 'workflow' || !['image','prompt'].includes(child?.type)) return;
+        if(!group || group.type !== 'group' || !['image','prompt'].includes(child?.type)) return;
         const directTargets = connections
             .filter(c => c.from === child.id)
             .map(c => nodes.find(n => n.id === c.to))
@@ -16987,9 +16965,9 @@ function updateGroupMembership(movedNodes){
             }
         });
     };
-    pairs.forEach(({childType, groupType, workflow=false}) => {
-        const groups = nodes.filter(n => n.type === groupType && (n.groupMode === 'workflow') === workflow);
-        const children = movedNodes.filter(n => n && (childType ? n.type === childType : !['group','promptGroup'].includes(n.type)));
+    pairs.forEach(({childType, groupType}) => {
+        const groups = nodes.filter(n => n.type === groupType);
+        const children = movedNodes.filter(n => n?.type === childType);
         if(!children.length || !groups.length) return;
         children.forEach(child => {
             const cr = nodeRect(child);
@@ -17316,7 +17294,6 @@ function startBoardPan(e, opts={}){
         viewport.x = dragBoard.ox + e2.clientX - dragBoard.sx;
         viewport.y = dragBoard.oy + e2.clientY - dragBoard.sy;
         applyViewport();
-        renderSelectionHub();
     };
     window.onmouseup = e2 => {
         const shouldClearSelection = dragBoard?.clearSelectionOnClick && !dragBoard.moved && selected.size;
@@ -17383,7 +17360,6 @@ board.addEventListener('mousedown', e => {
 });
 board.onwheel = e => {
     if(!canvas) return;
-    if(e.target.closest?.('#createMenu')) return;
     e.preventDefault();
     const before = screenToWorld(e.clientX, e.clientY);
     viewport.scale = viewport.scale * (e.deltaY > 0 ? .92 : 1.08);
@@ -17646,6 +17622,7 @@ window.onload = async () => {
     initCanvasClipBridge();
     initCanvasVideoDeconstructionBridge();
     applyTheme(localStorage.getItem('studio_theme') || localStorage.getItem(CANVAS_THEME_KEY) || 'light');
+    applyQuickToolbarState();
     if(window.StudioI18n) StudioI18n.apply();
     document.title = tr('canvas.title');
     initOutputCompareEvents();
@@ -17658,15 +17635,6 @@ window.onload = async () => {
     if(openId){
         await openCanvas(openId);
         await loadCanvasPromptTemplates();
-        const nativeEditor=window.CanvasAssistantNative?.createEditor({
-            getState:()=>({id:canvas?.id,updatedAt:Number(canvas?.updated_at||0),nodes,readOnly:!!canvas?.readOnly}),
-            getSnapshot:()=>({nodes:serializableCanvasNodes(),connections}),
-            save:()=>saveCanvas(),pushUndo:()=>pushUndo(),render:()=>render(),clipModel:window.CanvasClipModel,setSegmentPrompt:setMinimaxSegmentPrompt,
-            applyFields:(node,patch)=>{if(node.type==='generator')setCanvasGeneratorSizeFields(node,patch);else if(node.type==='msgen')setCanvasMsSizeFields(node,patch);else Object.assign(node,patch);},
-            createNode:type=>createNodeByType(type,defaultPoint(0,0)),
-            shotHost:()=>window.CanvasVideoDeconstructionBridge,shotModel:window.CanvasVideoDeconstructionModel,
-            check:proposal=>proposal.check(),
-        });
         window.CanvasAssistant?.mount({
             kind:'classic',
             getContext:()=>canvas ? {id:canvas.id,title:canvas.title,updatedAt:Number(canvas.updated_at||0),nodes,selectedNodeIds:[...selected],creationSettings:canvasAssistantCreationSettings()} : null,
@@ -17674,8 +17642,6 @@ window.onload = async () => {
             refresh:()=>syncRemoteCanvasNow(),
             prepareImageRequest:canvasAssistantImageRequest,
             generateImage:canvasAssistantGenerateImage,
-            nativeSnapshot:()=>nativeEditor?.snapshot(),
-            executeNativeAction:proposal=>nativeEditor.execute(proposal),
             referencePreview:(item,size)=>item.kind==='video' ? canvasVideoPreviewHtml(item.url,size,'preload="none"') : canvasPreviewImgHtml(item.thumbnail||item.url,size,'loading="lazy" draggable="false"'),
             bindReferencePreviews:element=>bindCanvasPreviewImageFallbacks(element),
             openPromptTemplates:async callback=>{canvasAssistantTemplateCallback=callback;await openPromptTemplateModal('');},

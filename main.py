@@ -19566,6 +19566,68 @@ def canvas_assistant_providers():
     return values
 
 
+_video_deconstruction_manager = None
+_video_deconstruction_key = None
+_video_deconstruction_lock = Lock()
+_video_speech_engine = None
+_video_speech_key = None
+
+
+def video_deconstruction_media(_context=None):
+    dirs, assets_root, legacy_output = dict(_current_storage_dirs()), ASSETS_DIR, OUTPUT_DIR
+    return VideoMedia(OUTPUT_OUTPUT_DIR, lambda name: resolve_output_url(name, 'output', dirs, assets_root),
+                      lambda url: resolve_output_file(url, dirs, assets_root, legacy_output),
+                      [assets_root, legacy_output, *dirs.values()])
+
+
+def validate_video_deconstruction_source(context, _user):
+    document = load_canvas(context.get('canvas_id', ''))
+    if document.get('readOnly') or document.get('readonly'):
+        raise ValueError('只读画布不能拆解视频')
+    node = next((n for n in document.get('nodes', []) if n.get('id') == context.get('node_id')), None)
+    if not node:
+        raise ValueError('原视频节点已不存在，请保存画布后重试')
+    candidates = [(node.get('url'), 'primary')] if node.get('type') == 'image' else []
+    for item in [*node.get('images', []), *node.get('generatedOutputs', [])]:
+        if isinstance(item, str):
+            candidates.append((item, item))
+        elif isinstance(item, dict):
+            candidates.append((item.get('url'), str(item.get('id') or item.get('resultId') or item.get('url'))))
+    if (context.get('source_url'), context.get('result_id')) not in candidates:
+        raise ValueError('视频素材已经改变，请重新打开编辑入口')
+    table_id = context.get('table_id')
+    if table_id:
+        table = next((n for n in document.get('nodes', []) if n.get('id') == table_id and n.get('type') in {'shot-table', 'smart-shot-table'}), None)
+        if not table or table.get('shotTableData', {}).get('revision', 0) != context.get('table_revision', 0):
+            raise ValueError('镜头表已变化，请保存后重新确认')
+    return {k: context[k] for k in ('canvas_id', 'node_id', 'result_id', 'source_url', 'operation_id', 'table_id', 'table_revision') if k in context}
+
+
+def video_speech_engine():
+    global _video_speech_engine, _video_speech_key
+    key = (os.path.realpath(DATA_DIR), os.path.realpath(OUTPUT_OUTPUT_DIR))
+    if _video_speech_engine is None or key != _video_speech_key:
+        _video_speech_engine = VideoSpeech(DATA_DIR, load_api_providers, provider_env_key_value, video_deconstruction_media())
+        _video_speech_key = key
+    return _video_speech_engine
+
+
+def video_deconstruction_manager():
+    global _video_deconstruction_manager, _video_deconstruction_key
+    key = (os.path.realpath(DATA_DIR), os.path.realpath(OUTPUT_OUTPUT_DIR))
+    with _video_deconstruction_lock:
+        if _video_deconstruction_manager is None or key != _video_deconstruction_key:
+            _video_deconstruction_manager = VideoDeconstructionManager(DATA_DIR, validate_video_deconstruction_source,
+                video_deconstruction_media, canvas_assistant_providers, call_canvas_assistant_model,
+                lambda *args, **kwargs: video_speech_engine().transcribe(*args, **kwargs))
+            _video_deconstruction_key = key
+        return _video_deconstruction_manager
+
+
+app.include_router(create_video_deconstruction_router(manager=video_deconstruction_manager, user_id=safe_user_id,
+                                                     speech_engine=video_speech_engine))
+
+
 def apply_canvas_assistant_operations(user, payload, operations):
     with CANVAS_LOCK:
         current = load_canvas(payload.canvasId)

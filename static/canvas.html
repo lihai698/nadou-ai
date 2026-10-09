@@ -16,44 +16,54 @@
             } catch(e) {}
         })();
     </script>
-    <script src="/static/vendor/js/tailwindcss-cdn.js?v=2026.10.08.1.1791376126"></script>
-    <script src="/static/vendor/js/lucide.js?v=2026.10.08.1.1791376125"></script>
-    <script src="/static/js/theme.js?v=2026.10.08.1.1791376089"></script>
-    <script src="/static/js/touch-mouse.js?v=2026.10.08.1.1791376090"></script>
-    <script src="/static/js/i18n.js?v=2026.10.08.1.1791474092"></script>
-    <link rel="stylesheet" href="/static/css/canvas.css?v=2026.10.08.1.1791469164">
-    <link rel="stylesheet" href="/static/css/canvas-depth-capture.css?v=2026.10.08.1.1791400313">
-    <link rel="stylesheet" href="/static/css/canvas-view-adjust.css?v=2026.10.08.1.1791389262">
-    <link rel="stylesheet" href="/static/css/studio-layout.css?v=2026.10.08.1.1791475154">
-    <link rel="stylesheet" href="/static/css/theme.css?v=2026.10.08.1.1791376028">
-    <link rel="stylesheet" href="/static/css/canvas-assistant.css?v=2026.10.08.1.1791469596">
+    <script src="/static/vendor/js/tailwindcss-cdn.js?v=2026.10.07.2.1791376126"></script>
+    <script src="/static/vendor/js/lucide.js?v=2026.10.07.2.1791376125"></script>
+    <script src="/static/js/theme.js?v=2026.10.07.2.1791376089"></script>
+    <script src="/static/js/touch-mouse.js?v=2026.10.07.2.1791376090"></script>
+    <script src="/static/js/i18n.js?v=2026.10.07.2.1791393743"></script>
+    <link rel="stylesheet" href="/static/css/canvas.css?v=2026.10.07.2.1791403719">
+    <link rel="stylesheet" href="/static/css/canvas-depth-capture.css?v=2026.10.07.2.1791400313">
+    <link rel="stylesheet" href="/static/css/canvas-view-adjust.css?v=2026.10.07.2.1791389262">
+    <link rel="stylesheet" href="/static/css/theme.css?v=2026.10.07.2.1791376028">
+    <link rel="stylesheet" href="/static/css/canvas-assistant.css?v=2026.10.08.assistant-image.5">
     <link rel="stylesheet" href="/static/css/canvas-clip.css?v=2026.10.08.1.1791484217">
+    <link rel="stylesheet" href="/static/css/canvas-video-deconstruction.css?v=2026.10.09.video.3">
 </head>
 <body>
     <div id="shell" class="shell no-canvas">
         <div class="topbar">
             <div class="panel canvas-nav">
-                <button id="canvasSidebarRestoreToggle" class="tool-btn sidebar-restore-inline" type="button" onclick="window.parent.toggleSidebarVisibility(event)" title="恢复左侧菜单" aria-label="恢复左侧菜单"><span aria-hidden="true">N</span></button>
                 <button id="backToManagerBtn" class="tool-btn" type="button" title="返回画布管理" aria-label="返回画布管理" data-i18n-title="canvas.backToManager"><i data-lucide="arrow-left" class="w-4 h-4"></i></button>
                 <div class="canvas-nav-meta">
                     <div id="currentCanvasTitle" class="current-canvas-title">未命名画布</div>
                     <div id="currentCanvasTime" class="current-canvas-time">--</div>
                 </div>
+                <button id="clearCurrentCanvasBtn" class="tool-btn canvas-clear-btn" type="button" title="清空当前画布" aria-label="清空当前画布"><i data-lucide="trash-2" class="w-4 h-4"></i><span>清空</span></button>
                 <p id="saveState" style="display:none" data-i18n="canvas.chooseFirst">请选择或新建画布</p>
             </div>
-            <div class="canvas-actions editor-only">
-                <button id="canvasAssetToggle" class="tool-btn canvas-asset-toggle" type="button" title="资产库" aria-label="资产库"><i data-lucide="library" class="w-4 h-4"></i><span>资产库</span></button>
-                <button id="canvasAssistantToggle" class="tool-btn" type="button" title="创作助手" aria-label="创作助手"><i data-lucide="sparkles" class="w-4 h-4"></i><span>创作助手</span></button>
-                <button id="canvasMoreToggle" class="tool-btn canvas-more-toggle" type="button" onclick="toggleCanvasMoreMenu()" title="更多画布操作" aria-label="更多画布操作" data-i18n-title="canvas.moreActions" aria-expanded="false" aria-controls="canvasMoreMenu"><i data-lucide="ellipsis" class="w-4 h-4"></i></button>
-            </div>
-            <div id="canvasMoreMenu" class="canvas-more-menu editor-only" hidden>
-                <button class="tool-btn" type="button" onclick="openCanvasNodeMenu()"><i data-lucide="mouse-pointer-2" class="w-4 h-4"></i><span data-i18n="canvas.nodeMenu">节点菜单</span></button>
-                <button class="tool-btn" type="button" onclick="groupSelectedImages()"><i data-lucide="group" class="w-4 h-4"></i><span data-i18n="canvas.group">分组</span><small>Ctrl+G</small></button>
-                <hr class="canvas-more-divider">
-                <button id="workflowTransferToggle" class="tool-btn" type="button" title="导入导出工作流" aria-label="导入导出工作流"><i data-lucide="package-open" class="w-4 h-4"></i><span>工作流</span></button>
-                <button id="canvasLogToggle" class="tool-btn" type="button" title="日志" aria-label="日志" data-i18n-title="canvas.logs"><i data-lucide="list-todo" class="w-4 h-4"></i><span data-i18n="canvas.logs">日志</span></button>
-                <hr class="canvas-more-divider">
-                <button id="clearCurrentCanvasBtn" class="tool-btn canvas-clear-btn" type="button" title="清空当前画布" aria-label="清空当前画布"><i data-lucide="trash-2" class="w-4 h-4"></i><span>清空</span></button>
+            <div id="quickToolbar" class="panel toolbar editor-only collapsed">
+                <button class="tool-btn toolbar-toggle" type="button" onclick="toggleQuickToolbar()" title="展开快捷菜单" aria-label="展开快捷菜单"><i data-lucide="chevron-left" class="w-4 h-4"></i></button>
+                <div class="toolbar-items">
+                    <button class="tool-btn" onclick="addImageNode()"><i data-lucide="image-plus" class="w-4 h-4"></i><span data-i18n="canvas.image">图片</span></button>
+                    <button class="tool-btn" onclick="addPromptNode()"><i data-lucide="text-cursor-input" class="w-4 h-4"></i><span data-i18n="canvas.prompt">提示词</span></button>
+                    <button class="tool-btn" onclick="addLoopNode()"><i data-lucide="repeat-2" class="w-4 h-4"></i><span data-i18n="canvas.loop">循环</span></button>
+                    <button class="tool-btn" onclick="addLLMNode()"><i data-lucide="message-square-text" class="w-4 h-4"></i>LLM</button>
+                    <button class="tool-btn" onclick="addGeneratorNode()"><i data-lucide="wand-sparkles" class="w-4 h-4"></i><span data-i18n="canvas.apiGenerate">API生成</span></button>
+                    <button class="tool-btn" onclick="addMsGenNode()"><i data-lucide="cloud-lightning" class="w-4 h-4"></i><span data-i18n="canvas.msGenerate">MS生成</span></button>
+                    <button class="tool-btn" onclick="addVideoNode()"><i data-lucide="clapperboard" class="w-4 h-4"></i><span data-i18n="canvas.videoGenerate">视频生成</span></button>
+                    <button class="tool-btn" onclick="addMiniMaxNode()"><i data-lucide="sparkles" class="w-4 h-4"></i><span>MiniMax</span></button>
+                    <button class="tool-btn" onclick="addRhNode()"><i data-lucide="workflow" class="w-4 h-4"></i><span data-i18n="canvas.rhGenerate">RH生成</span></button>
+                    <button class="tool-btn" onclick="addComfyNode()"><i data-lucide="workflow" class="w-4 h-4"></i>ComfyUI</button>
+                    <button class="tool-btn" onclick="addLTXDirectorNode()"><i data-lucide="film" class="w-4 h-4"></i><span data-i18n="canvas.ltxDirector">LTX Director</span></button>
+                    <button class="tool-btn" onclick="addOutputNode()"><i data-lucide="circle-dot" class="w-4 h-4"></i>Output</button>
+                    <button class="tool-btn" onclick="groupSelectedImages()"><i data-lucide="group" class="w-4 h-4"></i><span data-i18n="canvas.group">分组</span></button>
+                </div>
+                <div class="toolbar-fixed">
+                    <button id="workflowTransferToggle" class="tool-btn toolbar-workflow" type="button" title="导入导出工作流" aria-label="导入导出工作流"><i data-lucide="package-open" class="w-4 h-4"></i><span>工作流</span></button>
+                    <button id="canvasAssetToggle" class="tool-btn toolbar-asset canvas-asset-toggle" type="button" title="资产库" aria-label="资产库"><i data-lucide="library" class="w-4 h-4"></i><span>资产库</span></button>
+                    <button id="canvasLogToggle" class="tool-btn toolbar-log" type="button" onclick="openCanvasLog(event)" title="日志" aria-label="日志" data-i18n-title="canvas.logs"><i data-lucide="list-todo" class="w-4 h-4"></i><span data-i18n="canvas.logs">日志</span></button>
+                    <button id="canvasAssistantToggle" class="tool-btn" type="button" title="创作助手" aria-label="创作助手"><i data-lucide="sparkles" class="w-4 h-4"></i><span>创作助手</span></button>
+                </div>
             </div>
         </div>
 
@@ -351,19 +361,17 @@
         </div>
     </div>
 
-    <script src="/static/js/ltx-director-timeline.js?v=2026.10.08.1.1791376084"></script>
-    <script src="/static/js/canvas-task-error-rules.js?v=2026.10.08.1.1791376052"></script>
-    <script src="/static/js/canvas-view-adjust.js?v=2026.10.08.1.1791389161"></script>
-    <script src="/static/js/canvas-depth-capture.js?v=2026.10.08.1.1791520039"></script>
-    <script src="/static/js/canvas-assistant-native.js?v=2026.10.09.1"></script>
-    <script src="/static/js/canvas-assistant.js?v=2026.10.09.1"></script>
+    <script src="/static/js/ltx-director-timeline.js?v=2026.10.07.2.1791376084"></script>
+    <script src="/static/js/canvas-task-error-rules.js?v=2026.10.07.2.1791376052"></script>
+    <script src="/static/js/canvas-view-adjust.js?v=2026.10.07.2.1791389161"></script>
+    <script src="/static/js/canvas-depth-capture.js?v=2026.10.09.video.3"></script>
+    <script src="/static/js/canvas-assistant.js?v=2026.10.08.assistant-image.5"></script>
     <script src="/static/js/canvas-clip-model.js?v=2026.10.08.1.1791482865"></script>
-    <script src="/static/js/canvas-clip-host.js?v=2026.10.08.1.1791484648"></script>
+    <script src="/static/js/canvas-clip-host.js?v=2026.10.08.1.1791483980"></script>
     <script src="/static/js/canvas-clip-node.js?v=2026.10.08.1.1791484217"></script>
-    <link rel="stylesheet" href="/static/css/canvas-video-deconstruction.css?v=2026.10.08.1.1791521330">
-    <script src="/static/js/canvas-video-deconstruction-model.js?v=2026.10.08.1.1791521328"></script>
-    <script src="/static/js/canvas-video-deconstruction-host.js?v=2026.10.08.1.1791522025"></script>
-    <script src="/static/js/canvas-video-deconstruction-ui.js?v=2026.10.08.1.1791522028"></script>
-    <script src="/static/js/canvas.js?v=2026.10.08.1.1791520756"></script>
+    <script src="/static/js/canvas-video-deconstruction-model.js?v=2026.10.09.video.3"></script>
+    <script src="/static/js/canvas-video-deconstruction-host.js?v=2026.10.09.video.3"></script>
+    <script src="/static/js/canvas-video-deconstruction-ui.js?v=2026.10.09.video.3"></script>
+    <script src="/static/js/canvas.js?v=2026.10.09.video.3"></script>
 </body>
 </html>

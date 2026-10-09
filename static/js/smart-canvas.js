@@ -9684,7 +9684,7 @@ function bindMinimaxNodeControls(el, node){
             e.stopPropagation();
             focusMinimaxNode();
             const seg = smartMinimaxSelectedSegment(node);
-            if(seg) setMinimaxSegmentPrompt(node,seg.id,prompt.value);
+            if(seg) seg.prompt = prompt.value;
             scheduleSave();
         };
     }
@@ -13516,11 +13516,6 @@ function setPromptDraftForNode(node, text){
     }
 }
 function loadPromptDraft(subject){
-    if(subject?.promptDraftTouched === true){
-        const html=String(subject.promptDraftHtml || '');
-        promptInput.innerHTML=html.includes('mention-image-token') ? html : (promptHtmlWithMentionTokens(subject.promptDraftText || '',subject.runPromptRefs || []) || html);
-        return;
-    }
     if(subject?.promptDraftHtml){
         const hasToken = String(subject.promptDraftHtml || '').includes('mention-image-token');
         promptInput.innerHTML = hasToken
@@ -15991,7 +15986,16 @@ function syncCascadeRunButton(node=selectedNode()){
     refreshIcons();
 }
 function loadNodePromptDraftToInput(node){
-    loadPromptDraft(node);
+    if(node?.promptDraftHtml) {
+        const hasToken = String(node.promptDraftHtml || '').includes('mention-image-token');
+        promptInput.innerHTML = hasToken
+            ? node.promptDraftHtml
+            : (promptHtmlWithMentionTokens(node.runPrompt || node.promptDraftText || '', node.runPromptRefs || []) || node.promptDraftHtml);
+    } else {
+        const rebuilt = promptHtmlWithMentionTokens(node?.runPrompt || '', node?.runPromptRefs || []);
+        if(rebuilt) promptInput.innerHTML = rebuilt;
+        else setPromptText(node?.runPrompt || '');
+    }
 }
 async function createSmartComfyTask(payload){
     const res = await fetch('/api/canvas-comfy-tasks', {
@@ -17540,12 +17544,6 @@ async function comfyNameForRef(ref){
 function smartMinimaxPrompt(node){
     const seg = smartMinimaxSelectedSegment(node);
     return String(seg?.prompt || '').trim() || String(node.promptDraftText || '').trim() || inputPromptTextFor(node) || 'Generate a cinematic video clip.';
-}
-function setMinimaxSegmentPrompt(node, segmentId, text){
-    const segment=(node.segments||[]).find(s=>s.id===segmentId);
-    if(!segment || typeof text!=='string')throw new Error('分段或提示词无效');
-    node.selectedSegmentId=segmentId;
-    segment.prompt=text;
 }
 async function smartMinimaxDynamicParams(node){
     const seg = smartMinimaxSelectedSegment(node);
@@ -20396,18 +20394,6 @@ window.onload = async () => {
     initSmartVideoDeconstructionBridge();
     syncApiKindToggleVisibility();
     render();
-    const nativeEditor=window.CanvasAssistantNative?.createEditor({
-        getState:()=>({id:canvasId,updatedAt:Number(canvas?.updated_at||0),nodes,readOnly:!!canvas?.readOnly}),
-        getSnapshot:()=>({nodes:canvasForStorage().nodes,connections:canvas?.connections||[]}),
-        save:()=>saveCanvas(),pushUndo:()=>pushUndo(),render:()=>render(),setLoopPrompts:setSmartLoopPromptFieldValues,setSegmentPrompt:setMinimaxSegmentPrompt,
-        shotHost:()=>window.CanvasVideoDeconstructionBridge,shotModel:window.CanvasVideoDeconstructionModel,
-        applyFields:(node,patch)=>{const fields={...patch};if(Object.hasOwn(fields,'promptDraftText')){setPromptDraftForNode(node,fields.promptDraftText);delete fields.promptDraftText;}Object.assign(node,fields);},
-        createNode:type=>{const point={x:(viewport?.x||0)+120,y:(viewport?.y||0)+120};
-            if(type==='smart-image')return createImageNodeAt(point);
-            const factory={'smart-prompt':createPromptNode,'smart-loop':createLoopNode,'smart-group':createSmartGroupNode,'smart-minimax':createMinimaxNode}[type];
-            return factory?.(point.x,point.y);},
-        check:proposal=>proposal.check(),
-    });
     window.CanvasAssistant?.mount({
         kind:'smart',
         getContext:()=>canvas ? {id:canvasId,title:canvas.title,updatedAt:Number(canvas.updated_at||0),nodes,selectedNodeIds:selectedNodeIds(),creationSettings:smartAssistantCreationSettings()} : null,
@@ -20415,8 +20401,6 @@ window.onload = async () => {
         refresh:()=>mergeReloadCanvasNow(),
         prepareImageRequest:smartAssistantImageRequest,
         generateImage:smartAssistantGenerateImage,
-        nativeSnapshot:()=>nativeEditor?.snapshot(),
-        executeNativeAction:proposal=>nativeEditor.execute(proposal),
         referencePreview:(item,size)=>item.kind==='video' ? smartVideoPreviewHtml(item,size,'preload="none"') : smartPreviewImgHtml(item.thumbnail||item.url,size,'loading="lazy" draggable="false"'),
         bindReferencePreviews:element=>bindSmartPreviewImageFallbacks(element),
         openPromptTemplates:async callback=>{canvasAssistantTemplateCallback=callback;await openPromptTemplatePanel('', '', {target:'assistant'});},
