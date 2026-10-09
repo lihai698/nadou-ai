@@ -1,0 +1,77 @@
+/* 仅普通画布剪辑节点及其所属浮层。颜色服从 canvas.css 主题变量。 */
+.node.clip-node{min-width:560px;min-height:188px;max-width:960px}
+.clip-node .node-head{height:auto;min-height:54px;flex:0 0 auto;padding:10px 12px;gap:10px;overflow:visible;flex-wrap:wrap}
+.clip-title{display:flex;align-items:center;gap:7px;white-space:nowrap;font-size:12px;font-weight:800;color:var(--text)}
+.clip-title svg,.clip-node .tool-btn svg,.clip-panel svg{width:14px;height:14px;flex-shrink:0}
+.clip-summary{font-size:10px;font-weight:500;color:var(--muted);margin-left:3px}
+.clip-actions{display:flex;align-items:center;gap:5px;margin-left:auto}
+.clip-node .tool-btn{height:29px;min-width:29px;padding:0 9px;gap:4px;font-size:10px;white-space:nowrap}
+.clip-node .clip-delete-node{padding:0;width:27px;min-width:27px}
+.clip-node .clip-mobile-open{display:none}
+.clip-editor-panel{width:560px}
+.clip-editor-node{width:100%;min-width:0;outline:none}
+.clip-editor-node .node-head{cursor:default;border-radius:0;padding:0 0 10px;min-height:0}
+.clip-editor-node .node-body{padding:10px 0 0!important;min-height:124px}
+.clip-editor-node .clip-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));width:100%;margin:0}
+.clip-editor-node .clip-actions .tool-btn{height:36px;min-width:0;width:100%;font-size:11px}
+.clip-editor-node .clip-title{width:100%}
+.clip-editor-node .clip-node-hint{white-space:normal;font-size:10px}
+.clip-node .node-body{padding:10px 12px!important;flex:1;min-height:122px;overflow:hidden!important;cursor:default;box-sizing:border-box}
+.clip-axis-scroll{overflow-x:auto;overflow-y:hidden;max-width:100%;scrollbar-width:thin;overscroll-behavior:contain;touch-action:pan-x}
+.clip-axis{position:relative;min-width:720px;height:88px}
+.clip-ruler{position:relative;height:25px;border-bottom:1px solid var(--line);color:var(--muted);font-size:9px}
+.clip-ruler span{position:absolute;top:3px;padding-left:4px;white-space:nowrap}
+.clip-ruler span::after{content:'';position:absolute;left:0;top:16px;width:1px;height:6px;background:var(--line-2)}
+.clip-track{position:relative;height:59px;background:var(--soft);border-radius:8px}
+.clip-piece{position:absolute;top:5px;height:49px;min-width:1px;background:var(--card-solid);border:1px solid var(--line-2);border-radius:7px;box-sizing:border-box;overflow:hidden;cursor:grab;touch-action:none;outline:none}
+.clip-piece.selected{border-color:var(--strong);box-shadow:inset 0 0 0 1px var(--strong)}
+.clip-piece:focus-visible{outline:2px solid var(--strong);outline-offset:1px}
+.clip-film{position:absolute;inset:0;background-color:var(--soft-2);background-size:auto 100%;background-repeat:repeat-x;background-position:left center;opacity:.7;pointer-events:none}
+.clip-piece-label{position:absolute;bottom:0;left:0;right:0;display:flex;align-items:center;gap:3px;padding:3px 5px;background:var(--panel);font-size:9px;color:var(--text);white-space:nowrap;pointer-events:none}
+.clip-piece-label svg{width:11px;height:11px;flex-shrink:0}
+.clip-piece-label span{overflow:hidden;text-overflow:ellipsis;flex:1}
+.clip-piece-label small{font-size:8px;color:var(--muted)}
+.clip-trim{position:absolute;top:0;bottom:0;width:9px;cursor:ew-resize;touch-action:none;z-index:2;display:none}
+.clip-piece.selected .clip-trim{display:block}
+.clip-trim::after{content:'';position:absolute;top:15px;height:16px;width:3px;background:var(--strong);border-radius:3px}
+.clip-trim.left{left:0}.clip-trim.right{right:0}.clip-trim.left::after{left:2px}.clip-trim.right::after{right:2px}
+.clip-node .clip-add{position:absolute;top:10px;height:39px;width:32px;padding:0;border-style:dashed;border-radius:9px}
+.clip-empty-hint{position:absolute;left:54px;top:24px;color:var(--muted);font-size:10px;pointer-events:none}
+.clip-playhead{position:absolute;top:17px;bottom:3px;width:1px;background:var(--strong);pointer-events:none;z-index:3}
+.clip-playhead::before{content:'';position:absolute;top:0;left:-3px;width:7px;height:7px;background:var(--strong);border-radius:2px}
+.clip-snap-guide{position:absolute;top:18px;bottom:0;border-left:1px dashed var(--strong);pointer-events:none;z-index:4}
+.clip-snap-guide::after{content:attr(data-label);position:absolute;top:-17px;left:3px;color:var(--strong);background:var(--card-solid);font-size:9px;white-space:nowrap}
+.clip-node-hint{margin-top:7px;line-height:1.5;font-size:9px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-height:14px}
+.clip-panel{position:fixed;right:20px;bottom:20px;width:440px;max-width:calc(100vw - 28px);max-height:calc(100dvh - 28px);overflow-y:auto;box-sizing:border-box;padding:18px;border:1px solid var(--line);border-radius:18px;background:var(--card-solid);color:var(--text);box-shadow:0 18px 60px var(--shadow);z-index:6000;user-select:none;font-family:inherit;font-size:12px}
+.clip-panel-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;gap:10px}
+.clip-panel-head strong{font-size:13px}
+.clip-panel .tool-btn{height:32px;min-width:32px;padding:0 10px;gap:6px;cursor:pointer;font-family:inherit;font-size:10px}
+.clip-panel-head .tool-btn{padding:0;width:30px}
+.clip-panel button:disabled,.clip-node button:disabled{opacity:.4;cursor:not-allowed}
+.clip-panel button,.clip-panel input{font-family:inherit}
+.clip-screen{aspect-ratio:16/9;position:relative;overflow:hidden;border-radius:11px;background:#000}
+.clip-screen video,.clip-screen img{width:100%;height:100%;object-fit:contain;position:absolute;inset:0}
+.clip-screen [hidden]{display:none}
+.clip-screen-caption{position:absolute;left:9px;bottom:8px;padding:4px 6px;max-width:90%;box-sizing:border-box;background:rgba(0,0,0,.55);color:#fff;border-radius:5px;font-size:9px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.clip-preview-controls{display:flex;align-items:center;gap:8px;margin-top:12px}
+.clip-preview-controls input{flex:1;min-width:0;width:80px;accent-color:var(--strong)}
+.clip-time{font-size:9px;color:var(--muted);white-space:nowrap;font-variant-numeric:tabular-nums}
+.clip-help{font-size:10px;color:var(--muted);line-height:1.7;margin:12px 0 8px}
+.clip-status{font-size:10px;color:var(--muted);line-height:1.8;min-height:16px;margin-top:12px;overflow-wrap:anywhere}
+.clip-option-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px}
+.clip-option{padding:12px 8px;border:1px solid var(--line);border-radius:11px;background:var(--card-solid);color:var(--text);font-size:11px;text-align:left;cursor:pointer;min-width:0}
+.clip-option.active{border-color:var(--strong);box-shadow:inset 0 0 0 1px var(--strong)}
+.clip-option small{display:block;font-size:9px;color:var(--muted);line-height:1.6;margin-top:4px}
+.clip-mute-row{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:15px 0;padding:12px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line);font-size:11px}
+.clip-mute-row small{display:block;font-size:9px;color:var(--muted);margin-top:5px}
+.clip-mute-row input{accent-color:var(--strong);width:17px;height:17px;flex-shrink:0}
+.clip-panel .clip-primary{width:100%;background:var(--strong);color:var(--strong-text);border-color:var(--strong);font-size:11px;height:36px}
+.clip-picker-actions{display:flex;flex-wrap:wrap;gap:8px}
+.clip-picker-actions label{cursor:pointer}
+.clip-picker-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;max-height:330px;overflow:auto}
+.clip-picker-item{padding:0;border:1px solid var(--line);border-radius:10px;background:var(--card-solid);color:var(--text);text-align:left;overflow:hidden;cursor:pointer}
+.clip-picker-item img,.clip-picker-placeholder{display:flex;align-items:center;justify-content:center;width:100%;height:90px;object-fit:contain;background:var(--soft)}
+.clip-picker-item span{display:block;padding:8px;font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.clip-result-row{display:flex;gap:8px;justify-content:space-between;align-items:center;padding-top:9px;font-size:10px;border-top:1px solid var(--line);margin-top:10px}
+.clip-result-row span{min-width:0;overflow-wrap:anywhere}
+@media(max-width:600px){.clip-panel{right:14px;bottom:14px;width:calc(100vw - 28px);padding:14px}.clip-node .node-head{gap:8px}.clip-title{width:100%}.clip-actions{width:100%;justify-content:space-between}.clip-node .tool-btn{padding:0 7px;height:32px}.clip-node .clip-mobile-open{display:flex}.clip-editor-node .clip-actions .tool-btn{height:36px;font-size:11px}.clip-summary{margin-left:auto}.clip-preview-controls{gap:5px}.clip-time{font-size:8px}.clip-panel .clip-preview-controls .tool-btn{padding:0;width:30px;min-width:30px}}

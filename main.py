@@ -167,6 +167,7 @@ from backend.storage_paths import (
 )
 from backend import local_env
 from backend.depth_capture import DepthCaptureManager
+from backend.canvas_clip import CanvasClipManager, CanvasClipConflict
 
 QUIET_ACCESS_PATHS = {
     "/api/queue_status",
@@ -7522,6 +7523,55 @@ def local_media_path_from_url(url: str) -> Optional[str]:
         return path if os.path.commonpath([root, path]) == root and os.path.exists(path) else None
     except ValueError:
         return None
+
+_canvas_clip_manager = None
+_canvas_clip_manager_key = None
+_canvas_clip_manager_lock = Lock()
+
+
+def canvas_clip_manager():
+    global _canvas_clip_manager, _canvas_clip_manager_key
+    key = (os.path.realpath(DATA_DIR), os.path.realpath(OUTPUT_OUTPUT_DIR))
+    with _canvas_clip_manager_lock:
+        if _canvas_clip_manager is None or _canvas_clip_manager_key != key:
+            dirs = dict(_current_storage_dirs())
+            assets_root, legacy_output = ASSETS_DIR, OUTPUT_DIR
+
+            def clip_local_path(url):
+                # 捕获任务开始时的存储映射，避免用户切换存储目录后读到别的素材。
+                return resolve_output_file(url, dirs, assets_root, legacy_output)
+
+            _canvas_clip_manager = CanvasClipManager(
+                DATA_DIR, OUTPUT_OUTPUT_DIR,
+                lambda name: resolve_output_url(name, "output", dirs, assets_root),
+                clip_local_path,
+                [assets_root, legacy_output, *dirs.values()],
+                rewrite_url=rewrite_runninghub_file_url,
+            )
+            _canvas_clip_manager_key = key
+        return _canvas_clip_manager
+
+
+@app.post("/api/canvas-clip/export")
+def create_canvas_clip_export(payload: Dict[str, Any]):
+    try:
+        task = canvas_clip_manager().create(payload)
+    except CanvasClipConflict as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {key: task[key] for key in ("id", "status", "canvas_id", "node_id")}
+
+
+@app.get("/api/canvas-clip/tasks/{task_id}")
+def get_canvas_clip_export(task_id: str):
+    if not re.fullmatch(r"[0-9a-f]{32}", task_id):
+        raise HTTPException(status_code=404, detail="剪辑导出任务不存在")
+    task = canvas_clip_manager().get(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="剪辑导出任务不存在")
+    return task
+
 
 _depth_capture_manager = None
 _depth_capture_manager_key = None
@@ -19838,7 +19888,20 @@ def canvas_workflow_replace_strings(value, mapping):
     if isinstance(value, list):
         return [canvas_workflow_replace_strings(item, mapping) for item in value]
     if isinstance(value, str):
-        return mapping.get(value, value)
+        if value in mapping:
+            return mapping[value]
+        # 剪辑排除来源保存为 JSON 编码的 [sourceNodeId, sourceResultId]。
+        # 多结果以 URL 作稳定身份时，导入资源须同步替换第二项，避免重新灌回已删片段。
+        if value.lstrip().startswith("["):
+            try:
+                source_key = json.loads(value)
+            except (ValueError, TypeError):
+                source_key = None
+            if (isinstance(source_key, list) and len(source_key) == 2
+                    and all(isinstance(item, str) for item in source_key)
+                    and source_key[1] in mapping):
+                return json.dumps([source_key[0], mapping[source_key[1]]], ensure_ascii=False, separators=(",", ":"))
+        return value
     return value
 
 def canvas_workflow_payload(nodes, connections, resources=None):

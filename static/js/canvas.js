@@ -2055,6 +2055,7 @@ async function setCanvasTitle(id, title){
     await patchCanvasMeta(id, {title});
 }
 async function openCanvas(id){
+    window.CanvasClipBridge?.begin?.();
     setStatus('Opening...');
     try {
         const res = await fetch(`/api/canvases/${id}`);
@@ -2147,9 +2148,10 @@ function canvasLocalAssetUrls(nodeList=nodes, logList=canvas?.logs || []){
     const urls = new Set();
     const add = value => {
         const url = outputUrlValue(value);
-        if(url && (url.startsWith('/output/') || url.startsWith('/assets/'))) urls.add(url);
+        if(url && (url.startsWith('/output/') || url.startsWith('/assets/') || url.startsWith('/api/storage-files/'))) urls.add(url);
     };
     nodeList.forEach(node => {
+        (window.CanvasClipHost?.collectUrls(node) || []).forEach(add);
         if(node.url) add(node.url);
         (node.images || []).forEach(add);
         (node.generatedOutputs || []).forEach(add);
@@ -2564,6 +2566,10 @@ function defaultPoint(dx=0, dy=0){ return screenToWorld(window.innerWidth / 2 + 
 function addImageNode(point){
     const p = point || defaultPoint(-120, 0);
     return addNode({id:uid('img'), type:'image', x:p.x, y:p.y, url:'', name:'空白图片'});
+}
+function addClipNode(point){
+    const p = point || defaultPoint(-300, 0);
+    return addNode({id:uid('clip'),type:'clip',x:p.x,y:p.y,w:760,h:196,clipData:window.CanvasClipModel.createData()});
 }
 function addPromptNode(point){
     const p = point || defaultPoint(0, 0);
@@ -3286,9 +3292,13 @@ function closeCreateMenu(){
 function linkCreateOptions(state){
     const node = nodes.find(n => n.id === state?.originId);
     if(!node) return [];
+    if(node.type==='clip') return state.originKind==='out'
+        ? [{type:'output',label:'剪辑结果',icon:'circle-dot'}]
+        : [{type:'image',label:'图片 / 视频素材',icon:'image-plus'},{type:'output',label:'已有结果',icon:'circle-dot'}];
     if(state.originKind === 'out'){
         if(['image','prompt','loop','group','promptGroup','llm','output'].includes(node.type)){
             return [
+                ...(['image','group','output'].includes(node.type)?[{type:'clip',label:'剪辑节点',icon:'scissors'}]:[]),
                 {type:'generator', label:tr('canvas.apiGenerate'), icon:'wand-sparkles'},
                 {type:'midjourney', label:'Midjourney', icon:'panel-top'},
                 {type:'msgen', label:tr('canvas.modelscopeGenerate'), icon:'cloud-lightning'},
@@ -3792,6 +3802,7 @@ function createLinkedNode(type){
     }
 }
 function createNodeByType(type, point){
+    if(type === 'clip') return addClipNode(point);
     if(type === 'image') return addImageNode(point);
     if(type === 'prompt') return addPromptNode(point);
     if(type === 'loop') return addLoopNode(point);
@@ -3810,6 +3821,7 @@ function createNodeByType(type, point){
 }
 function menuAdd(type){
     closeCreateMenu();
+    if(type === 'clip') addClipNode(menuPoint);
     if(type === 'image') addImageNode(menuPoint);
     if(type === 'prompt') addPromptNode(menuPoint);
     if(type === 'loop') addLoopNode(menuPoint);
@@ -6222,7 +6234,81 @@ function measureCanvasOriginalImageNodes(root=nodesEl){
     });
 }
 
+function canvasClipMediaItems(canvasNodes, libraryItems=[], localItems=[]){
+    const current = (canvasNodes || []).flatMap(node => window.CanvasClipHost?.mediaForNode?.(node, canvasNodes) || []);
+    const all = [...current, ...(libraryItems || []), ...(localItems || [])];
+    const unique = new Map();
+    for(const item of all){
+        const url = item?.url || item?.renderUrl;
+        if(!url) continue;
+        const kind = item.kind || mediaKindForOutputItem(item);
+        if(!['image','video'].includes(kind)) continue;
+        if(unique.has(url)) continue;
+        unique.set(url, {
+            ...item,
+            kind, url,
+            name: item.name || outputImageName(url),
+            posterUrl: item.posterUrl || item.thumbnail || item.poster || '',
+            durationSeconds: item.durationSeconds || item.duration,
+            sourceResultId: item.sourceResultId || item.id || url,
+        });
+    }
+    return [...unique.values()];
+}
+function initCanvasClipBridge(){
+    if(!window.CanvasClipHost || window.CanvasClipBridge) return;
+    let generation=0;
+    const durations=new Map();
+    const probeDuration=url=>{
+        if(durations.has(url)) return durations.get(url);
+        const work=new Promise(resolve=>{
+            const video=document.createElement('video');
+            let settled=false;
+            const finish=value=>{
+                if(settled)return;settled=true;clearTimeout(timer);
+                video.onloadedmetadata=null;video.onerror=null;video.removeAttribute('src');video.load();resolve(value);
+            };
+            const timer=setTimeout(()=>finish(undefined),8000);
+            video.preload='metadata';video.muted=true;
+            video.onloadedmetadata=()=>finish(Number.isFinite(video.duration)&&video.duration>0?video.duration:undefined);
+            video.onerror=()=>finish(undefined);video.src=url;
+        });
+        durations.set(url,work);return work;
+    };
+    const bridge=window.CanvasClipHost.create({
+        getState:()=>({canvas,nodes,connections,generation,scale:viewport.scale}),
+        uid,pushUndo,save:scheduleSave,render,probeDuration,
+        onError:error=>setStatus(`剪辑素材同步失败：${error.message}`),
+        select:id=>{selected.clear();selected.add(id);nodesEl.querySelectorAll('.node').forEach(el=>el.classList.toggle('selected',el.dataset.id===id));},
+        deleteNode:id=>deleteNode(id),refreshIcons,download:downloadUrl,
+        listMedia:async()=>{
+            const loaded=await loadCanvasAssetLibrary({renderPanel:false});
+            if(!loaded)throw new Error('资产库加载失败，请重试');
+            const libraryItems=canvasAssetLibraries().flatMap(lib=>(lib.categories||[]).flatMap(cat=>cat.items||[]));
+            return canvasClipMediaItems(nodes, libraryItems, localCanvasAssetLibrary.items || []);
+        },
+        upload:async file=>{
+            const kind=mediaKindForUpload(file);
+            if(!['image','video'].includes(kind))throw new Error('剪辑节点只接收图片和视频');
+            const form=new FormData();form.append('files',file,file.name);
+            const response=await fetch('/api/local-assets/upload',{method:'POST',body:form});
+            const result=await response.json().catch(()=>({}));
+            if(!response.ok)throw new Error(result.detail||'素材上传失败');
+            const item=result.files?.[0];if(!item?.url)throw new Error('上传未返回有效素材，请重试');
+            return {kind,url:item.url,name:item.name||file.name,posterUrl:item.thumbnail||'',durationSeconds:item.durationSeconds||item.duration,sourceResultId:item.id||item.url};
+        },
+    });
+    bridge.begin=()=>{generation++;window.CanvasClipNode?.reconcile(bridge.getContext(),[]);};
+    window.CanvasClipBridge=bridge;
+    document.addEventListener('pointerdown',event=>{
+        if(!event.target.closest('.clip-node,.clip-panel'))window.CanvasClipNode?.closeAll();
+    },true);
+}
 function render(){
+    if(window.CanvasClipBridge){
+        window.CanvasClipNode?.reconcile(window.CanvasClipBridge.getContext(),nodes.filter(n=>n.type==='clip').map(n=>n.id));
+        window.CanvasClipBridge.syncConnected();
+    }
     const outputScrolls = captureOutputScrolls();
     const mediaStates = captureMediaPlaybackStates();
     const oldNodeElements = new Map();
@@ -6262,6 +6348,7 @@ function render(){
 function refreshNodes(ids=[]){
     const uniqueIds = [...new Set((ids || []).filter(Boolean))];
     if(!uniqueIds.length) return;
+    window.CanvasClipBridge?.syncConnected();
     const outputScrolls = captureOutputScrolls();
     applyViewport();
     for(const id of uniqueIds){
@@ -6412,7 +6499,7 @@ function restoreOutputScrolls(state){
     });
 }
 function isNodeControl(target){
-    return !!target.closest('textarea, input, select, option, button, audio, video, [contenteditable="true"], .seg, .gen-btn, .comfy-run, .input-item, .blank-image, .mode-tabs, .ms-model-tabs, .llm-provider, .llm-output, .llm-chat-log, .llm-bubble, .llm-pane-resizer, .loop-preview, .ltx-director-timeline-host, .minimax-canvas-workbench, .pr-wrapper, .pr-toolbar, .pr-viewport, .pr-canvas, .pr-player-controls, .pr-prompt-area');
+    return !!target.closest('textarea, input, select, option, button, audio, video, [contenteditable="true"], .clip-axis-scroll, .clip-node-hint, .clip-panel, .seg, .gen-btn, .comfy-run, .input-item, .blank-image, .mode-tabs, .ms-model-tabs, .llm-provider, .llm-output, .llm-chat-log, .llm-pane-resizer, .loop-preview, .ltx-director-timeline-host, .minimax-canvas-workbench, .pr-wrapper, .pr-toolbar, .pr-viewport, .pr-canvas, .pr-player-controls, .pr-prompt-area');
 }
 function destroyLTXEditor(node){
     if(!node?._ltxEditor) return;
@@ -6447,6 +6534,7 @@ function renderNode(node){
     el.onclick = (e) => {
         e.stopPropagation();
         if(isNodeControl(e.target)) return;
+        window.CanvasClipNode?.closeAll(node.type==='clip'?node.id:undefined);
         if(e.ctrlKey || e.metaKey) selected.has(node.id) ? selected.delete(node.id) : selected.add(node.id);
         else if(!selected.has(node.id)) { selected.clear(); selected.add(node.id); }
         refreshSelectionVisuals();
@@ -6661,6 +6749,7 @@ function renderNode(node){
         body.querySelectorAll('.output-img-wrap').forEach(wrap => bindOutputWrap(wrap, node));
     }
     el.appendChild(body);
+    if(node.type==='clip' && window.CanvasClipBridge) window.CanvasClipNode.mount(el,node,window.CanvasClipBridge.forNode(node.id));
     el.querySelectorAll('button, select, textarea, input').forEach(control => {
         control.addEventListener('mousedown', e => e.stopPropagation(), true);
         control.addEventListener('click', e => e.stopPropagation());
@@ -6669,8 +6758,8 @@ function renderNode(node){
         if(e.button !== 0 || !isNodeDragSurface(e.target)) return;
         startNodeDrag(e, node);
     };
-    const canInput = Boolean(node.depthCapture) || ['generator','midjourney','comfy','ltxDirector','output','llm','msgen','video','rh','minimax'].includes(node.type) || (node.type === 'loop' && (node.imageInput || node.showPrompt));
-    const canOutput = ['image','prompt','loop','group','promptGroup','generator','midjourney','comfy','ltxDirector','llm','msgen','video','rh','minimax','output'].includes(node.type);
+    const canInput = Boolean(node.depthCapture) || ['clip','generator','midjourney','comfy','ltxDirector','output','llm','msgen','video','rh','minimax'].includes(node.type) || (node.type === 'loop' && (node.imageInput || node.showPrompt));
+    const canOutput = ['clip','image','prompt','loop','group','promptGroup','generator','midjourney','comfy','ltxDirector','llm','msgen','video','rh','minimax','output'].includes(node.type);
     if(canInput) el.insertAdjacentHTML('beforeend', `<div class="port in" title="${tr('canvas.connectHere')}"></div>`);
     if(canOutput) el.insertAdjacentHTML('beforeend', `<div class="port out" title="${tr('canvas.dragConnect')}"></div>`);
     el.insertAdjacentHTML('beforeend', `<div class="resize-handle" title="${tr('canvas.resize')}"></div>`);
@@ -6863,6 +6952,7 @@ function refreshOutputNodeContent(node){
     return true;
 }
 function defaultNodeSize(type){
+    if(type === 'clip') return {w:760,h:196};
     if(type === 'image') return {w:260, h:336};
     if(type === 'prompt') return {w:310, h:0};
     if(type === 'loop') return {w:336, h:0};
@@ -16112,6 +16202,7 @@ function duplicateNodesForAltDrag(node, preserveConnections=false){
         }
     });
     remapCanvasDepthCopies(copies, idMap, preserveConnections);
+    window.CanvasClipHost?.remapCopies(copies,idMap);
     nodes.push(...copies);
     if(preserveConnections){
         const copiedConnections = (connections || [])
@@ -16170,6 +16261,7 @@ function pasteNodes(){
             c.items = c.items.map(id => idMap.get(id) || id);
     });
     remapCanvasDepthCopies(copies, idMap);
+    window.CanvasClipHost?.remapCopies(copies,idMap);
     const newConnections = clipConnections
         .map(c => ({...c, id:uid('c'), from:idMap.get(c.from), to:idMap.get(c.to)}))
         .filter(c => c.from && c.to);
@@ -16385,6 +16477,7 @@ function insertWorkflowIntoCanvas(imported){
         }
     });
     remapCanvasDepthCopies(newNodes, idMap);
+    window.CanvasClipHost?.remapCopies(newNodes,idMap);
     const newConnections = srcConnections
         .map(c => ({...c, id:uid('c'), from:idMap.get(c.from), to:idMap.get(c.to)}))
         .filter(c => c.from && c.to);
@@ -16505,8 +16598,9 @@ function startNodeResize(e, node){
 function onNodeResize(e){
     if(!resizeNode) return;
     const min = defaultNodeSize(resizeNode.node.type);
-    const nextW = Math.max(Math.min(min.w, 220), resizeNode.sw + (e.clientX - resizeNode.sx) / viewport.scale);
-    const nextH = Math.max(96, resizeNode.sh + (e.clientY - resizeNode.sy) / viewport.scale);
+    const isClip = resizeNode.node.type==='clip';
+    const nextW = isClip ? Math.max(560,Math.min(960,resizeNode.sw+(e.clientX-resizeNode.sx)/viewport.scale)) : Math.max(Math.min(min.w, 220), resizeNode.sw + (e.clientX - resizeNode.sx) / viewport.scale);
+    const nextH = isClip ? Math.max(188,Math.min(260,resizeNode.sh+(e.clientY-resizeNode.sy)/viewport.scale)) : Math.max(96, resizeNode.sh + (e.clientY - resizeNode.sy) / viewport.scale);
     resizeNode.node.w = Math.round(nextW);
     resizeNode.node.h = Math.round(nextH);
     const el = nodesEl.querySelector(`.node[data-id="${resizeNode.node.id}"]`);
@@ -16614,6 +16708,8 @@ function canConnect(fromId, toId){
     const from = nodes.find(n => n.id === fromId);
     const to = nodes.find(n => n.id === toId);
     if(!from || !to) return false;
+    if(from.type==='clip') return to.type==='output'&&!wouldCreateGeneratorCycle(fromId,toId);
+    if(to.type==='clip') return ['image','group','output',...CANVAS_MEDIA_OUTPUT_TYPES].includes(from.type)&&!wouldCreateGeneratorCycle(fromId,toId);
     if(to.depthCapture?.sourceId === fromId && from.type !== 'image' && from.type !== 'output') return false;
     if(to.depthCapture?.sourceId === fromId) return true;
     if(CANVAS_GENERATOR_TYPES.includes(from.type)){
@@ -17476,6 +17572,7 @@ async function canvasAssistantGenerateImage(proposal,task){
     await saveCanvas();
 }
 window.onload = async () => {
+    initCanvasClipBridge();
     applyTheme(localStorage.getItem('studio_theme') || localStorage.getItem(CANVAS_THEME_KEY) || 'light');
     applyQuickToolbarState();
     if(window.StudioI18n) StudioI18n.apply();

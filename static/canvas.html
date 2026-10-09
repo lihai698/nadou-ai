@@ -26,6 +26,7 @@
     <link rel="stylesheet" href="/static/css/canvas-view-adjust.css?v=2026.10.07.2.1791389262">
     <link rel="stylesheet" href="/static/css/theme.css?v=2026.10.07.2.1791376028">
     <link rel="stylesheet" href="/static/css/canvas-assistant.css?v=2026.10.08.assistant-image.5">
+    <link rel="stylesheet" href="/static/css/canvas-clip.css?v=2026.10.08.1.1791484217">
 </head>
 <body>
     <div id="shell" class="shell no-canvas">
@@ -84,6 +85,7 @@
                 <button class="menu-btn" onclick="menuAdd('rh')"><i data-lucide="workflow" class="w-4 h-4"></i><span data-i18n="canvas.rhGenerate">RH生成</span></button>
                 <button class="menu-btn" onclick="menuAdd('comfy')"><i data-lucide="workflow" class="w-4 h-4"></i><span data-i18n="canvas.comfyGenerate">ComfyUI 生成</span></button>
                 <button class="menu-btn" onclick="menuAdd('ltxDirector')"><i data-lucide="film" class="w-4 h-4"></i><span data-i18n="canvas.ltxDirector">LTX Director</span></button>
+                <button class="menu-btn" onclick="menuAdd('clip')"><i data-lucide="scissors" class="w-4 h-4"></i><span>剪辑节点</span></button>
                 <button class="menu-btn" onclick="menuAdd('output')"><i data-lucide="circle-dot" class="w-4 h-4"></i>Output</button>
             </div>
             <div id="linkCreateMenu" class="create-menu"></div>
@@ -363,6 +365,9 @@
     <script src="/static/js/canvas-view-adjust.js?v=2026.10.07.2.1791389161"></script>
     <script src="/static/js/canvas-depth-capture.js?v=2026.10.07.2.1791399880"></script>
     <script src="/static/js/canvas-assistant.js?v=2026.10.08.assistant-image.5"></script>
-    <script src="/static/js/canvas.js?v=2026.10.08.assistant-image.5"></script>
+    <script src="/static/js/canvas-clip-model.js?v=2026.10.08.1.1791482865"></script>
+    <script src="/static/js/canvas-clip-host.js?v=2026.10.08.1.1791483980"></script>
+    <script src="/static/js/canvas-clip-node.js?v=2026.10.08.1.1791484217"></script>
+    <script src="/static/js/canvas.js?v=2026.10.09.clip.media.1"></script>
 </body>
 </html>
