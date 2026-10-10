@@ -1,0 +1,204 @@
+"""模型、参数校验与界面共享的有限画布工具协议。"""
+from __future__ import annotations
+
+import json
+from typing import Literal
+
+from fastapi import HTTPException
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
+
+from backend.canvas_assistant_operations import AssistantPlan, parse_plan
+
+
+class StrictArgs(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
+class ReadCanvas(StrictArgs):
+    nodeIds: list[str] = Field(default_factory=list, max_length=30)
+    offset: int = Field(default=0, ge=0)
+    limit: int = Field(default=50, ge=1, le=100)
+
+
+class ReadProjectKnowledge(StrictArgs):
+    capabilityId: str = Field(min_length=1, max_length=120)
+    section: str = Field(default="overview", max_length=40)
+
+
+class ReadNodeState(StrictArgs):
+    nodeId: str = Field(min_length=1, max_length=100)
+    textOffset: int = Field(default=0, ge=0)
+    textLimit: int = Field(default=12000, ge=1, le=24000)
+    itemOffset: int = Field(default=0, ge=0)
+    itemLimit: int = Field(default=30, ge=1, le=100)
+    arrayPath: str = Field(default="", max_length=180, description="补读嵌套数组时填 pagination.arrays 返回的字段路径，如 segments.0.refs.image")
+
+
+OperationList = AssistantPlan.model_fields["operations"].annotation
+
+
+class Operations(StrictArgs):
+    operations: OperationList = Field(min_length=1, max_length=20)
+
+
+class ProposeImage(StrictArgs):
+    title: str = Field(default="", max_length=80)
+    prompt: str = Field(min_length=1, max_length=12000)
+
+
+class ReadTask(StrictArgs):
+    proposalId: str = Field(min_length=1, max_length=100)
+
+
+class InspectResult(StrictArgs):
+    assetIds: list[str] = Field(default_factory=list, max_length=8, description='当前画布真实图片或视频素材编号；最多2段视频，每段最多3帧，总视觉输入不超过8张')
+    proposalId: str = Field(default="", max_length=100, description='本轮已确认图片方案或已受理的原生视频 run 动作编号，核对原任务与确认要求')
+
+
+class RecordResultReview(StrictArgs):
+    inspectionId: str = Field(min_length=1, max_length=180)
+    status: Literal['passed', 'needs_changes', 'unknown']
+    findings: list[str] = Field(min_length=1, max_length=12)
+    limitations: list[str] = Field(default_factory=list, max_length=12)
+
+
+class ReadSkill(StrictArgs):
+    skillId: Literal["poster-layout", "reference-edit", "prompt-polish"]
+    file: str = Field(default="SKILL.md", max_length=160)
+
+
+class ReadNativeCapabilities(StrictArgs):
+    nodeId: str = Field(default='',max_length=100)
+    offset: int = Field(default=0,ge=0)
+    limit: int = Field(default=50,ge=1,le=100)
+
+
+class ReadNativeTask(StrictArgs):
+    nodeId: str = Field(min_length=1,max_length=100)
+    taskKind: Literal['depth','image','video','comfy']
+    taskId: str = Field(min_length=1,max_length=240)
+
+
+class ProposeNativeAction(StrictArgs):
+    action: str = Field(min_length=1, max_length=40)
+    nodeId: str = Field(default='', max_length=100)
+    type: str = Field(default='', max_length=40)
+    patch: dict = Field(default_factory=dict, max_length=30)
+    taskKind: Literal['depth','image','video','comfy'] | None = None
+    taskId: str | None = Field(default=None,min_length=1,max_length=240)
+    values: list[str] | None = Field(default=None, max_length=100)
+    memberIds: list[str] | None = Field(default=None, max_length=100)
+    sourceId: str | None = Field(default=None,max_length=100)
+    maxCalls: int | None = Field(default=None,ge=1,le=100)
+    segmentId: str | None = Field(default=None, max_length=100)
+    track: Literal['segments','audioSegments'] | None = None
+    changes: list[dict] | None = Field(default=None,min_length=1,max_length=100)
+    rowId: str | None = Field(default=None,max_length=100)
+    columnId: str | None = Field(default=None,max_length=160)
+    value: str | None = Field(default=None,max_length=12000)
+    columnAction: Literal['add','rename','delete'] | None = None
+    label: str | None = Field(default=None,max_length=60)
+    selectedRowIds: list[str] | None = Field(default=None,max_length=121)
+    clipId: str | None = Field(default=None, max_length=100)
+    clipAction: str | None = Field(default=None, max_length=40)
+    startFrame: int | None = Field(default=None, ge=0)
+    endFrame: int | None = Field(default=None, ge=0)
+    nodeIds: list[str] | None = Field(default=None, min_length=1, max_length=100, description='export 的当前画布节点范围，包含 nodeId；省略时仅导出锚点')
+    includeResources: bool | None = Field(default=None, description='export 必填：false 导出 JSON 资源引用，true 导出含本地资源 ZIP；仅发起浏览器下载')
+    scope: Literal['full','segments','selected'] | None = None
+    destination: Literal['canvas','download'] | None = None
+    exportMuted: bool | None = None
+
+
+class PlanStep(StrictArgs):
+    id: str = Field(min_length=1, max_length=80, pattern=r"^[A-Za-z0-9_-]+$")
+    description: str = Field(min_length=1, max_length=240)
+    dependsOn: list[str] = Field(default_factory=list, max_length=40)
+
+
+class CreatePlan(StrictArgs):
+    goal: str = Field(min_length=1, max_length=12000)
+    steps: list[PlanStep] = Field(min_length=1, max_length=40)
+    preserve: list[str] = Field(default_factory=list, max_length=40)
+    requirements: list[str] = Field(default_factory=list, max_length=40)
+
+
+class ExecutePlanStep(StrictArgs):
+    stepId: str = Field(min_length=1, max_length=80)
+    tool: Literal['read_canvas', 'read_project_knowledge', 'read_node_state', 'read_skill',
+                  'read_native_capabilities', 'read_native_task', 'apply_canvas_operations',
+                  'propose_native_action', 'inspect_result', 'record_result_review']
+    arguments: dict = Field(default_factory=dict)
+
+
+TOOLS = {
+    'execute_plan_step': ('执行计划步骤', '按依赖领取一个步骤，调用已开放工具；完成状态由真实回执决定', ExecutePlanStep),
+    'create_plan': ('保存创作计划', '保存带依赖的创作计划；预算由后端提供，不能由模型扩大', CreatePlan),
+    'read_native_task': ('查询节点原任务','只查询当前节点持久保存的深度/图片/视频/ComfyUI任务，不提交或重试',ReadNativeTask),
+    'read_native_capabilities': ('读取原生动作', '核对当前画布原生编辑合同和尚未开放的动作', ReadNativeCapabilities),
+    'propose_native_action': ('原生动作方案', '保存待确认原生动作，不调用服务、不更换模型、不修改历史结果', ProposeNativeAction),
+    "read_canvas": ("读取画布", "读取当前画布或指定原生节点，回读操作结果", ReadCanvas),
+    "read_project_knowledge": ("读取项目规则", "读取当前版本已登记的节点使用规则和验收状态", ReadProjectKnowledge),
+    "read_node_state": ("读取节点状态", "读取当前画布指定节点的白名单参数、输入输出、任务和结果", ReadNodeState),
+    "apply_canvas_operations": ("操作节点", "整批创建/修改/连接原生节点；不删除、不生成、不更换模型", Operations),
+    "propose_image": ("图片方案", "使用用户已勾选图片模型创建待确认方案；不提交生成", ProposeImage),
+    "read_image_task": ("查询原任务", "只查询本轮已有生成方案的原任务", ReadTask),
+    "inspect_result": ("读取作品", "读取当前画布真实图片或视频素材，视频仅有限时间戳关键帧供下次视觉评价；不能推断全片或音频语义", InspectResult),
+    'record_result_review': ('保存作品核验', '登记刚读取的作品检查与视觉结论；硬条件优先，旧检查或未实际输入图片/视频帧不能判通过', RecordResultReview),
+    "read_skill": ("读取 Skill", "按需读取本轮内置 Skill 正文或白名单引用文档", ReadSkill),
+}
+
+
+def tool_catalog():
+    return [{"name": name, "label": label, "description": description, "parameters": schema.model_json_schema()}
+            for name, (label, description, schema) in TOOLS.items()]
+
+
+def validate_tool(name, arguments):
+    if name not in TOOLS:
+        raise HTTPException(422, "模型请求了未开放的工具，请仅使用列出的画布工具")
+    try:
+        args = TOOLS[name][2].model_validate(arguments)
+        if name == "apply_canvas_operations" and any(op.op == "propose_image" for op in args.operations):
+            raise HTTPException(422, "图片方案请使用 propose_image 工具")
+        return args.model_dump(by_alias=True, exclude_none=True) if name == 'propose_native_action' else args.model_dump(by_alias=True)
+    except ValidationError as exc:
+        fields = ", ".join(".".join(map(str, error["loc"])) for error in exc.errors()[:3])
+        raise HTTPException(422, f"工具参数无效，请按 schema 修正字段：{fields}") from exc
+
+
+class Decision(StrictArgs):
+    reply: str = Field(default="", max_length=24000)
+    tool: str | None = Field(default=None, max_length=80)
+    arguments: dict = Field(default_factory=dict)
+    # 旧结构化响应只用于兼容已有平台模板；不在新提示协议中公开。
+    legacy: bool = Field(default=False, exclude=True)
+
+
+def parse_decision(text):
+    text = str(text or "").strip()
+    if len(text) > 64000:
+        raise HTTPException(422, "模型响应过大，请缩短回复与工具参数")
+    if not text:
+        raise HTTPException(422, "模型返回空内容")
+    candidate = text
+    if candidate.startswith("```") and candidate.endswith("```"):
+        candidate = candidate.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
+    if not candidate.startswith("{"):
+        return Decision(reply=text)
+    try:
+        value = json.loads(candidate)
+        if isinstance(value, dict) and "operations" in value:
+            plan = parse_plan(candidate)
+            return Decision(reply=plan.reply, tool="legacy_operations" if plan.operations else None,
+                            arguments={"operations": [op.model_dump(by_alias=True) for op in plan.operations]}, legacy=True)
+        if isinstance(value, dict) and "legacy" in value:
+            raise ValueError("private field")
+        result = Decision.model_validate(value)
+        if not result.tool and result.arguments:
+            raise ValueError("arguments without tool")
+        if not result.tool and not result.reply.strip():
+            raise ValueError("empty finish")
+        return result
+    except (ValueError, ValidationError) as exc:
+        raise HTTPException(422, '模型协议无效，请返回 {"reply":"说明","tool":null,"arguments":{}} 或列出的工具调用') from exc

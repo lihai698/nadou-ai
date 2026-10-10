@@ -70,7 +70,7 @@ class ChatVideoErrorSanitizationTests(unittest.IsolatedAsyncioTestCase):
                 base_url="https://provider.test",
             )
 
-        payload = SimpleNamespace(
+        payload = main.CanvasLLMRequest(
             provider="test", model="model", ms_model="", system_prompt="", messages=[],
             images=[], videos=[], message="hello",
         )

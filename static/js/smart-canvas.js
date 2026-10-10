@@ -824,6 +824,33 @@ function downloadBlob(blob, filename){
     link.remove();
     setTimeout(() => URL.revokeObjectURL(url), 800);
 }
+async function smartCanvasAssistantExportWorkflow({actionId,nodeId,nodeIds,connectionIds,includeResources,scopeHash,beforeDownload}){
+    if(!canvas || !Array.isArray(nodeIds) || !nodeIds.length) throw new Error('没有可导出的节点范围');
+    const idSet=new Set(nodeIds);
+    const storage=canvasForStorage();
+    const selectedNodes=nodeIds.map(id=>(storage.nodes||[]).find(node=>node.id===id)).filter(Boolean).map(node=>{const item={...node};delete item.assistantExportReceipts;return item;});
+    const selectedConnections=(storage.connections||[]).filter(edge=>idSet.has(edge.from)&&idSet.has(edge.to));
+    if(selectedNodes.length!==nodeIds.length) throw new Error('导出节点范围已变化，请重新读取画布');
+    const expectedConnectionIds=selectedConnections.map(edge=>edge.id).filter(Boolean);
+    if(JSON.stringify(expectedConnectionIds)!==JSON.stringify(connectionIds||expectedConnectionIds)) throw new Error('导出连线范围已变化，请重新读取画布');
+    const format=includeResources?'zip':'json';
+    const filename=smartWorkflowFilename(format);
+    let blob,contentType='application/json';
+    if(includeResources){
+        const res=await fetch('/api/canvas-workflows/export',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({nodes:selectedNodes,connections:selectedConnections,include_resources:true,filename})});
+        if(!res.ok) throw new Error(await responseErrorMessage(res,'导出包含资源的工作流失败'));
+        blob=await res.blob();contentType=res.headers.get('content-type')||'application/zip';
+        const bytes=new Uint8Array(await blob.slice(0,2).arrayBuffer());
+        if(blob.size<=0||bytes[0]!==0x50||bytes[1]!==0x4b) throw new Error('服务返回的 ZIP 文件无效');
+    }else{
+        blob=new Blob([JSON.stringify({format:'infinite-canvas-workflow',version:1,exported_at:Date.now(),nodes:selectedNodes,connections:selectedConnections},null,2)],{type:'application/json'});
+        if(blob.size<=0) throw new Error('工作流 JSON 为空');
+    }
+    if(typeof beforeDownload!=='function')throw new Error('缺少导出内容复核，未发起下载');
+    await beforeDownload();
+    downloadBlob(blob,filename);
+    return {receipt:{actionId:String(actionId),status:'download_started',format,filename,nodeId:String(nodeId||''),nodeIds:[...nodeIds],connectionIds:expectedConnectionIds,includeResources:!!includeResources,scopeHash:String(scopeHash||''),bytes:blob.size,contentType,archiveMagic:includeResources?'PK':'',downloadedAt:Date.now()}};
+}
 function smartWorkflowFilename(ext='json'){
     const title = (canvas?.title || document.getElementById('smartTitle')?.textContent || 'smart-canvas').trim();
     const safe = title.replace(/[\\/:*?"<>|]+/g, '_').replace(/\s+/g, '-').slice(0, 48) || 'smart-canvas';
@@ -3013,7 +3040,10 @@ function renderDynamicParams(){
     restoreOpenControl(keepOpen);
     restoreDynamicParamsScroll(scrollState);
     updatePromptPlaceholder();
+    // renderApiParams 会根据上游音频重新整理文本模型，整理完成后再同步图片/视频切换按钮。
+    syncApiKindToggleVisibility();
     persistActiveSmartSettings();
+    syncRunButtonState();
     if(window.lucide) lucide.createIcons();
 }
 function renderApiParams(){
@@ -3021,10 +3051,7 @@ function renderApiParams(){
     const providers = audioAnalysis ? chatApiProviders() : imageProviders();
     if(!settings.provider_id || !providers.some(p => p.id === settings.provider_id)) settings.provider_id = providers[0]?.id || '';
     const models = audioAnalysis ? providerChatModels(settings.provider_id) : filterJimengImageModels(providerImageModels(settings.provider_id));
-    // renderApiParams 会根据上游音频重新整理文本模型，整理完成后再同步图片/视频切换按钮。
-    syncApiKindToggleVisibility();
     if(!settings.model || !models.includes(settings.model)) settings.model = models[0] || '';
-    syncRunButtonState();
     // 切换平台/模型时保留用户已选的分辨率（记忆），normalizeApiSizeSettings 只会修正非法的 auto。
     normalizeApiSizeSettings('');
     const outpaintLocked = settings.outpaintResolutionLocked === true;
@@ -3380,6 +3407,7 @@ function renderModelControl(models, options={}){
             <div class="smart-popover-title">${escapeHtml(audioAnalysis ? '文本模型' : tr('smart.imageModel'))}</div>
             <div class="model-list">
                 ${models.map(m => `<button type="button" class="direct-option ${m === settings.model ? 'active' : ''}" data-smart-param="model" data-smart-value="${escapeHtml(m)}"><span>${escapeHtml(m)}</span></button>`).join('') || `<div class="muted-note">${escapeHtml(tr('smart.noImageModel'))}</div>`}
+                ${audioAnalysis ? '' : window.CanvasAudio.models(apiProviders.find(p=>p.id===settings.provider_id)).map(m=>`<button class="direct-option" type="button" data-smart-param="model" data-smart-value="audio:${escapeAttr(m)}"><span>音频 · ${escapeHtml(window.CanvasAudio.modelName(apiProviders.find(p=>p.id===settings.provider_id),m))}</span></button>`).join('')}
             </div>
         </div>
     </div>`;
@@ -3387,7 +3415,6 @@ function renderModelControl(models, options={}){
 function msModelLabel(key){
     if(key === 'custom') return tr('smart.custom');
     return MS_GEN_MODELS[key]?.label || key;
-                ${audioAnalysis ? '' : window.CanvasAudio.models(apiProviders.find(p=>p.id===settings.provider_id)).map(m=>`<button class="direct-option" type="button" data-smart-param="model" data-smart-value="audio:${escapeAttr(m)}"><span>音频 · ${escapeHtml(window.CanvasAudio.modelName(apiProviders.find(p=>p.id===settings.provider_id),m))}</span></button>`).join('')}
 }
 function renderMsFunctionControl(){
     return `<div class="smart-control provider-control">
@@ -3757,13 +3784,6 @@ function rhDefaultPromptSuggestion(){
 }
 function updatePromptPlaceholder(){
     if(!promptInput) return;
-    const suggestion = rhDefaultPromptSuggestion();
-    promptInput.dataset.placeholder = suggestion || tr('smart.promptPlaceholder');
-}
-function rhFieldIndexes(fields){
-    const counters = {image:0, video:0, audio:0};
-    const map = {};
-    sortRunningHubFields(fields).forEach(field => {
     if(smartHasAudioAnalysisInput()){
         promptInput.dataset.placeholder='输入音频分析指令（可选）…';
         return;
@@ -3772,6 +3792,13 @@ function rhFieldIndexes(fields){
         promptInput.dataset.placeholder=window.CanvasAudio.operation(settings,apiProviders)==='recognition'?'连接音频后点击运行识别；无需填写提示词':'输入台词或音乐描述…';
         return;
     }
+    const suggestion = rhDefaultPromptSuggestion();
+    promptInput.dataset.placeholder = suggestion || tr('smart.promptPlaceholder');
+}
+function rhFieldIndexes(fields){
+    const counters = {image:0, video:0, audio:0};
+    const map = {};
+    sortRunningHubFields(fields).forEach(field => {
         const kind = rhFieldKind(field);
         if(['image','video','audio'].includes(kind)){
             map[rhParamKey(field.nodeId, field.fieldName)] = counters[kind]++;
@@ -4214,6 +4241,11 @@ function smartComfyRandomValue(field){
     return Math.floor(value);
 }
 function setDynamicSetting(key, value){
+    if(key==='audioModel' && value==='__image__'){settings.audioManualSelection=false;persistActiveSmartSettings();renderDynamicParams();scheduleSave();return;}
+    if(key.startsWith('audio')){settings[key]=value;if(key==='audioProvider'){settings.audioModel='';settings.audioVoice='';}persistActiveSmartSettings();renderDynamicParams();scheduleSave();return;}
+    if(key==='provider_id' && smartHasAudioAnalysisInput()){settings.provider_id=value;settings.model='';persistActiveSmartSettings();renderDynamicParams();scheduleSave();return;}
+    if(key==='model' && String(value).startsWith('audio:')){settings.audioProvider=settings.provider_id;settings.audioModel=String(value).slice(6);settings.audioManualSelection=true;persistActiveSmartSettings();renderDynamicParams();scheduleSave();return;}
+    if(key==='provider_id' && !imageProviders().some(p=>p.id===value) && window.CanvasAudio.providers(apiProviders).some(p=>p.id===value)){settings.audioProvider=value;settings.audioManualSelection=true;persistActiveSmartSettings();renderDynamicParams();scheduleSave();return;}
     const numericKeys = new Set(['count','width','height','videoDuration','enhanceStrength','enhanceUpscaleRes','editUpscaleRes','customRatioWidth','customRatioHeight','customWidth','customHeight','msCustomRatioWidth','msCustomRatioHeight','msCustomWidth','msCustomHeight']);
     const layoutKeys = new Set(['provider_id','model','resolution','ratio','msgenModel','msCustomModel','msResolution','msRatio','videoProvider','videoModel','videoAspect','videoResolution','comfyMode','comfyWorkflow','quality','count','enhanceUpscaleRes','editUpscaleRes','jimengUpscaleRes','rhConfigKey','rhPayment','rhInstanceType']);
     settings[key] = numericKeys.has(key) && value !== '' ? Number(value) : value;
@@ -4221,11 +4253,6 @@ function setDynamicSetting(key, value){
     if(key === 'videoProvider') settings.videoModel = '';
     if(key === 'videoMultimodal') settings._videoMultimodalUserSet = true;
     if(key === 'videoMultimodal' && settings.videoMultimodal) settings.videoUseFrameRoles = false;
-    if(key==='audioModel' && value==='__image__'){settings.audioManualSelection=false;persistActiveSmartSettings();renderDynamicParams();scheduleSave();return;}
-    if(key.startsWith('audio')){settings[key]=value;if(key==='audioProvider'){settings.audioModel='';settings.audioVoice='';}persistActiveSmartSettings();renderDynamicParams();scheduleSave();return;}
-    if(key==='provider_id' && smartHasAudioAnalysisInput()){settings.provider_id=value;settings.model='';persistActiveSmartSettings();renderDynamicParams();scheduleSave();return;}
-    if(key==='model' && String(value).startsWith('audio:')){settings.audioProvider=settings.provider_id;settings.audioModel=String(value).slice(6);settings.audioManualSelection=true;persistActiveSmartSettings();renderDynamicParams();scheduleSave();return;}
-    if(key==='provider_id' && !imageProviders().some(p=>p.id===value) && window.CanvasAudio.providers(apiProviders).some(p=>p.id===value)){settings.audioProvider=value;settings.audioManualSelection=true;persistActiveSmartSettings();renderDynamicParams();scheduleSave();return;}
     normalizeSmartVideoModeSettings(settings, key === 'videoUseFrameRoles');
     if(key === 'comfyMode') applyRecentSmartSettingsForCurrentMode();
     if(key === 'resolution'){
@@ -5628,6 +5655,7 @@ function applyMergedServerCanvas(serverCanvas){
     if(typeof scheduleConnectionLayerRefresh === 'function') scheduleConnectionLayerRefresh();
     if(cleanedState || recoveredLoopOutputs || conflictCopies.length) scheduleSave();
     resumeSmartPendingTasks();
+    resumeSmartAudioTasks();
     resumeJimengPendingNodes();
     return true;
 }
@@ -6031,16 +6059,7 @@ function bindAssetItemEvents(){
             e.dataTransfer.setData('application/x-smart-asset', JSON.stringify(asset));
             e.dataTransfer.setData('text/plain', asset.url || el.dataset.url || '');
         });
-        el.addEventListener('dblclick', e => {
-            const node = selectedNode();
-            if(node?.type !== 'smart-minimax') return;
-            e.preventDefault();
-            e.stopPropagation();
-            hideAssetHoverPreview();
-            const item = (activeAssetCategory()?.items || []).find(x => x.id === el.dataset.assetId);
-            const asset = assetNodeImageFromItem(item || {url:el.dataset.url, name:el.dataset.name, kind:el.dataset.kind});
-            addAssetToSelectedMinimaxRefs(asset);
-        });
+
     });
     assetGrid.querySelectorAll('[data-rename-asset]').forEach(btn => {
         btn.onclick = async e => {
@@ -6250,6 +6269,7 @@ async function loadCanvas(){
         render();
         if(cleanedDetachedInputs || cleanedCompletedState || recoveredLoopOutputs || hiddenCompletedTimers) scheduleSave();
         resumeSmartPendingTasks();
+    resumeSmartAudioTasks();
         resumeJimengPendingNodes();
         startCanvasMetaPoll();
     } catch(e) { toast(tr('smart.toastCanvasFail')); }
@@ -6257,7 +6277,6 @@ async function loadCanvas(){
 function scheduleSave(){
     // Field edits can bypass pushUndo; viewport-only and no-op saves must keep redo.
     if(!undoSuppressed && redoStack.length && historyContentSignature() !== redoBaseContent){
-    resumeSmartAudioTasks();
         redoStack.length = 0;
         redoBaseContent = '';
     }
@@ -6496,6 +6515,7 @@ function cloneSmartNode(node, dx=0, dy=0){
     copy.x = (Number(node.x) || 0) + dx;
     copy.y = (Number(node.y) || 0) + dy;
     clearSmartNodeTransientRunState(copy, {clearRunHistory:true});
+    window.CanvasAudio.detachTask(copy);
     if(copy.type === 'smart-group') copy.title = copy.title || '智能分组';
     return copy;
 }
@@ -6503,7 +6523,6 @@ function copySelectedNodes(){
     if(!canvas || isEditableTarget(document.activeElement)) return;
     const ids = selectedNodeIds();
     const copiedNodes = ids.map(id => nodes.find(n => n.id === id)).filter(Boolean);
-    window.CanvasAudio.detachTask(copy);
     if(!copiedNodes.length) return;
     const idSet = new Set(copiedNodes.map(n => n.id));
     const copiedConnections = (canvas.connections || []).filter(c => idSet.has(c.from) && idSet.has(c.to));
@@ -7300,6 +7319,7 @@ function smartRunPlatformLabel(run){
     return apiProviderById(s.provider_id || '')?.name || s.provider_id || 'API';
 }
 function smartRunRequestMeta(run){
+    if(run?.audioRequest) return {...run.audioRequest};
     const s = run?.settings || {};
     if(s.engine === 'comfy') return {workflow_json:s.comfyWorkflow || '', mode:s.comfyMode || 'text'};
     if(s.engine === 'runninghub') return {
@@ -7307,7 +7327,6 @@ function smartRunRequestMeta(run){
         webapp_id:s.rhAppId || '',
         task_id:s.rhTaskId || '',
         mode:s.rhMode || 'workflow',
-    if(run?.audioRequest) return {...run.audioRequest};
         duration:s.duration || '',
         aspect_ratio:s.aspectRatio || '',
         megapixels:s.megapixels || '',
@@ -8439,6 +8458,7 @@ function smartMinimaxBodyHtml(node){
 }
 
 function nodeBodyHtml(node, layout){
+    if(isSmartImageNode(node)){const audioBody=smartAudioBodyHtml(node);if(audioBody)return audioBody;}
     if(node.depthCapture && !(node.images || []).length){
         const capture = node.depthCapture;
         const running = ['queued','running','submitting','query-error'].includes(capture.status);
@@ -8446,7 +8466,6 @@ function nodeBodyHtml(node, layout){
         return `<div class="canvas-depth-task" style="width:${layout.width}px;min-height:${layout.height}px"><strong>${capture.role === 'pose' ? '骨骼姿态参考' : '灰度深度参考'}</strong><span>${escapeHtml(capture.stage || '准备处理')}${capture.error ? `：${escapeHtml(capture.error)}` : ''}</span><span class="canvas-depth-progress-label">进度 ${progress}%</span><div class="canvas-depth-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${progress}"><i style="width:${progress}%"></i></div><div class="canvas-depth-task-actions">${running && capture.taskId ? '<button type="button" data-depth-action="cancel">取消</button>' : ''}${capture.sourceId && ['failed','cancelled'].includes(capture.status) ? '<button type="button" data-depth-action="retry">重试</button>' : ''}</div></div>`;
     }
     const media = nodeMediaBodyHtml(node, layout);
-    if(isSmartImageNode(node)){const audioBody=smartAudioBodyHtml(node);if(audioBody)return audioBody;}
     const videoEdit = (node.type === 'smart-image' || !node.type) && (node.images || []).length === 1
         && mediaKindForItem(imageForDisplay(node.images[0])) === 'video'
         ? '<button type="button" class="smart-video-edit-direct" data-smart-video-edit="0"><i data-lucide="scan-face"></i><span>编辑</span></button>' : '';
@@ -8683,6 +8702,10 @@ function remapSmartDepthCopies(copies, idMap, preserveExternal=false){
     window.CanvasVideoDeconstructionModel?.remapCopies(copies, idMap);
     const operations = new Map();
     copies.forEach(node => {
+        delete node.assistantNativeRun;
+        delete node.assistantNativeActionId;
+        delete node.assistantMediaExportReceipts;
+        delete node.assistantNativeOrigin;
         const capture = node.depthCapture;
         if(!capture) return;
         const oldOperation = capture.operationId || node.id;
@@ -13549,6 +13572,11 @@ function setPromptDraftForNode(node, text){
     }
 }
 function loadPromptDraft(subject){
+    if(subject?.promptDraftTouched === true){
+        const html=String(subject.promptDraftHtml || '');
+        promptInput.innerHTML=html.includes('mention-image-token') ? html : (promptHtmlWithMentionTokens(subject.promptDraftText || '',subject.runPromptRefs || []) || html);
+        return;
+    }
     if(subject?.promptDraftHtml){
         const hasToken = String(subject.promptDraftHtml || '').includes('mention-image-token');
         promptInput.innerHTML = hasToken
@@ -15317,7 +15345,7 @@ function createPendingOutputFromSource(sourceNode, expectedCount, meta, options=
     const pendingBox = pendingBoxSize(expectedCount, {sourceNode, refs:options.refs || meta?.promptRefs || []});
     const pos = nextOutputPositionForSource(sourceNode, pendingBox);
     const output = {
-        id:uid('smart'),
+        id:options.outputNodeId || uid('smart'),
         type:'smart-image',
         x:pos.x,
         y:pos.y,
@@ -15336,8 +15364,10 @@ function createPendingOutputFromSource(sourceNode, expectedCount, meta, options=
     if(options.connectSource === false) addConnection(sourceNode.id, output.id, 'flow');
     else connectInputNode(sourceNode.id, output.id);
     attachRunMeta(output, options.stripInputMeta ? stripRunInputMeta(meta) : meta);
-    selectedId = sourceNode.id;
-    selectedImage = {nodeId:'', index:-1};
+    if(!options.preserveSelection){
+        selectedId = sourceNode.id;
+        selectedImage = {nodeId:'', index:-1};
+    }
     return output;
 }
 function createParallelLoopOutputNode(templateNode, sourceNode, roundIndex, roundOffset=0){
@@ -15707,7 +15737,7 @@ function downstreamCascadeTargetsFor(node){
     return (canvas?.connections || [])
         .filter(conn => conn.from === node.id && ['input','flow'].includes(conn.kind || 'flow'))
         .map(conn => nodes.find(n => n.id === conn.to))
-        .filter(n => n && !isHistoryGroupNode(n) && (isSmartImageNode(n) || n.type === 'smart-loop'))
+        .filter(n => n && !isHistoryGroupNode(n) && n.assistantNativeOrigin?.kind!=='loop' && (isSmartImageNode(n) || n.type === 'smart-loop'))
         .sort((a, b) => {
             const ax = Number(a.x) || 0, bx = Number(b.x) || 0;
             if(ax !== bx) return ax - bx;
@@ -16023,16 +16053,7 @@ function syncCascadeRunButton(node=selectedNode()){
     refreshIcons();
 }
 function loadNodePromptDraftToInput(node){
-    if(node?.promptDraftHtml) {
-        const hasToken = String(node.promptDraftHtml || '').includes('mention-image-token');
-        promptInput.innerHTML = hasToken
-            ? node.promptDraftHtml
-            : (promptHtmlWithMentionTokens(node.runPrompt || node.promptDraftText || '', node.runPromptRefs || []) || node.promptDraftHtml);
-    } else {
-        const rebuilt = promptHtmlWithMentionTokens(node?.runPrompt || '', node?.runPromptRefs || []);
-        if(rebuilt) promptInput.innerHTML = rebuilt;
-        else setPromptText(node?.runPrompt || '');
-    }
+    loadPromptDraft(node);
 }
 async function createSmartComfyTask(payload){
     const res = await fetch('/api/canvas-comfy-tasks', {
@@ -16043,7 +16064,7 @@ async function createSmartComfyTask(payload){
     if(!res.ok) throw new Error(await smartResponseErrorMessage(res, tr('smart.errRunFailed')));
     return res.json();
 }
-async function waitSmartComfyTaskResult(taskId){
+async function waitSmartComfyTaskResult(taskId, binding=null){
     if(!taskId) throw new Error(tr('smart.errRunFailed'));
     let queryFailures = 0;
     while(true){
@@ -16068,14 +16089,16 @@ async function waitSmartComfyTaskResult(taskId){
             if(res.status === 404){
                 const error = new Error(tr('smart.comfyTaskRestart'));
                 error.restartLost = true;
+                if(binding) error.taskLost = true;
                 throw error;
             }
             throw new Error(await smartResponseErrorMessage(res, tr('smart.errRunFailed')));
         }
         const data = await res.json();
+
         const readyResult = data?.result || data?.outputs || data?.images || data?.videos || data?.audios || data?.texts;
-        if(readyResult && resultMediaUrls(readyResult).length) return data.result || data;
-        if(data.status === 'succeeded') return data.result || {};
+        if(!binding && readyResult && resultMediaUrls(readyResult).length) return data.result || data;
+        if(data.status === 'succeeded') return binding ? data : data.result || {};
         if(data.status === 'unknown'){
             const error = new Error(data.error || '本地任务记录已失效，远端状态未知，请勿直接重新提交');
             error.restartLost = true;
@@ -16083,18 +16106,24 @@ async function waitSmartComfyTaskResult(taskId){
             error.taskData = data;
             throw error;
         }
-        if(data.status === 'failed') throw new Error(data.error || tr('smart.errRunFailed'));
+        if(['failed','cancelled','canceled'].includes(data.status)){
+            const error=new Error(data.error || tr('smart.errRunFailed'));
+            error.taskData=data;
+            throw error;
+        }
         await sleep(1600);
     }
 }
-async function runQueuedSmartComfyGenerate(payload, node){
+async function runQueuedSmartComfyGenerate(payload, node, options={}){
+    if(options.beforeSubmit) await options.beforeSubmit();
     const task = await createSmartComfyTask(payload);
     if(!task?.task_id) throw new Error('任务提交未返回编号，受理状态未知');
+    if(options.onAccepted) await options.onAccepted(task.task_id, task);
     if(!node) return waitSmartComfyTaskResult(task.task_id);
     const pending = {
-        taskId:task.task_id, kind:'comfy', outputKind:node.type === 'smart-minimax' ? 'video' : '',
-        segmentId:node.type === 'smart-minimax' ? smartMinimaxSelectedSegment(node)?.id || '' : '',
-        querying:true
+        taskId:task.task_id, kind:'comfy', outputKind:'',
+        segmentId:'',
+        querying:true, ...(options.pending || {})
     };
     node.pendingTasks = [...smartPendingTasks(node), pending];
     node.pending = node.pendingTasks.length;
@@ -16106,11 +16135,13 @@ async function runQueuedSmartComfyGenerate(payload, node){
     }
     activeSmartComfyTaskPolls.add(task.task_id);
     try {
-        const result = await waitSmartComfyTaskResult(task.task_id);
+        const result = await waitSmartComfyTaskResult(task.task_id, pending.assistantBinding);
+        if(options.onResult) await options.onResult(result);
         node.pendingTasks = smartPendingTasks(node).filter(item => item !== pending);
         node.pending = node.pendingTasks.length;
         return result;
     } catch(error){
+        if(options.onFailure) options.onFailure(error);
         if(error.queryPaused){
             pending.queryPaused = true;
             pending.error = error.message || '暂时无法查询原任务';
@@ -16223,11 +16254,6 @@ async function waitSmartCanvasTaskBatch(node, taskResult){
 }
 async function generateUrlsForCurrentSettings(node, prompt, refs, runSettings=settings, ctx=null){
     const activeSettings = runSettings || settings;
-    if(activeSettings.engine === 'comfy') return generateComfyUrlsWithSettings(activeSettings, prompt, refs, node);
-    if(activeSettings.engine === 'runninghub' && runningHubSelectedModel(activeSettings)){
-        const taskResult = await runApiGeneration(prompt, refs, runningHubModelApiSettings(activeSettings));
-        const warning = recordSmartTaskSubmission(node, taskResult, ctx?.runState);
-        const taskIds = Array.isArray(taskResult?.taskIds) ? taskResult.taskIds : [];
     const audioRefs = audioRefsOnly(refs || []);
     if(isApiLikeEngine(activeSettings.engine)
         && activeSettings.apiKind !== 'video'
@@ -16253,6 +16279,11 @@ async function generateUrlsForCurrentSettings(node, prompt, refs, runSettings=se
         return {urls:[], kind:'text', text:String(response.text || '').trim()};
     }
     if(smartApiAudioMode(node,activeSettings,refs)){const item=await runSmartApiAudio(node,prompt,refs,activeSettings);if(!item)throw new Error('音频任务结果尚未确认');return {urls:item.url?[item]:[],kind:item.kind,text:item.text};}
+    if(activeSettings.engine === 'comfy') return generateComfyUrlsWithSettings(activeSettings, prompt, refs, node);
+    if(activeSettings.engine === 'runninghub' && runningHubSelectedModel(activeSettings)){
+        const taskResult = await runApiGeneration(prompt, refs, runningHubModelApiSettings(activeSettings));
+        const warning = recordSmartTaskSubmission(node, taskResult, ctx?.runState);
+        const taskIds = Array.isArray(taskResult?.taskIds) ? taskResult.taskIds : [];
         if(taskIds.length){
             const urls = await waitSmartCanvasTaskBatch(node, taskResult);
             return {urls, kind:mediaKindForUrls(urls, 'image')};
@@ -16883,7 +16914,224 @@ function runSmartCascadeFromLoop(loopId){
     selectedImage = {nodeId:'', index:-1};
     runSmartCascade(tail);
 }
+function smartAssistantLoopInputSignature(loop,plan){
+    const ids=new Set(plan.scopeNodeIds),runtime=new Set(['assistantNativeRun','running','runStatus','runError','submissionUnknown','submissionWarning']);
+    return JSON.stringify({nodes:nodes.filter(n=>ids.has(n.id)).map(n=>{const copy=cloneSmartSettings(n);if(n.id===loop.id)for(const key of runtime)delete copy[key];return copy;}),connections:(canvas.connections||[]).filter(c=>ids.has(c.from)&&ids.has(c.to)),settings:canvas.settings});
+}
+function validateSmartAssistantLoopSlots(loop, proposal){
+    const run=loop?.assistantNativeRun,plan=proposal.loopPlan;
+    if(!run || run.actionId!==proposal.id || run.inputHash!==proposal.runInputHash || !plan || !run.slots || run.inputSignature!==smartAssistantLoopInputSignature(loop,plan))return false;
+    return plan.steps.every(step=>{
+        const slot=nodes.find(n=>n.id===step.outputNodeId),entry=run.slots[step.key],origin=slot?.assistantNativeOrigin;
+        const incoming=(canvas.connections||[]).filter(c=>c.to===step.outputNodeId);
+        return slot?.type==='smart-image' && entry?.outputNodeId===slot.id && origin?.kind==='loop' && origin.actionId===proposal.id && origin.sourceNodeId===loop.id && origin.inputHash===proposal.runInputHash && origin.stepKey===step.key
+            && slot.loopSourceId===loop.id && slot.loopRootId===step.templateNodeId && slot.loopRoundIndex===step.roundIndex && incoming.length===1 && incoming[0].from===step.templateNodeId && incoming[0].kind==='flow'
+            && !slot.submissionUnknown && (entry.status!=='ready'||!slot.images?.length) && (entry.status!=='succeeded'||JSON.stringify((slot.images||[]).map(i=>i.url).sort())===JSON.stringify((entry.resultUrls||[]).slice().sort()))
+            && (slot.pendingTasks||[]).every(t=>t.assistantNativeActionId===proposal.id && t.assistantLoopStepKey===step.key && entry.taskIds?.includes(t.taskId) && run.taskIds.includes(t.taskId));
+    });
+}
+function validateSmartLoopPendingOutput(slot, task){
+    const loop=nodes.find(n=>n.id===task.assistantSourceNodeId&&n.type==='smart-loop'),run=loop?.assistantNativeRun,entry=run?.slots?.[task.assistantLoopStepKey],origin=slot.assistantNativeOrigin;
+    const incoming=(canvas.connections||[]).filter(c=>c.to===slot.id);
+    if(canvasId!==task.assistantBinding?.canvas_id || !nodes.includes(slot) || run?.actionId!==task.assistantNativeActionId || !entry?.taskIds?.includes(task.taskId) || !run.taskIds.includes(task.taskId) || run.inputSignature!==smartAssistantLoopInputSignature(loop,run.loopPlan)
+        || entry.outputNodeId!==slot.id || origin?.kind!=='loop' || origin.actionId!==run.actionId || origin.sourceNodeId!==loop.id || origin.inputHash!==task.assistantInputHash || origin.stepKey!==task.assistantLoopStepKey
+        || incoming.length!==1 || incoming[0].from!==slot.loopRootId || incoming[0].kind!=='flow'){
+        const error=new Error('循环原轮槽或任务归属已变化，只保留原编号，不回填其它节点');error.queryPaused=true;throw error;
+    }
+}
+async function runSmartAssistantNativeLoop(loop, options){
+    const plan=options.assistantLoopPlan,run=loop?.assistantNativeRun;
+    const reject=message=>{const error=new Error(message);error.submissionKnownRejected=true;throw error;};
+    if(!plan || loop?.type!=='smart-loop' || run?.actionId!==options.assistantNativeActionId || plan.maxCalls!==options.assistantMaxCalls)reject('循环原方案或预算不可用');
+    if(run.unknownCount || loop.submissionUnknown || Object.values(run.slots||{}).some(s=>s.status==='submitting'||s.status==='unknown'))reject('循环有受理未知轮槽，只查询原编号，不重新提交');
+    const ownerCanvas=options.assistantCanvasId;
+    const current=()=>canvasId===ownerCanvas && nodes.includes(loop) && loop.assistantNativeRun===run;
+    const proposal={id:options.assistantNativeActionId,nodeId:loop.id,runInputHash:options.assistantRunInputHash,loopPlan:plan};
+    if(!run.slots){
+        if(plan.steps.some(s=>nodes.some(n=>n.id===s.outputNodeId)))reject('循环新轮槽编号已存在，未提交');
+        pushUndo();run.slots={};run.inputHash=options.assistantRunInputHash;run.loopPlan=cloneSmartSettings(plan);run.inputSignature=smartAssistantLoopInputSignature(loop,plan);
+        for(const step of plan.steps){
+            const template=nodes.find(n=>n.id===step.templateNodeId);
+            if(!template)reject('循环原图片模板已移除');
+            const slot=createLoopOutputSlot(template,step.roundIndex,step.roundOffset,{loopNode:loop,slotIndex:step.roundOffset,outputNodeId:step.outputNodeId});
+            delete slot.assistantNativeRun;delete slot.assistantNativeActionId;
+            slot.assistantNativeOrigin={kind:'loop',actionId:run.actionId,sourceNodeId:loop.id,inputHash:run.inputHash,stepKey:step.key};
+            run.slots[step.key]={outputNodeId:slot.id,taskIds:[],status:'ready'};
+        }
+        render();if(!await saveCanvas()){run.knownRejected=true;reject('循环轮槽尚未保存，未提交任务');}
+    }
+    if(!current() || !validateSmartAssistantLoopSlots(loop,proposal))reject('循环原轮槽或连接已变化');
+    const runState={runKey:loop.id,loopId:loop.id,stopRequested:false,runPath:{states:{}}};
+    if(smartCascadeIsLoopRunning(loop.id))reject('循环仍在执行，请查询原任务');
+    smartCascadeRuns.set(loop.id,runState);syncSmartCascadeLegacyState(loop.id);
+    // 每项受理编号保存后才放行下一次提交；原任务查询可按轮次并行。
+    let submissionTail=Promise.resolve();
+    const acquireSubmission=async()=>{let release;const held=new Promise(resolve=>release=resolve),previous=submissionTail;submissionTail=previous.then(()=>held);await previous;return release;};
+    const pendingFor=(step,taskId)=>({taskId,kind:'image',providerId:step.provider,model:step.model,assistantNativeActionId:run.actionId,assistantMaxCalls:plan.maxCalls,
+        assistantSourceNodeId:loop.id,assistantInputHash:run.inputHash,assistantLoopStepKey:step.key,
+        assistantBinding:{canvas_id:ownerCanvas,node_id:loop.id,assistant_action_id:run.actionId,input_hash:run.inputHash,provider_id:step.provider,model:step.model}});
+    const processRound=async offset=>{
+        const ctx={index:plan.startIndex+offset*plan.batchSize,total:plan.endIndex,nodeId:loop.id,forceWorkflow:!plan.direct,runState,roundOutputs:new Map()};
+        for(const step of plan.steps.filter(s=>s.roundOffset===offset)){
+            throwIfSmartCascadeStopRequested(runState);
+            if(!current() || !validateSmartAssistantLoopSlots(loop,proposal))throw new Error('循环画布、输入轮槽或连接已变化，停止后续提交');
+            const entry=run.slots[step.key],slot=nodes.find(n=>n.id===entry.outputNodeId);
+            if(entry.status==='succeeded'){
+                if(!slot.images?.length)throw new Error('已完成轮槽的原结果已移除，不能重放生成');
+                rememberRoundOutputs(ctx,{id:step.templateNodeId},slot.images);continue;
+            }
+            if(step.kind==='copy'){
+                const original=nodes.find(n=>n.id===run.slots[step.copyFromKey]?.outputNodeId);
+                if(!original?.images?.length)throw new Error('循环复制分支的原结果尚未保存');
+                slot.images=original.images.map(img=>({...img}));slot.pending=0;slot.running=false;entry.status='succeeded';entry.resultUrls=slot.images.map(i=>i.url);
+                rememberRoundOutputs(ctx,{id:step.templateNodeId},slot.images);render();if(!await saveCanvas())throw new Error('复制轮槽尚未保存');continue;
+            }
+            const source=nodes.find(n=>n.id===step.sourceNodeId),requestNode=nodes.find(n=>n.id===step.requestNodeId);
+            const selected=requestNode?.runSettings||{},runSettings=smartLoopRoundSettings(cloneSmartSettings(smartSettingsForNode(requestNode)),ctx);
+            if(selected.engine!=='api'||selected.provider_id!==step.provider||selected.model!==step.model||runSettings.engine!=='api'||runSettings.apiKind==='video'||smartApiAudioMode(requestNode,runSettings))reject('循环原节点引擎或模型已变化');
+            let taskId=entry.taskIds[0];
+            if(!taskId){
+                if(entry.status!=='ready' || slot.images?.length)reject('轮槽已有结果或提交记录，只查询原任务');
+                const refs=plan.direct ? outputImagesForNode(loop,true,ctx) : selfReferenceImagesForNode(source,false,ctx);
+                const defaults=refs.length ? refs : defaultReferenceImagesFor(requestNode,false,ctx);
+                const relayLoops=plan.direct?[]:relayLoopPromptNodesForEdge(source,nodes.find(n=>n.id===step.templateNodeId));
+                const request=buildPromptRequestForNode(requestNode,defaults.length?defaults:null,{...ctx,relayPromptNodeIds:relayLoops.map(n=>n.id)});
+                if(!request.prompt?.trim() || (request.refs||[]).some(r=>r.kind&&r.kind!=='image'))reject('循环当前轮正文为空或包含音视频输入');
+                slot.runPrompt=request.displayPrompt||request.prompt;slot.runModelPrompt=request.prompt;slot.runInputRefs=cloneSmartSettings(request.refs||[]);
+                let releaseSubmission,result;
+                try{result=await runApiGeneration(request.prompt.trim(),request.refs||[],runSettings,{...options,assistantNativeNodeId:loop.id,assistantLoopStepKey:step.key,
+                    beforeSubmit:async()=>{
+                        releaseSubmission=await acquireSubmission();
+                        throwIfSmartCascadeStopRequested(runState);
+                        if(!current()||entry.status!=='ready'||slot.images?.length)reject('循环轮槽已变化');
+                        // 串行保存提交边界；刷新遇到 submitting 只能查询，不猜测零受理。
+                        await options.beforeSubmit();
+                        if(!current()||runState.stopRequested||entry.status!=='ready'||slot.images?.length||!validateSmartAssistantLoopSlots(loop,proposal))reject('循环提交门禁等待期间状态变化');
+                        entry.status='submitting';run.unknownCount=(run.unknownCount||0)+1;
+                        if(!await saveCanvas()){entry.status='ready';run.unknownCount--;reject('提交保护未保存，未调用服务');}
+                        if(!current()||runState.stopRequested){entry.status='ready';run.unknownCount--;reject('循环已停止，未调用服务');}
+                    },
+                    onAccepted:async id=>{
+                        entry.taskIds=[id];entry.status='accepted';run.unknownCount=Math.max(0,(run.unknownCount||0)-1);if(!run.taskIds.includes(id))run.taskIds.push(id);
+                        const pending=pendingFor(step,id);
+                        rememberSmartAcceptedTasks(slot,[pending],ownerCanvas);
+                        slot.pendingTasks=[pending];slot.pending=1;
+                        if(!current())return;
+                        if(!await saveSmartAcceptedTasksBeforeQuery(slot,[id])){runState.stopRequested=true;throw new Error('原任务已受理，编号尚未保存；只重试保存和查询');}
+                        releaseSubmission?.();releaseSubmission=null;
+                    }
+                });
+                taskId=entry.taskIds[0];
+                if(!taskId){
+                    const unknown=(result.submissionFailures||[]).some(f=>f.kind==='unknown');
+                    entry.status=unknown?'unknown':'ready';
+                    if(!unknown && run.unknownCount)run.unknownCount--;run.knownRejected=!unknown&&!run.taskIds.length;
+                    if(unknown){loop.submissionUnknown=true;slot.submissionUnknown=true;runState.submissionUnknown=true;}
+                    throw new Error(result.submissionWarning||'循环轮槽未取得原任务编号，不自动重提');
+                }
+                }finally{releaseSubmission?.();}
+            }
+            if(slot.pendingTasks?.some(t=>t.savePending) || !await saveSmartAcceptedTasksBeforeQuery(slot,[taskId]))throw new Error('原任务编号尚未保存，只重试保存和查询');
+            await resumeSmartPendingNode(slot);
+            if(!current() || !validateSmartAssistantLoopSlots(loop,proposal))throw new Error('循环原归属已变化，保留成果');
+            if(smartPendingTasks(slot).length || !slot.images?.length)throw new Error('循环原任务尚未成功，请查询原编号');
+            entry.status='succeeded';entry.resultUrls=slot.images.map(i=>i.url);rememberRoundOutputs(ctx,{id:step.templateNodeId},slot.images);
+            render();if(!await saveCanvas())throw new Error('循环原结果尚未保存，停止后续轮次');
+        }
+    };
+    try{
+        const offsets=Array.from({length:plan.rounds},(_,i)=>i);
+        if(plan.mode==='parallel'&&plan.rounds>1)await runSmartCascadeRoundsWithLimit(offsets,6,processRound,runState);
+        else for(const offset of offsets)await processRound(offset);
+        run.status='succeeded';run.knownRejected=false;
+    }catch(error){
+        run.error=error.message||'循环运行暂停';run.status=run.unknownCount?'unknown':'paused';
+        if(!run.taskIds.length && run.submissionStarted===false)run.knownRejected=true;
+        if(!run.taskIds.length)throw error;
+    }finally{
+        run.stopped=runState.stopRequested;smartCascadeRuns.delete(loop.id);syncSmartCascadeLegacyState();
+        if(current()){render();await saveCanvas();}
+    }
+}
+async function runSmartAssistantNativeImage(node, options){
+    const reject=message=>{const error=new Error(message);error.submissionKnownRejected=true;throw error;};
+    const group=node?.type==='smart-group';
+    if(!node || !['smart-image','smart-group'].includes(node.type) || smartNodeInFlight(node) || node.submissionUnknown || (!group&&(node.images||[]).length) || node.outpaintSize)
+        reject('此确认入口仅支持无原任务的空智能图片节点；已有结果请使用原入口');
+    const selected=node.runSettings||{};
+    const runSettings=cloneSmartSettings(smartSettingsForNode(node));
+    if(selected.engine!=='api'||runSettings.engine!=='api'||runSettings.apiKind==='video'||smartApiAudioMode(node,runSettings)
+       ||!selected.provider_id||!selected.model||runSettings.provider_id!==selected.provider_id||runSettings.model!==selected.model)
+        reject('智能图片引擎或手选模型已变化，未提交调用');
+    const count=runSettings.count??1;
+    if(!Number.isInteger(count)||count<1||count>8||count!==options.assistantMaxCalls)reject('智能图片确认数量已变化，未提交调用');
+    const request=buildPromptRequestForNode(node,null,smartLoopContext);
+    if(!request.prompt?.trim() || (request.refs||[]).some(ref=>ref.kind && ref.kind!=='image'))reject('图片正文为空或包含音视频输入，未提交调用');
+    const run=node.assistantNativeRun;
+    let output=node;
+    if(group){
+        if(!options.assistantOutputNodeId || !options.assistantRunInputHash || nodes.some(n=>n.id===options.assistantOutputNodeId))reject('智能分组的新结果分支编号无效或已存在，未提交调用');
+        const memberIds=new Set(node.items||[]);
+        if(nodes.some(n=>memberIds.has(n.id)&&(n.type==='smart-loop'||smartNodeInFlight(n))))reject('分组循环或成员原任务尚未结束，请先核对原任务');
+        pushUndo();
+        output=createPendingOutputFromSource(node,count,stripRunInputMeta(snapshotRunMeta(request.prompt,node.id,request.displayPrompt,request.refs)),{connectSource:false,selectOutput:true,preserveSelection:true,refs:request.refs,outputNodeId:options.assistantOutputNodeId});
+        output.assistantNativeOrigin={actionId:options.assistantNativeActionId,sourceNodeId:node.id,inputHash:options.assistantRunInputHash};
+        output.runSettings=cloneSmartSettings(runSettings);
+        run.outputNodeId=output.id;run.inputHash=options.assistantRunInputHash;
+        render();
+        if(!await saveCanvas()){
+            output.pending=0;run.knownRejected=true;
+            reject('分组结果分支尚未保存，未提交调用；请先重试保存');
+        }
+    }
+    const pendingTask=taskId=>({taskId,kind:'image',providerId:runSettings.provider_id,model:runSettings.model,
+        ...(group?{assistantNativeActionId:options.assistantNativeActionId,assistantMaxCalls:options.assistantMaxCalls,assistantSourceNodeId:node.id,assistantInputHash:options.assistantRunInputHash,
+            assistantBinding:{canvas_id:options.assistantCanvasId,node_id:node.id,assistant_action_id:options.assistantNativeActionId,input_hash:options.assistantRunInputHash,provider_id:runSettings.provider_id,model:runSettings.model}}: {})});
+    node.running=true;render();
+    try{
+        // 提交前不改变画布、全局设置或原输入，让原确认门禁核对真实的原状态。
+        const result=await runApiGeneration(request.prompt.trim(),request.refs||[],runSettings,{
+            ...options,onAccepted:async taskId=>{
+                if(!run.taskIds.includes(taskId))run.taskIds.push(taskId);
+                // 每项收到编号就用原生本地恢复备份保存，不等待同批其它响应。
+                rememberSmartAcceptedTasks(output,[{...pendingTask(taskId),
+                    assistantNativeActionId:options.assistantNativeActionId,assistantMaxCalls:options.assistantMaxCalls}],options.assistantCanvasId);
+                if(group){
+                    output.pendingTasks=run.taskIds.map(pendingTask);output.pending=run.taskIds.length;
+                    if(canvasId!==options.assistantCanvasId || !nodes.includes(node) || !nodes.includes(output) || node.assistantNativeRun!==run)return;
+                    await saveSmartAcceptedTasksBeforeQuery(output,[taskId]);
+                }
+            }
+        });
+        run.unknownCount=result.submissionFailures.filter(item=>item.kind==='unknown').length;
+        run.warning=recordSmartTaskSubmission(node,result);
+        if(run.unknownCount)node.submissionUnknown=true;
+        if(!run.taskIds.length){
+            const error=new Error(run.warning||'未取得原任务编号，请查询；不自动重新提交');
+            error.submissionKnownRejected=!run.unknownCount;throw error;
+        }
+        if(group&&(canvasId!==options.assistantCanvasId || !nodes.includes(node) || !nodes.includes(output) || node.assistantNativeRun!==run))return;
+        output.pendingTasks=run.taskIds.map(pendingTask);
+        output.pending=run.taskIds.length;node.running=false;output.runStartedAt=nowMs();output.runTimerHidden=false;
+        output.runPrompt=request.displayPrompt||request.prompt;output.runModelPrompt=request.prompt;
+        output.runInputRefs=cloneSmartSettings(request.refs||[]);output.runPromptRefs=cloneSmartSettings(request.refs||[]);
+        if(group&&run.unknownCount)output.submissionUnknown=true;
+        render();
+        if(!await saveSmartAcceptedTasksBeforeQuery(output,run.taskIds))return;
+        await resumeSmartPendingNode(output);
+    }catch(error){
+        run.error=error.message||'智能图片运行失败';run.knownRejected=!!error.submissionKnownRejected||run.submissionStarted===false;
+        scheduleSave();
+        if(!run.taskIds.length)throw error;
+        // 已有编号后只保留原生恢复入口，禁止用轮询/保存错误重放提交。
+    }finally{
+        if(group&&!run.taskIds.length&&!run.unknownCount&&run.knownRejected){output.pending=0;output.running=false;}
+        node.running=false;render();
+    }
+    scheduleSave();
+}
 async function runGeneration(options={}){
+    if(options.assistantNativeActionId)return runSmartAssistantNativeImage(nodes.find(n=>n.id===options.assistantNativeNodeId),options);
     const node = options.assistantProposal ? nodes.find(n=>n.id===options.assistantProposal.nodeId) : selectedNode();
     if(node?.type === 'smart-minimax') return runMinimaxNode(node.id);
     if(!node || smartNodeInFlight(node)) return;
@@ -17099,13 +17347,13 @@ async function runGeneration(options={}){
         render();
     }
 }
-async function runPromptLLMNode(nodeId){
+async function runPromptLLMNode(nodeId, options={}){
     const node = nodes.find(n => n.id === nodeId);
     if(!node || node.type !== 'smart-prompt') return;
     const message = promptNodeLLMInputText(node).trim();
     if(!message){ toast(tr('smart.promptLlmNeedText')); return; }
     const systemPrompt = (node.llmSystemPrompt || '').trim();
-    node.llmEnabled = true;
+    if(!options.assistantNativeActionId) node.llmEnabled = true;
     node.running = true;
     render();
     try {
@@ -17114,6 +17362,13 @@ async function runPromptLLMNode(nodeId){
         const mediaRefs = promptNodeInputMediaForLLM(node);
         const images = imageRefsOnly(mediaRefs).map(img => img.url).filter(Boolean);
         const videos = videoRefsOnly(mediaRefs).map(video => video.url).filter(Boolean);
+        if(options.assistantNativeActionId){
+            if(!node.llmEnabled || !node.llmProvider || !node.llmModel || provider!==node.llmProvider || model!==node.llmModel){
+                const error=new Error('智能提示词的文本模型或 LLM 开关已变化，未提交调用');
+                error.submissionKnownRejected=true;throw error;
+            }
+        }
+        if(options.beforeSubmit) await options.beforeSubmit();
         const result = await fetch('/api/canvas-llm', {
             method:'POST',
             headers:{'Content-Type':'application/json'},
@@ -17131,11 +17386,24 @@ async function runPromptLLMNode(nodeId){
             if(!r.ok) throw new Error(await r.text());
             return r.json();
         });
-        node.text = (result.text || '').trim();
+        const output = (result.text || '').trim();
+        if(options.assistantNativeActionId && !output) throw new Error('LLM 返回空文本，原正文已保留');
+        node.text = output;
         node.llmProvider = provider;
         node.llmModel = model;
+        if(options.assistantNativeActionId){
+            node.assistantNativeRun.status='succeeded';
+            node.assistantNativeRun.outputText=output;
+        }
         scheduleSave();
     } catch(e) {
+        if(options.assistantNativeActionId){
+            node.assistantNativeRun.status='failed';
+            node.assistantNativeRun.error=e.message || tr('smart.promptLlmFailed');
+            node.assistantNativeRun.knownRejected=!!e.submissionKnownRejected || node.assistantNativeRun.submissionStarted===false;
+            scheduleSave();
+            throw e;
+        }
         toast((e.message || tr('smart.promptLlmFailed')).slice(0, 160));
     } finally {
         node.running = false;
@@ -17242,8 +17510,13 @@ async function runApiGeneration(prompt, refs, runSettings=settings, options={}){
         n:1,
         reference_images:imageRefsOnly(refs).slice(0, SMART_REFERENCE_IMAGE_MAX)
     };
+    if(options.assistantNativeActionId && options.assistantRunInputHash){
+        Object.assign(payload,{assistant_action_id:options.assistantNativeActionId,canvas_id:options.assistantCanvasId,node_id:options.assistantNativeNodeId,input_hash:options.assistantRunInputHash});
+        if(options.assistantLoopStepKey)payload.assistant_slot_key=options.assistantLoopStepKey;
+    }
     const settled = await Promise.allSettled(Array.from({length:count}, async () => {
         if(options.acceptedTask?.task_id) return options.acceptedTask.task_id;
+        if(options.beforeSubmit){try{await options.beforeSubmit();}catch(error){error.submissionKnownRejected=true;throw error;}}
         const response = await fetch('/api/canvas-image-tasks', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
         if(!response.ok){
             const error = new Error((await response.text().catch(() => '')) || `HTTP ${response.status}`);
@@ -17252,10 +17525,11 @@ async function runApiGeneration(prompt, refs, runSettings=settings, options={}){
         }
         const task = await response.json();
         if(!task?.task_id) throw new Error('任务提交未返回编号，受理状态未知');
+        if(options.onAccepted)await options.onAccepted(task.task_id);
         return task.task_id;
     }));
     const submissionFailures = settled.flatMap((item, index) => item.status === 'rejected'
-        ? [{index:index + 1, kind:item.reason?.submissionRejected ? 'rejected' : 'unknown', message:item.reason?.message || String(item.reason)}]
+        ? [{index:index + 1, kind:item.reason?.submissionRejected || item.reason?.submissionKnownRejected ? 'rejected' : 'unknown', message:item.reason?.message || String(item.reason)}]
         : []);
     return {
         taskIds:settled.filter(item => item.status === 'fulfilled').map(item => item.value),
@@ -17901,10 +18175,10 @@ function readSmartUnsavedAcceptedTasks(id){
         return Array.isArray(entries) ? entries : [];
     } catch(_) { return []; }
 }
-function rememberSmartAcceptedTasks(node, tasks=[]){
-    const key = smartUnsavedAcceptedTasksKey();
+function rememberSmartAcceptedTasks(node, tasks=[], ownerCanvasId){
+    const key = smartUnsavedAcceptedTasksKey(ownerCanvasId);
     if(!key || !node?.id || typeof localStorage === 'undefined') return false;
-    const entries = readSmartUnsavedAcceptedTasks();
+    const entries = readSmartUnsavedAcceptedTasks(ownerCanvasId);
     (tasks || []).forEach(task => {
         const taskId = String(task?.taskId || '').trim().slice(0, 256);
         if(!taskId) return;
@@ -17917,8 +18191,19 @@ function rememberSmartAcceptedTasks(node, tasks=[]){
             segmentId:String(task.segmentId || '').slice(0, 128),
             startedAt:Number(task.startedAt || nowMs())
         };
+        if(task.assistantNativeActionId){
+            entry.assistantNativeActionId=String(task.assistantNativeActionId).slice(0,160);
+            entry.assistantMaxCalls=Number(task.assistantMaxCalls)||1;
+            if(task.assistantBinding)entry.assistantBinding={...task.assistantBinding};
+            if(task.segmentInputSignature)entry.segmentInputSignature=String(task.segmentInputSignature);
+            if(task.assistantSourceNodeId){
+                entry.assistantSourceNodeId=String(task.assistantSourceNodeId).slice(0,100);
+                entry.assistantInputHash=String(task.assistantInputHash||'').slice(0,64);
+                if(task.assistantLoopStepKey)entry.assistantLoopStepKey=String(task.assistantLoopStepKey).slice(0,80);
+            }
+        }
         const index = entries.findIndex(item => item?.taskId === taskId);
-        if(index >= 0) entries[index] = entry;
+        if(index >= 0) entries[index] = {...entries[index],...entry};
         else entries.push(entry);
     });
     try {
@@ -17946,6 +18231,30 @@ function restoreSmartUnsavedAcceptedTasks(){
         const taskId = String(entry?.taskId || '').trim();
         const node = nodes.find(item => item?.id === entry?.nodeId);
         if(!taskId || !node) return;
+        if(entry.assistantLoopStepKey){
+            const owner=nodes.find(n=>n.id===entry.assistantSourceNodeId&&n.type==='smart-loop'),run=owner?.assistantNativeRun,slot=run?.slots?.[entry.assistantLoopStepKey],origin=node.assistantNativeOrigin;
+            if(!run || run.actionId!==entry.assistantNativeActionId || slot?.outputNodeId!==node.id || origin?.kind!=='loop' || origin.actionId!==run.actionId || origin.sourceNodeId!==owner.id || origin.inputHash!==entry.assistantInputHash || origin.stepKey!==entry.assistantLoopStepKey)return;
+            if(!run.taskIds.includes(taskId))run.taskIds.push(taskId);
+            if(['submitting','unknown'].includes(slot.status))run.unknownCount=Math.max(0,(run.unknownCount||0)-1);
+            slot.taskIds=[taskId];if(slot.status!=='succeeded')slot.status='accepted';
+            if(!run.unknownCount && !Object.values(run.slots).some(s=>['submitting','unknown'].includes(s.status))){owner.submissionUnknown=false;node.submissionUnknown=false;}
+        }
+        if(!entry.assistantLoopStepKey && entry.assistantNativeActionId && Number.isInteger(entry.assistantMaxCalls) && entry.assistantMaxCalls>=1 && entry.assistantMaxCalls<=8){
+            const sameAction=entries.filter(item=>item?.nodeId===node.id && item.assistantNativeActionId===entry.assistantNativeActionId);
+            const recoveredIds=[...new Set(sameAction.map(item=>String(item.taskId||'').trim()).filter(Boolean))];
+            const owner=entry.assistantSourceNodeId ? nodes.find(n=>n.id===entry.assistantSourceNodeId&&n.type==='smart-group') : node;
+            const origin=node.assistantNativeOrigin;
+            if(entry.assistantSourceNodeId && (!owner || origin?.sourceNodeId!==owner.id || origin.actionId!==entry.assistantNativeActionId || origin.inputHash!==entry.assistantInputHash))return;
+            const prior=owner.assistantNativeRun;
+            if(!prior || prior.actionId===entry.assistantNativeActionId){
+                const taskIds=[...new Set([...(prior?.taskIds||[]),...recoveredIds])];
+                const unknownCount=Math.max(Number(prior?.unknownCount)||0,entry.assistantMaxCalls-taskIds.length);
+                owner.assistantNativeRun={...prior,actionId:entry.assistantNativeActionId,taskKind:entry.kind==='comfy'?'comfy':'image',taskIds,submissionStarted:true,unknownCount,
+                    ...(entry.assistantSourceNodeId?{outputNodeId:node.id,inputHash:entry.assistantInputHash}:{}),
+                    ...(entry.assistantBinding?{assistantBinding:{...entry.assistantBinding},segmentId:entry.segmentId,segmentInputSignature:entry.segmentInputSignature}: {})};
+                if(unknownCount){owner.submissionUnknown=true;node.submissionUnknown=true;}
+            }
+        }
         const existing = smartPendingTasks(node).find(task => task.taskId === taskId);
         if(existing){
             alreadySaved.push(taskId);
@@ -17957,6 +18266,9 @@ function restoreSmartUnsavedAcceptedTasks(){
                 providerId:String(entry.providerId || ''),
                 model:String(entry.model || ''),
                 segmentId:String(entry.segmentId || ''),
+                ...(entry.assistantSourceNodeId?{assistantNativeActionId:entry.assistantNativeActionId,assistantSourceNodeId:entry.assistantSourceNodeId,assistantInputHash:entry.assistantInputHash}:{}),
+                ...(entry.assistantLoopStepKey?{assistantLoopStepKey:entry.assistantLoopStepKey}:{}),
+                ...(entry.assistantBinding?{assistantNativeActionId:entry.assistantNativeActionId,assistantMaxCalls:entry.assistantMaxCalls,assistantBinding:{...entry.assistantBinding},segmentInputSignature:entry.segmentInputSignature}:{}),
                 startedAt:Number(entry.startedAt || nowMs()),
                 querying:false,
                 queryPaused:true,
@@ -18258,9 +18570,10 @@ function resumeJimengPendingNodes(){
         startJimengPoll(n);
     });
 }
-async function pollSmartCanvasTask(taskId){
+async function pollSmartCanvasTask(taskId, binding=null){
     if(!taskId) throw new Error(tr('smart.errRunFailed'));
-    if(activeSmartTaskPolls.has(taskId)) return activeSmartTaskPolls.get(taskId);
+    const pollKey=binding?JSON.stringify([taskId,binding]):taskId;
+    if(activeSmartTaskPolls.has(pollKey)) return activeSmartTaskPolls.get(pollKey);
     const promise = (async () => {
         let queryFailures = 0;
         for(let i = 0; i < 900; i++){
@@ -18283,6 +18596,9 @@ async function pollSmartCanvasTask(taskId){
                 }
                 throw e;
             }
+            if(binding && ((task.task_id||task.id)!==taskId || Object.entries(binding).some(([key,value])=>task[key]!==value))){
+                const error=new Error('原图片任务的画布、分组、动作、输入或模型归属不匹配；保留原编号');error.queryPaused=true;throw error;
+            }
             if(task.status === 'succeeded') return task.result || {};
             if(task.status === 'jimeng_pending') throw new JimengPendingSignal({submitId:task.submit_id, kind:task.kind, queueInfo:task.queue_info, message:task.message});
             if(task.status === 'unknown'){
@@ -18301,11 +18617,11 @@ async function pollSmartCanvasTask(taskId){
         }
         throw new Error(tr('smart.errRunTimeout'));
     })();
-    activeSmartTaskPolls.set(taskId, promise);
+    activeSmartTaskPolls.set(pollKey, promise);
     try {
         return await promise;
     } finally {
-        activeSmartTaskPolls.delete(taskId);
+        activeSmartTaskPolls.delete(pollKey);
     }
 }
 function prepareSmartVideoTask(node){
@@ -18458,6 +18774,7 @@ function finalizeSmartPendingTask(node, taskId, images, kind='image'){
     node.pending = Math.max(0, Number(node.pending || 0) - 1);
     const ext = kind === 'video' ? 'mp4' : kind === 'audio' ? 'mp3' : kind === 'text' ? 'txt' : 'png';
     const mediaItems = resultMediaUrls(images);
+    if(mediaItems.length) delete node.audioOutputText;
     const existing = cleanHistoryImages(node.images || []);
     const seen = new Set(existing.map(img => `${img.kind || ''}|${img.url || ''}`));
     const additions = cleanHistoryImages((mediaItems || []).map((item, i) => {
@@ -18469,7 +18786,6 @@ function finalizeSmartPendingTask(node, taskId, images, kind='image'){
         if(seen.has(key)) return false;
         seen.add(key);
         return true;
-    if(mediaItems.length) delete node.audioOutputText;
     });
     node.images = [...existing, ...additions];
     if(additions.length) node.outputKind = kind;
@@ -18492,6 +18808,16 @@ function finalizeSmartPendingTask(node, taskId, images, kind='image'){
         else node.scale = mediaNodeDefaultScale(node);
         delete node.w;
         delete node.h;
+    }
+}
+function validateSmartGroupPendingOutput(node, task){
+    if(task.assistantLoopStepKey)return validateSmartLoopPendingOutput(node,task);
+    if(!task.assistantSourceNodeId)return;
+    const source=nodes.find(n=>n.id===task.assistantSourceNodeId&&n.type==='smart-group'),run=source?.assistantNativeRun,origin=node.assistantNativeOrigin;
+    const incoming=(canvas.connections||[]).filter(c=>c.to===node.id);
+    if(!nodes.includes(node) || canvasId!==task.assistantBinding?.canvas_id || !source || run?.actionId!==task.assistantNativeActionId || run.outputNodeId!==node.id || !run.taskIds?.includes(task.taskId)
+        || origin?.actionId!==task.assistantNativeActionId || origin.sourceNodeId!==source.id || origin.inputHash!==task.assistantInputHash || incoming.length!==1 || incoming[0].from!==source.id || incoming[0].kind!=='flow'){
+        const error=new Error('智能分组原结果分支或归属已变化，保留原编号，不回填其它节点');error.queryPaused=true;throw error;
     }
 }
 async function resumeSmartPendingNode(node, logContext={}, onlyTaskId=''){
@@ -18517,11 +18843,13 @@ async function resumeSmartPendingNode(node, logContext={}, onlyTaskId=''){
         task.querying = true;
         render();
         try {
+            if(task.assistantSourceNodeId)validateSmartGroupPendingOutput(node,task);
             const result = task.kind === 'comfy'
-                ? await waitSmartComfyTaskResult(task.taskId)
+                ? await waitSmartComfyTaskResult(task.taskId,task.assistantBinding)
                 : task.kind === 'video'
                     ? await pollSmartVideoCanvasTask(task.taskId, {forceRefresh:Boolean(task.remoteRefreshable)})
-                    : await pollSmartCanvasTask(task.taskId);
+                    : await pollSmartCanvasTask(task.taskId,task.assistantBinding);
+            if(task.assistantSourceNodeId)validateSmartGroupPendingOutput(node,task);
             const outputs = resultMediaUrls(result?.image_items?.length ? result.image_items : (result?.images?.length ? result.images : result));
             if(task.kind === 'comfy' && node.type === 'smart-minimax'){
                 const segment = (node.segments || []).find(item => item.id === task.segmentId);
@@ -18535,6 +18863,10 @@ async function resumeSmartPendingNode(node, logContext={}, onlyTaskId=''){
             } else {
                 const kind = task.kind === 'comfy' ? mediaKindForUrls(outputs, task.outputKind || 'image') : task.kind || 'image';
                 finalizeSmartPendingTask(node, task.taskId, outputs, kind);
+                if(task.assistantLoopStepKey){
+                    const owner=nodes.find(n=>n.id===task.assistantSourceNodeId&&n.type==='smart-loop'),entry=owner?.assistantNativeRun?.slots?.[task.assistantLoopStepKey];
+                    if(entry && outputs.length){entry.status='succeeded';entry.resultUrls=(node.images||[]).map(i=>i.url);}
+                }
             }
             render();
             scheduleSave();
@@ -20387,6 +20719,8 @@ async function smartAssistantImageRequest(proposal){
     const node=nodes.find(n=>n.id===proposal.nodeId && n.type==='smart-image');
     if(!canvas || canvasId!==proposal.canvasId || !node) throw new Error('画布或生成节点已变化，请重新提出方案');
     if(smartNodeInFlight(node)) throw new Error('该节点还有原任务，请先在画布查询或恢复原任务');
+    // 方案确认时以用户本轮明确选择的平台/模型为准，避免沿用画布中旧生成节点的配置。
+    if(proposal.provider && proposal.model){ node.runSettings={...(node.runSettings||{}),provider_id:proposal.provider,model:proposal.model}; }
     const runSettings=smartSettingsForNode(node);
     return {prompt:proposal.prompt,provider_id:runSettings.provider_id,model:runSettings.model,size:sizeForRun(runSettings),
         aspect_ratio:API_RATIO_VALUES[runSettings.ratio]||(runSettings.ratio==='custom'?String(runSettings.customRatio||'').trim():''),resolution:['1k','2k','4k'].includes(runSettings.resolution)?runSettings.resolution:'',
@@ -20471,6 +20805,36 @@ window.onload = async () => {
     initSmartVideoDeconstructionBridge();
     syncApiKindToggleVisibility();
     render();
+    const nativeEditor=window.CanvasAssistantNative?.createEditor({
+        getState:()=>({id:canvasId,kind:'smart',updatedAt:Number(canvas?.updated_at||0),nodes,connections:canvas?.connections||[],readOnly:!!canvas?.readOnly}),
+        getSnapshot:()=>({nodes:canvasForStorage().nodes,connections:canvas?.connections||[]}),
+        save:()=>saveCanvas(),pushUndo:()=>pushUndo(),render:()=>render(),setLoopPrompts:setSmartLoopPromptFieldValues,setGroupMembers:setSmartGroupMemberIds,
+        exportWorkflow:typeof smartCanvasAssistantExportWorkflow==='function'?smartCanvasAssistantExportWorkflow:null,
+        connectNodes:connectInputNode,
+        runLLMNode:(node,options)=>runPromptLLMNode(node.id,options),
+        runNode:(node,options)=>node?.type==='smart-loop' ? runSmartAssistantNativeLoop(node,options) : runGeneration({...options,assistantNativeNodeId:node.id}),
+        validateLoopSlots:(node,proposal)=>validateSmartAssistantLoopSlots(node,proposal),
+        applyTask:async(node,task,kind)=>{
+
+            if(kind==='depth')return updateSmartDepthCapture(smartDepthPair(node),task,node.depthCapture.operationId);
+            const id=task.task_id||task.id;
+            if(task.status==='succeeded'){
+                const outputs=resultMediaUrls(task.image_items?.length?task.image_items:task);
+                if(!outputs.length)throw new Error('原任务成功但没有可回填的媒体结果');
+                finalizeSmartPendingTask(node,id,outputs,kind);render();
+            }else if(task.status==='failed'){
+                const pending=smartPendingTasks(node).find(p=>p.taskId===id);
+                if(pending){pending.querying=false;await resumeSmartPendingNode(node,{},id);}
+            }
+        },
+        shotHost:()=>window.CanvasVideoDeconstructionBridge,shotModel:window.CanvasVideoDeconstructionModel,
+        applyFields:(node,patch)=>{const fields={...patch};if(Object.hasOwn(fields,'promptDraftText')){setPromptDraftForNode(node,fields.promptDraftText);delete fields.promptDraftText;}Object.assign(node,fields);},
+        createNode:type=>{const point={x:(viewport?.x||0)+120,y:(viewport?.y||0)+120};
+            if(type==='smart-image')return createImageNodeAt(point);
+            const factory={'smart-prompt':createPromptNode,'smart-loop':createLoopNode,'smart-group':createSmartGroupNode}[type];
+            return factory?.(point.x,point.y);},
+        check:proposal=>proposal.check(),
+    });
     window.CanvasAssistant?.mount({
         kind:'smart',
         getContext:()=>canvas ? {id:canvasId,title:canvas.title,updatedAt:Number(canvas.updated_at||0),nodes,selectedNodeIds:selectedNodeIds(),creationSettings:smartAssistantCreationSettings()} : null,
@@ -20478,6 +20842,10 @@ window.onload = async () => {
         refresh:()=>mergeReloadCanvasNow(),
         prepareImageRequest:smartAssistantImageRequest,
         generateImage:smartAssistantGenerateImage,
+        nativeSnapshot:()=>nativeEditor?.snapshot(),
+        executeNativeAction:proposal=>nativeEditor.execute(proposal),
+        resumeNativeLoop:proposal=>nativeEditor.resumeLoop(proposal),
+        syncNativeTask:proposal=>nativeEditor.syncTask(proposal),
         referencePreview:(item,size)=>item.kind==='video' ? smartVideoPreviewHtml(item,size,'preload="none"') : smartPreviewImgHtml(item.thumbnail||item.url,size,'loading="lazy" draggable="false"'),
         bindReferencePreviews:element=>bindSmartPreviewImageFallbacks(element),
         openPromptTemplates:async callback=>{canvasAssistantTemplateCallback=callback;await openPromptTemplatePanel('', '', {target:'assistant'});},
@@ -20491,3 +20859,11 @@ window.onload = async () => {
         },
     });
 };
+
+function setSmartGroupMemberIds(group, memberIds){
+    const targets = memberIds.map(id => nodes.find(n => n.id === id));
+    if(!isSmartGroupNode(group) || targets.some(n => !n || !['smart-prompt','smart-loop'].includes(n.type)) || new Set(memberIds).size !== memberIds.length) throw new Error('智能分组只允许现有提示词或循环成员');
+    group.items = [];
+    targets.forEach(child => addNodeToSmartGroup(group, child));
+    if(targets.length) arrangeSmartGroupMembers(group, {skipUndo:true});
+}

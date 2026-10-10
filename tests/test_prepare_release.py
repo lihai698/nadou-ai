@@ -2,6 +2,7 @@
 
 import importlib.util
 import tempfile
+import json
 import unittest
 import zipfile
 from pathlib import Path
@@ -15,6 +16,30 @@ SPEC.loader.exec_module(release)
 
 
 class PrepareReleaseTests(unittest.TestCase):
+    def test_builtin_assistant_files_are_included_but_other_skills_are_private(self):
+        for relative in ('skills/canvas-assistant/poster-layout/SKILL.md',
+                         'skills/canvas-assistant/reference-edit/SKILL.md',
+                         'skills/canvas-assistant/prompt-polish/SKILL.md',
+                         'skills/canvas-assistant/project-knowledge/index.json',
+                         'skills/canvas-assistant/project-knowledge/nodes/classic-image.md'):
+            self.assertTrue(release.included(relative), relative)
+        for relative in ('skills/private-notes/SKILL.md', 'skills/canvas-assistant/private/SKILL.md'):
+            self.assertFalse(release.included(relative), relative)
+
+    def test_preflight_rejects_missing_runtime_knowledge_card(self):
+        omitted = 'skills/canvas-assistant/project-knowledge/nodes/classic-image.md'
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory)
+            names=['main.py','VERSION','LICENSE','README.md','static/index.html','static/update-notes.json',
+                   *(f'skills/canvas-assistant/{name}/SKILL.md' for name in ('poster-layout','reference-edit','prompt-polish'))]
+            for name in names:
+                path=root/name;path.parent.mkdir(parents=True,exist_ok=True);path.write_text('isolated',encoding='utf-8')
+            index='skills/canvas-assistant/project-knowledge/index.json'
+            (root/index).parent.mkdir(parents=True,exist_ok=True)
+            (root/index).write_text(json.dumps({'entries':[{'file':'nodes/classic-image.md'}]}),encoding='utf-8')
+            with self.assertRaisesRegex(ValueError, omitted):
+                release.check_release([(name,root/name) for name in [*names,index]],preflight=True)
+
     def test_unlisted_root_files_stay_out_of_public_release(self):
         for relative in ("_self_restart.bat", "_self_restart.sh", "private-notes.md", "scratch.py"):
             self.assertFalse(release.included(relative), relative)

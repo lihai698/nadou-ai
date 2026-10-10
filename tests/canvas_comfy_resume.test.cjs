@@ -106,6 +106,16 @@ test('classic: stopping page wait keeps the accepted ID without claiming remote 
     assert.match(editor.nodes[1]._pending[0].error, /远端任务状态未知/);
 });
 
+test('classic: Comfy 原生运行在每个任务受理后保留编号并先执行提交前复核', async()=>{
+    const editor = classicEditor(null, [{status:200, data:{status:'succeeded', result:{images:['done.png']}}}]);
+    const events=[];
+    const pending=editor.nodes[1]._pending[0];
+    editor.context.events=events;
+    await vm.runInContext("runQueuedComfyGenerate({workflow_json:'test.json'}, {out:nodes[1], pendingId:'pending', beforeSubmit:async()=>events.push('before'), onAccepted:id=>events.push('accepted:'+id)})", editor.context);
+    assert.deepEqual(events,['before','accepted:accepted']);
+    assert.equal(pending.canvasTaskId,'accepted');
+});
+
 function smartEditor(saved, replies, saveOk=true){
     const calls = [];
     const nodes = saved ? clone(saved.nodes) : [{id:'output',type:'smart-image',images:[]}];
@@ -130,7 +140,6 @@ function smartEditor(saved, replies, saveOk=true){
         tr:x=>x === 'smart.comfyTaskRestart' ? '后端已重启或任务过期' : x,
         resultMediaUrls:result=>Array.isArray(result) ? result : result.images || [],
         mediaKindForUrls:()=> 'image',
-        smartMinimaxSelectedSegment:()=>null,
         sleep:async()=>{}, nowMs:()=>2, toast:()=>{},
         finalizeSmartPendingTask:(node, id, images)=>{
             node.pendingTasks = (node.pendingTasks || []).filter(item=>item.taskId !== id);
@@ -138,9 +147,11 @@ function smartEditor(saved, replies, saveOk=true){
             node.images.push(...images);
         },
         pollSmartCanvasTask:()=>{throw Error('image GET must not run');},
+        watchSmartDepthCapture:()=>{throw Error('unexpected depth capture');},
     });
     vm.runInContext(section(smartSource, 'async function createSmartComfyTask(', 'function comfyParamsFromWorkflowValues(')
-        +section(smartSource, 'async function resumeSmartPendingNode(', 'function updateSelectionBox('), context);
+        +section(smartSource, 'async function resumeSmartPendingNode(', 'function updateSelectionBox(')
+        +section(smartSource, 'function resumeSmartDepthCaptureTasks(', 'async function runJimengUpscale('), context);
     return {
         context, nodes, calls, saved:()=>disk,
         submit:()=>vm.runInContext("runQueuedSmartComfyGenerate({workflow_json:'test.json'}, nodes[0])", context),

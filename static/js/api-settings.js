@@ -571,12 +571,12 @@ function volcengineAssetKeyHintText(item){
     const sk = item?.has_volcengine_secret_key ? `SK 已保存：${item.volcengine_secret_key_env || 'API/.env'} ${item.volcengine_secret_key_preview || ''}` : 'SK 未保存';
     return `${ak} · ${sk}`;
 }
-function isNewUserProvider(item){
 function volcengineVoiceKeyHintText(item){
     return item?.has_volcengine_voice_api_key
         ? `豆包语音 API Key 已保存：${item.volcengine_voice_api_key_env || 'API/.env'} ${item.volcengine_voice_api_key_preview || ''}`
         : '还没有保存豆包语音 API Key。';
 }
+function isNewUserProvider(item){
     if(!item) return false;
     if(item.id === 'modelscope') return !item.has_key;
     if(item.id === 'runninghub') return !item.has_key && !item.has_wallet_key;
@@ -813,9 +813,9 @@ function syncEditor(){
         if(sk) item.volcengine_secret_access_key = sk;
         item.volcengine_project_name = (volcProjectInput?.value.trim() || VOLCENGINE_DEFAULT_PROJECT_NAME);
         item.volcengine_region = (volcRegionInput?.value.trim() || VOLCENGINE_DEFAULT_REGION);
-    }
         const voiceKey = volcVoiceKeyInput?.value.trim() || '';
         if(voiceKey) item.volcengine_voice_api_key = voiceKey;
+    }
 }
 function ensureRunningHubLists(item){
     if(!item) return;
@@ -2542,7 +2542,6 @@ function renderEditor(){
         keyInput.placeholder = item.has_key ? `保持当前方舟 API Key ${item.key_preview || ''}` : '输入方舟 API Key';
         keyHint.textContent = volcengineArkKeyHintText(item);
         if(volcArkKeyHint) volcArkKeyHint.textContent = volcengineArkKeyHintText(item);
-        if(volcAkInput){
         if(volcVoiceKeyInput){
             volcVoiceKeyInput.value = '';
             volcVoiceKeyInput.placeholder = item.has_volcengine_voice_api_key
@@ -2550,6 +2549,7 @@ function renderEditor(){
                 : '输入豆包语音 API Key';
         }
         if(volcVoiceKeyHint) volcVoiceKeyHint.textContent = volcengineVoiceKeyHintText(item);
+        if(volcAkInput){
             volcAkInput.value = '';
             volcAkInput.placeholder = item.has_volcengine_access_key ? `保持当前 AK ${item.volcengine_access_key_preview || ''}` : 'Access Key ID';
         }
@@ -2583,8 +2583,8 @@ function renderEditor(){
     document.body.classList.toggle('show-runninghub', isRunningHub);
     document.body.classList.toggle('show-volcengine', isVolcengine);
     document.body.classList.toggle('show-volcengine-standalone', isStandaloneVolcengine);
-    document.body.classList.toggle('show-jimeng', isJimeng);
     if(volcengineKeyStack) volcengineKeyStack.hidden = !isStandaloneVolcengine;
+    document.body.classList.toggle('show-jimeng', isJimeng);
     document.body.classList.toggle('show-codex', isCodex);
     document.body.classList.toggle('show-gemini-cli', isGeminiCli);
     updateApimartDomesticHint(item);
@@ -2622,9 +2622,9 @@ function renderEditor(){
     renderModels('image');
     renderModels('chat');
     renderModels('video');
-    if(isModelScope) renderMsLoras();
     renderModels('audio');
     renderModels('audioGeneration');
+    if(isModelScope) renderMsLoras();
     else if(msLoraList) msLoraList.innerHTML = '';
     renderProviderList();
 }
@@ -3160,9 +3160,9 @@ function setFetchedModelState(data){
         image: new Set(data?.image_models || []),
         chat: new Set(data?.chat_models || []),
         video: new Set(data?.video_models || []),
-    };
         audio: new Set(data?.audio_models || []),
         audioGeneration: new Set(data?.audio_generation_models || []),
+    };
     lastFetchedModelNames = (data?.model_names && typeof data.model_names === 'object') ? {...data.model_names} : {};
 }
 const RH_KNOWN_MODEL_LABELS = {
@@ -3317,11 +3317,11 @@ function openModelPicker(){
     renderModelPicker();
 }
 function closeModelPicker(){ document.getElementById('modelPickerOverlay').style.display = 'none'; }
-function renderModelPicker(){
 function pickerCategories(id){
     return !pickerState.modified?.[id] && pickerState.original?.[id]?.length
         ? pickerState.original[id] : [pickerState.category[id]];
 }
+function renderModelPicker(){
     const item = provider();
     const filter = (document.getElementById('pickerFilter')?.value || '').toLowerCase();
     const currentTab = document.querySelector('.picker-cat-tab.active')?.dataset.cat || 'all';
@@ -3360,10 +3360,10 @@ function pickerCategories(id){
                 <div class="picker-model-name" title="${escapeAttr(id)}">
                     <div class="picker-model-label">${escapeHtml(label || id)}</div>
                     ${label && label !== id ? `<div class="picker-model-id">${escapeHtml(id)}</div>` : ''}
-                </div>
                     ${pickerCategories(id).length>1?`<div class="picker-model-id">已配置用途：${pickerCategories(id).map(kind=>MODEL_LABELS[kind]).join('、')}</div>`:''}
-            </div>
+                </div>
                 <select class="model-protocol-select" aria-label="模型用途" onclick="event.stopPropagation()" onchange="changePickerCategory(${index}, this.value)">${Object.entries(MODEL_LABELS).map(([kind,name])=>`<option value="${kind}" ${pickerState.category[id]===kind?'selected':''}>${name}</option>`).join('')}</select>
+            </div>
         `;
     }).join('');
     document.getElementById('pickerList').innerHTML = html || `<div style="padding:32px;text-align:center;color:var(--faint);font-size:12px">无匹配</div>`;
@@ -3375,13 +3375,12 @@ function pickerCategories(id){
     if(sumImage){ sumImage.textContent = `生图 ${selecteds.image}`; sumImage.classList.toggle('picker-sum-chip-empty', selecteds.image === 0); }
     if(sumChat){ sumChat.textContent = `LLM ${selecteds.chat}`; sumChat.classList.toggle('picker-sum-chip-empty', selecteds.chat === 0); }
     if(sumVideo){ sumVideo.textContent = `视频 ${selecteds.video}`; sumVideo.classList.toggle('picker-sum-chip-empty', selecteds.video === 0); }
-    if(sumUnsel){ sumUnsel.textContent = `未选 ${totals.all - selecteds.all}`; }
     ['audio','audioGeneration'].forEach(kind=>{
         const chip=document.getElementById(kind==='audio'?'sumAudio':'sumAudioGeneration');
         if(chip){chip.textContent=`${MODEL_LABELS[kind]} ${selecteds[kind]}`;chip.classList.toggle('picker-sum-chip-empty',selecteds[kind]===0);}
     });
+    if(sumUnsel){ sumUnsel.textContent = `未选 ${totals.all - selecteds.all}`; }
 }
-function togglePickerRow(id){
 function changePickerCategory(index, kind){
     const id=pickerVisibleIds[index];
     if(typeof id!=='string' || !MODEL_KINDS[kind]) return;
@@ -3389,6 +3388,7 @@ function changePickerCategory(index, kind){
     pickerState.modified[id]=true;
     renderModelPicker();
 }
+function togglePickerRow(id){
     pickerState.selected[id] = !pickerState.selected[id];
     renderModelPicker();
 }
@@ -3679,7 +3679,6 @@ async function clearVolcengineAssetKeys(){
         if(volcSkInput) volcSkInput.value = '';
     }
 }
-function addModel(kind){
 async function saveVolcengineVoiceKey(){
     const item = provider();
     if(!item || item.id !== 'volcengine') return;
@@ -3697,6 +3696,7 @@ async function clearVolcengineVoiceKey(){
     const ok = await saveProviders();
     if(ok && volcVoiceKeyInput) volcVoiceKeyInput.value = '';
 }
+function addModel(kind){
     const item = provider();
     const key = MODEL_KINDS[kind];
     item[key] = [...(item[key] || []), ''];
@@ -3734,11 +3734,11 @@ function updateModel(kind, index, value){
             if(newName && label && label !== newName) item.model_names[newName] = label;
         }
     }
-    if(kind === 'image') renderMsLoras();
     if(kind==='audio' && oldName!==newName){
         item.audio_timestamp_models=(item.audio_timestamp_models || []).map(id=>id===oldName?newName:id).filter(Boolean);
         if(audioTimestampModelsInput) audioTimestampModelsInput.value=item.audio_timestamp_models.join('\n');
     }
+    if(kind === 'image') renderMsLoras();
 }
 function updateModelProtocol(kind, index, value){
     const item = provider();
@@ -3758,11 +3758,11 @@ function removeModel(kind, index){
     const key = MODEL_KINDS[kind];
     const removed = String(item[key][index] || '').trim();
     item[key].splice(index, 1);
-    // 清理不再使用的协议覆盖
     if(kind==='audio'){
         item.audio_timestamp_models=(item.audio_timestamp_models || []).filter(id=>(item.audio_models || []).includes(id));
         if(audioTimestampModelsInput) audioTimestampModelsInput.value=item.audio_timestamp_models.join('\n');
     }
+    // 清理不再使用的协议覆盖
     if(removed && item.model_protocols && typeof item.model_protocols === 'object' && !modelProtocolStillUsed(item, removed)){
         delete item.model_protocols[removed];
     }
@@ -3818,9 +3818,9 @@ async function saveProviders(){
         item.image_models = unique(item.image_models || []);
         item.chat_models = unique(item.chat_models || []);
         item.video_models = unique(item.video_models || []);
-        const modelNameSource = (item.model_names && typeof item.model_names === 'object') ? item.model_names : {};
         item.audio_models = unique(item.audio_models || []);
         item.audio_generation_models = unique(item.audio_generation_models || []);
+        const modelNameSource = (item.model_names && typeof item.model_names === 'object') ? item.model_names : {};
         const modelNameMap = {};
         Object.values(MODEL_KINDS).flatMap(key=>item[key] || []).forEach(model => {
             const raw = String(model || '').trim();
@@ -3863,11 +3863,11 @@ async function saveProviders(){
                 chat_models:item.chat_models || [],
                 video_models:item.video_models || [],
                 audio_models:item.audio_models || [],
-                audio_timestamp_models:item.audio_timestamp_models || [],
                 audio_generation_models:item.audio_generation_models || [],
                 audio_generation_protocol:item.audio_generation_protocol || 'openai-speech',
                 audio_generation_voices:item.audio_generation_voices || [],
                 audio_generation_instructions:!!item.audio_generation_instructions,
+                audio_timestamp_models:item.audio_timestamp_models || [],
                 model_names:(item.model_names && typeof item.model_names === 'object') ? item.model_names : {},
                 model_protocols:(item.model_protocols && typeof item.model_protocols === 'object') ? item.model_protocols : {},
                 ms_loras:item.id === 'modelscope' ? (item.ms_loras || []) : [],
@@ -3878,8 +3878,8 @@ async function saveProviders(){
                 volcengine_region:item.id === 'volcengine' ? (item.volcengine_region || VOLCENGINE_DEFAULT_REGION) : '',
                 volcengine_access_key_id:item.volcengine_access_key_id || undefined,
                 volcengine_secret_access_key:item.volcengine_secret_access_key || undefined,
-                api_key:item.api_key || undefined,
                 volcengine_voice_api_key:item.volcengine_voice_api_key || undefined,
+                api_key:item.api_key || undefined,
                 wallet_api_key:item.wallet_api_key || undefined,
                 clear_key:item._clearKey === true,
                 clear_wallet_key:item._clearWalletKey === true,
@@ -3896,13 +3896,13 @@ async function saveProviders(){
             delete item.wallet_api_key;
             delete item.volcengine_access_key_id;
             delete item.volcengine_secret_access_key;
-            delete item._clearKey;
             delete item.volcengine_voice_api_key;
+            delete item._clearKey;
             delete item._clearWalletKey;
             delete item._clearVolcengineAccessKey;
             delete item._clearVolcengineSecretKey;
-        });
             delete item._clearVolcengineVoiceKey;
+        });
         selectedId = provider()?.id || providers[0]?.id || '';
         renderEditor();
         setStatus(tr('api.saved'));

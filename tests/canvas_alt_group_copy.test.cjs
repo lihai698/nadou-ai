@@ -33,6 +33,7 @@ function editor(initialNodes, initialConnections, selectedIds){
         workflowTransferModal:null, scheduleMinimapRender:() => {},
         endDrag:() => {},
     });
+    vm.runInContext(readFileSync(path.join(__dirname, '../static/js/canvas-audio.js'), 'utf8'),context);
     vm.runInContext(source.slice(copyStart,copyEnd) + source.slice(dragStart,dragEnd),context);
     const state = () => ({
         nodes:JSON.parse(JSON.stringify(context.nodes)),

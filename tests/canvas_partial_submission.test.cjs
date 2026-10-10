@@ -144,7 +144,8 @@ function generatorHarness(kind, submissionResult, confirmResult=true){
     let nextId=0, submissions=0, confirmations=0, saveAllowed=true;
     const context=vm.createContext({
         nodes, CANVAS_REFERENCE_IMAGE_MAX:10,
-        window:{confirm:()=>{confirmations++;return typeof confirmResult==='function' ? confirmResult() : confirmResult;}},
+        window:{addEventListener:()=>{},confirm:()=>{confirmations++;return typeof confirmResult==='function' ? confirmResult() : confirmResult;}},
+        document:{addEventListener:()=>{}},
         rhSelectedEntryRef:()=>({id:'mock-model'}), rhMediaSources:()=>({prompt:'sample',refs:[]}),
         orderedSources:()=>[{prompt:'sample',refs:[]}], generatorSources:()=>[],
         imageRefsOnly:refs=>refs, outputForNode:()=>output,
@@ -182,6 +183,9 @@ function generatorHarness(kind, submissionResult, confirmResult=true){
     const code=kind==='rh'
         ? section('async function runRhModelNode(', 'function renderComfySettings(')
         : section('async function runGenerator(', 'async function midjourneyRequest(');
+    vm.runInContext(readFileSync(path.join(__dirname, '../static/js/canvas-audio.js'), 'utf8'),context);
+    vm.runInContext(readFileSync(path.join(__dirname, '../static/js/canvas-audio-host.js'), 'utf8'),context);
+    vm.runInContext(section('function audioRefsOnly(', 'function mediaKindForNode('),context);
     vm.runInContext(section('function confirmCanvasUnknownResubmission(', 'async function createCanvasImageTask('),context);
     vm.runInContext(code,context);
     return {generator,output,saves,queries,notices,

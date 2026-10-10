@@ -8,7 +8,7 @@ function part(start,end){ return source.slice(source.indexOf(start),source.index
 function editor(responses){
     const node={id:'n',images:[],pending:1,pendingTasks:[{taskId:'original',kind:'image'}]};
     const calls=[], delays=[];
-    const ctx=vm.createContext({nodes:[node],activeSmartTaskPolls:new Map(),
+    const ctx=vm.createContext({nodes:[node],activeSmartTaskPolls:new Map(),window:{},
         fetch:async(url,options)=>{ calls.push({url,options}); const r=responses.shift(); if(r instanceof Error) throw r; if(!r) throw Error('extra request'); return {ok:r.code===200,status:r.code,text:async()=> 'unavailable',json:async()=>r.data}; },
         setTimeout:(fn,ms)=>{delays.push(ms);fn();},render:()=>{},scheduleSave:()=>{},toast:()=>{},tr:x=>x,
         resultMediaUrls:x=>x,nowMs:()=>1,extractUpstreamTaskId:()=>'',
@@ -16,6 +16,9 @@ function editor(responses){
         fetchImageTaskQuery:()=>{throw Error('must not query upstream');},
         watchSmartDepthCapture:()=>{throw Error('unexpected depth capture');},
     });
+    vm.runInContext(fs.readFileSync(path.join(__dirname,'../static/js/canvas-audio.js'),'utf8'),ctx);
+    vm.runInContext(fs.readFileSync(path.join(__dirname,'../static/js/smart-canvas-audio-host.js'),'utf8'),ctx);
+    vm.runInContext(part('function audioRefsOnly(', 'function thumbMediaHtml('),ctx);
     vm.runInContext(part('function smartPendingTasks(', 'class JimengPendingSignal')+
         part('class JimengPendingSignal', 'function extractUpstreamTaskId')+
         part('function smartRecoverableImageTask(', 'function imageTaskRecoverBodyHtml')+
@@ -27,10 +30,13 @@ function editor(responses){
 }
 const success=()=>({code:200,data:{status:'succeeded',result:{images:['result.png']}}});
 test('partial results keep media and an actionable recovery control together',()=>{
-    const ctx=vm.createContext({imageForDisplay:x=>x,smartPendingTasks:n=>n.pendingTasks||[],
+    const ctx=vm.createContext({window:{},imageForDisplay:x=>x,smartPendingTasks:n=>n.pendingTasks||[],
         escapeHtml:x=>x,escapeAttr:x=>x,selectedImage:{},MEDIA_GROUP_MAX_VISIBLE_ROWS:4,
         mediaKindForItem:()=> 'image',singleMediaHtml:img=>`<img src="${img.url}">`,
         thumbMediaHtml:img=>`<img src="${img.url}">`,imageNameBadgeHtml:()=>'',imageResolutionBadgeHtml:()=>'',tr:x=>x});
+    vm.runInContext(fs.readFileSync(path.join(__dirname,'../static/js/canvas-audio.js'),'utf8'),ctx);
+    vm.runInContext(fs.readFileSync(path.join(__dirname,'../static/js/smart-canvas-audio-host.js'),'utf8'),ctx);
+    vm.runInContext(part('function isSmartImageNode(', 'function isSmartGroupNode('),ctx);
     vm.runInContext(part('function nodeBodyHtml(', 'function smartNodeToolbarImageIndex('),ctx);
     for(const count of [1,2]){
         ctx.node={id:'partial',type:'smart-image',images:Array.from({length:count},(_,i)=>({url:`result-${i}.png`})),pendingTasks:[{taskId:'original',queryPaused:true}]};

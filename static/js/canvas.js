@@ -720,9 +720,6 @@ function providerChatModels(providerId){
     const provider = apiProviders.find(p => p.id === providerId);
     return uniqueModels(provider?.chat_models || []);
 }
-function resolveImageProviderId(id){
-    const providers = imageApiProviders();
-    return providers.find(p => p.id === id)?.id || providers[0]?.id || '';
 function providerAudioAnalysisModels(providerId){
     const provider = apiProviders.find(p => p.id === providerId);
     return uniqueModels(provider?.chat_models || []);
@@ -744,6 +741,9 @@ function audioAnalysisModelOptions(selectedModel, providerId){
     const options = uniqueModels([selected, ...models]).filter(Boolean);
     return `<optgroup label="文本模型">${options.map(model => `<option value="${escapeHtml(model)}" ${model === selected ? 'selected' : ''}>${escapeHtml(model)}</option>`).join('')}</optgroup>`;
 }
+function resolveImageProviderId(id){
+    const providers = imageApiProviders();
+    return providers.find(p => p.id === id)?.id || providers[0]?.id || '';
 }
 function providerOptions(selectedId){
     const selected = resolveImageProviderId(selectedId);
@@ -1071,6 +1071,48 @@ function normalizeApiNodeSizeChoice(node){
     if(allowAuto && node._apiResolutionUserSet !== true && (!node.resolution || node.resolution === '1k' || node.resolution === 'auto')) node.resolution = defaultApiImageResolution(node.model);
     else if(!node.resolution) node.resolution = defaultApiImageResolution(node.model);
     if(!allowAuto && node.resolution === 'auto') node.resolution = '1k';
+}
+function setCanvasGeneratorSizeFields(node, patch){
+    Object.assign(node,patch);
+    if(Object.hasOwn(patch,'resolution')){
+        node._apiResolutionUserSet=true;
+        if(node.resolution==='custom')node.ratio='';
+        else{if(!node.ratio)node.ratio='square';node.customSize='';node.customWidth='';node.customHeight='';}
+    }
+    if(Object.hasOwn(patch,'ratio') && node.ratio!=='custom'){
+        node.customRatio='';node.customRatioWidth='';node.customRatioHeight='';
+    }
+    if(Object.hasOwn(patch,'customRatioWidth') || Object.hasOwn(patch,'customRatioHeight')){
+        node.customRatioWidth=String(node.customRatioWidth||'');node.customRatioHeight=String(node.customRatioHeight||'');
+        node.customRatio=node.customRatioWidth&&node.customRatioHeight?`${node.customRatioWidth}:${node.customRatioHeight}`:'';
+        node.ratio='custom';
+    }
+    if(Object.hasOwn(patch,'customWidth') || Object.hasOwn(patch,'customHeight')){
+        node.customWidth=String(node.customWidth||'');node.customHeight=String(node.customHeight||'');
+        node.customSize=node.customWidth&&node.customHeight?`${node.customWidth}x${node.customHeight}`:'';
+        node.resolution='custom';node._apiResolutionUserSet=true;node.ratio='';
+    }
+    normalizeApiNodeSizeChoice(node);
+}
+function setCanvasMsSizeFields(node, patch){
+    Object.assign(node,patch);
+    if(Object.hasOwn(patch,'msResolution')){
+        if(node.msResolution==='custom')node.msRatio='';
+        else{if(!node.msRatio)node.msRatio='square';node.msCustomSize='';node.msCustomWidth='';node.msCustomHeight='';}
+    }
+    if(Object.hasOwn(patch,'msRatio') && node.msRatio!=='custom'){
+        node.msCustomRatio='';node.msCustomRatioWidth='';node.msCustomRatioHeight='';
+    }
+    if(Object.hasOwn(patch,'msCustomRatioWidth') || Object.hasOwn(patch,'msCustomRatioHeight')){
+        node.msCustomRatioWidth=String(node.msCustomRatioWidth||'');node.msCustomRatioHeight=String(node.msCustomRatioHeight||'');
+        node.msCustomRatio=node.msCustomRatioWidth&&node.msCustomRatioHeight?`${node.msCustomRatioWidth}:${node.msCustomRatioHeight}`:'';
+        node.msRatio='custom';
+    }
+    if(Object.hasOwn(patch,'msCustomWidth') || Object.hasOwn(patch,'msCustomHeight')){
+        node.msCustomWidth=String(node.msCustomWidth||'');node.msCustomHeight=String(node.msCustomHeight||'');
+        node.msCustomSize=node.msCustomWidth&&node.msCustomHeight?`${node.msCustomWidth}x${node.msCustomHeight}`:'';
+        node.msResolution='custom';node.msRatio='';
+    }
 }
 async function generatorSizeForRun(gen, refs){
     if((gen.ratio || 'square') === 'source'){
@@ -3167,7 +3209,42 @@ function renderMsGenBody(node){
     bindCascadeButtons(wrap, node.id);
     return wrap;
 }
+async function runCanvasAssistantCatalogImage(nodeId, opts){
+    const node=nodes.find(n=>n.id===nodeId),config=opts.assistantImageConfig,run=node?.assistantNativeRun;
+    if(!node||!['msgen','midjourney'].includes(node.type)||!config||run?.actionId!==opts.assistantNativeActionId)throw new Error('原魔搭或Midjourney运行配置不可用');
+    const out=nodes.find(n=>n.id===opts.assistantOutputNodeId&&n.type==='output');
+    const validate=()=>{if(canvas?.id!==opts.assistantCanvasId||canvas?.readOnly||!nodes.includes(node)||!nodes.includes(out)||node.outputEnabled!==true||node.count!==1||run.actionId!==opts.assistantNativeActionId||connections.filter(c=>c.from===node.id&&nodes.some(n=>n.id===c.to&&n.type==='output')).length!==1||!connections.some(c=>c.from===node.id&&c.to===out.id))throw new Error('原画布、节点或唯一输出已变化');};
+    validate();
+    const sources=orderedSources(node,generatorSources(node)),refs=imageRefsOnly(sources.flatMap(s=>s.refs||[])),prompt=sources.map(s=>s.prompt).filter(Boolean).join('\n\n').trim();
+    const snapshot=runSnapshot(node,prompt,refs),pending=makePendingForRun(uid('p'),snapshot,node,{refs,requestSize:config.size}, {canvasTaskType:'online-image',providerId:config.provider,model:config.model,assistantNativeActionId:opts.assistantNativeActionId,assistantCanvasId:opts.assistantCanvasId,assistantInputHash:opts.assistantRunInputHash,assistantOutputNodeId:out.id,assistantCatalogImage:true});
+    Object.assign(run,{inputHash:opts.assistantRunInputHash,outputNodeId:out.id});
+    let submitted=false;
+    try{
+        await opts.beforeSubmit();validate();
+        if(!await saveCanvas())throw new Error('提交开始状态未保存，未提交原任务');
+        await opts.beforeSubmit();validate();submitted=true;
+        const task=await createCanvasImageTask({prompt:prompt||'Blend connected images.',provider_id:config.provider,model:config.model,size:config.size||'1024x1024',n:1,reference_images:refs,canvas_id:opts.assistantCanvasId,node_id:node.id,assistant_action_id:opts.assistantNativeActionId,input_hash:opts.assistantRunInputHash,native_node_type:node.type,native_configuration_hash:config.configurationHash});
+        run.taskIds=[task.task_id];pending.canvasTaskId=task.task_id;pending.queryRecoverable=true;
+        out._pending=[...(out._pending||[]),pending];rememberUnsavedCanvasAcceptedTasks(node,[pending],out);
+        if(!await saveCanvas())throw pauseCanvasAcceptedTasksUntilSaved(node,[pending],out);
+        refreshRunNodes(node,out);await pollCanvasImageTask(task.task_id);
+        if(!await saveCanvas())throw new Error('原任务结果尚未保存，请只重试保存和查询');
+    }catch(error){
+        run.knownRejected=!submitted||error.submissionKnownRejected===true;
+        if(run.knownRejected)run.submissionStarted=false;
+        else if(!run.taskIds.length){run.unknownCount=1;node.submissionUnknown=true;}
+        run.error=error.message;await saveCanvas();throw error;
+    }
+}
+
+function validateCanvasAssistantCatalogTask(pending,task){
+    if(!pending?.assistantCatalogImage)return;
+    const binding={canvas_id:pending.assistantCanvasId,node_id:pending.run?.node?.id,assistant_action_id:pending.assistantNativeActionId,input_hash:pending.assistantInputHash,provider_id:pending.providerId,model:pending.model};
+    if(Object.entries(binding).some(([k,v])=>task[k]!==v)){const error=new Error('原魔搭或Midjourney任务归属不同，只保留原编号');error.queryPaused=true;throw error;}
+}
+
 async function runMsGenNode(nodeId, opts={}){
+    if(opts.assistantNativeActionId)return runCanvasAssistantCatalogImage(nodeId,opts);
     const node = nodes.find(n => n.id === nodeId);
     if(!node || (node.running && !opts.cascade)) return;
     const cascadeTargetId = cascadeTargetIdFromOptions(opts);
@@ -3481,6 +3558,9 @@ function canvasDepthPair(node){
 function remapCanvasDepthCopies(copies, idMap, preserveExternal=false){
     const operations = new Map();
     copies.forEach(node => {
+        delete node.assistantNativeRun;
+        delete node.assistantNativeActionId;
+        delete node.assistantMediaExportReceipts;
         const capture = node.depthCapture;
         if(!capture) return;
         const oldOperation = capture.operationId || node.id;
@@ -4080,6 +4160,7 @@ function audioRefsOnly(refs){
     return (refs || []).filter(ref => ref?.url && mediaKindForRef(ref) === 'audio');
 }
 function mediaKindForNode(node){
+    if(node?.type==='audio')return 'audio';
     if(node?.mediaKind) return node.mediaKind;
     if(isVideoUrl(node?.url)) return 'video';
     if(isAudioUrl(node?.url)) return 'audio';
@@ -4108,7 +4189,6 @@ const IMAGE_DROP_TEXT_TYPES = [
 const IMAGE_DROP_TYPE_HINT_RE = /^(?:files?|image\/.+|text\/(?:uri-list|html|plain|x-moz-url|x-file-url)|downloadurl|public\.(?:file-url|url)|uniformresourcelocator|filenamew?)$|application\/x-qt-(?:windows-mime|image)|application\/x-moz-file|com\.eagle/i;
 function dropDataTypes(dataTransfer){
     return [...(dataTransfer?.types || [])].map(type => String(type || ''));
-    if(node?.type==='audio')return 'audio';
 }
 function readDropData(dataTransfer, type){
     try { return dataTransfer?.getData?.(type) || ''; } catch(_) { return ''; }
@@ -4275,6 +4355,7 @@ async function uploadMediaFiles(files, point, onlyImages=false, opts={}){
             name:file.name,
             mediaKind:kind, mime:supported[i]?.type || '',sizeBytes:supported[i]?.size || 0
         };
+        window.CanvasAudio.migrate(node);
         nodes.push(node);
         created.push(node);
     });
@@ -4297,13 +4378,13 @@ function createImageCardFromUrl(url, point, name='image'){
     const p = point || defaultPoint(0, 0);
     const mediaKind = isVideoUrl(url) ? 'video' : isAudioUrl(url) ? 'audio' : 'image';
     nodes.push({id:uid('img'), type:'image', x:p.x, y:p.y, url, name:name || outputImageName(url), mediaKind});
+    window.CanvasAudio.migrate(nodes[nodes.length-1]);
     render();
     scheduleSave();
 }
 async function createImageCardsFromLocalPaths(paths, point){
     if(!ensureCanvas()) return [];
     setStatus(langIsEn() ? 'Importing images...' : '导入图片...');
-        window.CanvasAudio.migrate(node);
     try {
         const files = await importLocalImages((paths || []).slice(0, CANVAS_UPLOAD_MAX));
         const base = point || screenToWorld(window.innerWidth / 2, window.innerHeight / 2);
@@ -4326,7 +4407,6 @@ async function applyImageDropPayloadToBoard(payload, point){
     if(payload.type === 'files'){
         if(payload.files.length > 1) return uploadImageGroup(payload.files, point);
         return uploadImages(payload.files, point);
-    window.CanvasAudio.migrate(nodes[nodes.length-1]);
     }
     if(payload.type === 'localPaths') return createImageCardsFromLocalPaths(payload.localPaths, point);
     if(payload.type === 'url') {
@@ -4361,6 +4441,8 @@ async function applyImageDropPayloadToNode(nodeId, payload){
         node.url = payload.url;
         node.name = outputImageName(payload.url);
         node.mediaKind = isVideoUrl(payload.url) ? 'video' : isAudioUrl(payload.url) ? 'audio' : 'image';
+        if(node.type==='audio' && node.mediaKind!=='audio')node.type='image';
+        window.CanvasAudio.migrate(node);
         render();
         scheduleSave();
     }
@@ -4389,8 +4471,6 @@ async function handleImageNodeDropEvent(e, nodeId, highlightEl){
     const payload = await resolveImageDropPayload(e.dataTransfer);
     clearImageNodeDropState(e, highlightEl);
     if(payload.type === 'none') return;
-        if(node.type==='audio' && node.mediaKind!=='audio')node.type='image';
-        window.CanvasAudio.migrate(node);
     try {
         await applyImageDropPayloadToNode(nodeId, payload);
     } catch(err) {
@@ -4443,6 +4523,9 @@ async function fillImageNode(nodeId, files, opts={}){
         node.url = file.url;
         node.name = file.name;
         node.mediaKind = file.kind || mediaKindForUpload(imgs[0]);
+        node.mime=imgs[0].type;node.sizeBytes=imgs[0].size;
+        if(node.type==='audio' && node.mediaKind!=='audio')node.type='image';
+        window.CanvasAudio.migrate(node);
         render();
         scheduleSave();
     }
@@ -4453,7 +4536,7 @@ function setImageNodeFromOutput(nodeId, url){
     pushUndo();
     node.url = url;
     node.name = outputImageName(url);
-    node.mediaKind = 'image';
+    node.mediaKind=isAudioUrl(url)?'audio':'image';node.type=node.mediaKind==='audio'?'audio':'image';
     render();
     scheduleSave();
 }
@@ -4467,13 +4550,10 @@ function clearImageNode(nodeId, event=null){
     if(!node || node.type !== 'image') return;
     pushUndo();
     node.url = '';
-    node.mediaKind=isAudioUrl(url)?'audio':'image';node.type=node.mediaKind==='audio'?'audio':'image';
+    node.mediaKind = 'image';
     node.name = '空白图片';
     render();
     scheduleSave();
-        node.mime=imgs[0].type;node.sizeBytes=imgs[0].size;
-        if(node.type==='audio' && node.mediaKind!=='audio')node.type='image';
-        window.CanvasAudio.migrate(node);
 }
 function pickImageForNode(nodeId){
     pickMediaForNode(nodeId);
@@ -6741,6 +6821,7 @@ function renderNode(node){
             blank.ondrop = e => handleImageNodeDropEvent(e, node.id, blank);
         }
     }
+    if(node.type==='audio')body.appendChild(renderCanvasAudioMaterial(node));
     if(node.type === 'prompt') {
         const templateActive = promptTemplateModal?.classList.contains('open') && promptTemplateNodeId === node.id;
         body.innerHTML = `<div class="prompt-editor"><div class="prompt-toolbar"><button class="prompt-template-btn ${templateActive ? 'active' : ''}" type="button" data-prompt-template-open data-prompt-template-node-id="${escapeAttr(node.id)}" aria-pressed="${templateActive ? 'true' : 'false'}" title="${escapeAttr(tr('canvas.promptTemplateLibrary'))}"><i data-lucide="library"></i><span>${escapeHtml(tr('canvas.promptTemplateShort'))}</span></button>${promptCounterHtml(node.text || '')}</div><textarea placeholder="${tr('canvas.promptPlaceholder')}">${escapeHtml(node.text || '')}</textarea></div>`;
@@ -6767,9 +6848,10 @@ function renderNode(node){
         const audioCount = items.filter(n => ['image','audio'].includes(n.type) && mediaKindForNode(n) === 'audio').length;
         const promptCount = items.filter(n => n.type === 'prompt').length;
         const parts = [];
+        const otherCount = items.length - imgCount - videoCount - audioCount - promptCount;
+        if(otherCount) parts.push(langIsEn() ? `${items.length} nodes` : `${items.length} 个节点`);
         if(imgCount) parts.push(`${imgCount} ${tr('canvas.imageCount')}`);
         if(videoCount) parts.push(langIsEn() ? `${videoCount} video` : `${videoCount} 个视频`);
-    if(node.type==='audio')body.appendChild(renderCanvasAudioMaterial(node));
         if(audioCount) parts.push(langIsEn() ? `${audioCount} audio` : `${audioCount} 个音频`);
         if(promptCount) parts.push(`${promptCount} ${tr('canvas.promptCount')}`);
         if(!parts.length && items.length) parts.push(langIsEn() ? `${items.length} items` : `${items.length} 项素材`);
@@ -6796,8 +6878,6 @@ function renderNode(node){
         }
     }
     if(node.type === 'promptGroup') {
-        const otherCount = items.length - imgCount - videoCount - audioCount - promptCount;
-        if(otherCount) parts.push(langIsEn() ? `${items.length} nodes` : `${items.length} 个节点`);
         const promptNodes = (node.items || []).map(id => nodes.find(n => n.id === id)).filter(Boolean);
         body.innerHTML = `<div class="text-[11px] text-gray-400">${promptNodes.length} ${tr('canvas.promptCount')} ${tr('canvas.grouped')}</div>`;
     }
@@ -7029,6 +7109,7 @@ function refreshOutputNodeContent(node){
 function defaultNodeSize(type){
     if(type === 'shot-table') return {w:1120,h:390};
     if(type === 'clip') return {w:760,h:196};
+    if(type === 'audio') return {w:330,h:0};
     if(type === 'image') return {w:260, h:336};
     if(type === 'prompt') return {w:310, h:0};
     if(type === 'loop') return {w:336, h:0};
@@ -7057,7 +7138,6 @@ function splitPromptIntoItems(text){
     return [trimmed];
 }
 const loopPromptVisiting = new Set();
-    if(type === 'audio') return {w:330,h:0};
 function loopInputPromptItems(node){
     if(!node?.showPrompt) return [];
     if(loopPromptVisiting.has(node.id)) return [];
@@ -8545,6 +8625,7 @@ function renderLLMBody(node){
     const modelOpts = chatModelOptions(node.model, llmProv);
     const imgs = llmInputImages(node);
     const videos = llmInputVideos(node);
+    const audios = llmInputAudios(node);
     const mediaBadgeText = [
         imgs.length ? `${imgs.length} 张图片` : '',
         videos.length ? `${videos.length} 个视频` : '',
@@ -8574,7 +8655,6 @@ function renderLLMBody(node){
     });
     providerSelect.onchange = e => {
         e.stopPropagation();
-    const audios = llmInputAudios(node);
         node.llmProvider = e.target.value;
         const models = providerChatModels(node.llmProvider);
         node.model = models[0] || '';
@@ -8790,6 +8870,7 @@ function llmInputText(node){
         if(n.type === 'prompt') return n.text || '';
         if(n.type === 'loop') return renderLoopPrompt(n);
         if(n.type === 'promptGroup') return (n.items || []).map(id => nodes.find(x => x.id === id)).filter(Boolean).map(p => p.text || '').filter(Boolean).join('\n\n');
+        if(n.type==='generator' || n.type==='output')return n.audioOutputText || '';
         if(n.type === 'llm') return n.outputText || '';
         return '';
     }).filter(Boolean).join('\n\n');
@@ -8818,17 +8899,37 @@ function llmInputVideos(node){
         }
         if(n.type === 'group'){
             (n.items || []).map(id => nodes.find(x => x.id === id)).filter(x => x?.type === 'image' && x?.url && mediaKindForNode(x) === 'video').forEach(video => urls.push(video.url));
-        if(n.type==='generator' || n.type==='output')return n.audioOutputText || '';
         }
     });
     return urls;
 }
+function llmInputAudios(node){
+    const urls = [];
+    connections.filter(c => c.to === node.id).map(c => nodes.find(n => n.id === c.from)).filter(Boolean).forEach(n => {
+        if(n.type === 'audio' && n.url) urls.push(n.url);
+        if(n.type === 'generator' && (n.generatedOutputs || []).length){
+            const item = [...n.generatedOutputs].reverse().find(output => mediaKindForOutputItem(output) === 'audio' && outputUrlValue(output));
+            if(item) urls.push(outputUrlValue(item));
+        }
+        if(n.type === 'output' && (n.images||[]).length){
+            const last = [...n.images].reverse().map(outputUrlValue).find(url => url && isAudioUrl(url));
+            if(last) urls.push(last);
+        }
+        if(n.type === 'group'){
+            (n.items || []).map(id => nodes.find(x => x.id === id)).filter(x => x?.url && mediaKindForNode(x) === 'audio').forEach(audio => urls.push(audio.url));
+        }
+    });
+    return [...new Set(urls)];
+}
 function renderGeneratorBody(node){
+    const audioSources=orderedSources(node,generatorSources(node));
+    if(canvasApiAudioMode(node,audioSources))return renderCanvasApiAudio(node,audioSources);
     const wrap = document.createElement('div');
     wrap.className = 'generator-body';
     const inputSources = generatorSources(node);
     const ordered = orderedSources(node, inputSources);
     const mediaInputs = ordered.filter(src => src.refs?.some(ref => ['image','video','audio'].includes(mediaKindForRef(ref))));
+    const hasAudioAnalysisInput = audioSources.some(src => src.refs?.some(ref => mediaKindForRef(ref) === 'audio'));
     const promptInputs = ordered.filter(src => src.prompt && !src.refs?.length && src.id !== `${node.id}:view-adjust`);
     if(hasAudioAnalysisInput){
         const providers = audioAnalysisApiProviders();
@@ -8856,33 +8957,12 @@ function renderGeneratorBody(node){
                     <option value="custom">${tr('canvas.custom')}</option>
                 </select>
                 <select class="select-lite ratio compact-select" data-field="ratio">
-function llmInputAudios(node){
-    const urls = [];
-    connections.filter(c => c.to === node.id).map(c => nodes.find(n => n.id === c.from)).filter(Boolean).forEach(n => {
-        if(n.type === 'audio' && n.url) urls.push(n.url);
-        if(n.type === 'generator' && (n.generatedOutputs || []).length){
-            const item = [...n.generatedOutputs].reverse().find(output => mediaKindForOutputItem(output) === 'audio' && outputUrlValue(output));
-            if(item) urls.push(outputUrlValue(item));
-        }
-        if(n.type === 'output' && (n.images||[]).length){
-            const last = [...n.images].reverse().map(outputUrlValue).find(url => url && isAudioUrl(url));
-            if(last) urls.push(last);
-        }
-        if(n.type === 'group'){
-            (n.items || []).map(id => nodes.find(x => x.id === id)).filter(x => x?.url && mediaKindForNode(x) === 'audio').forEach(audio => urls.push(audio.url));
-        }
-    });
-    return [...new Set(urls)];
-}
                     <option value="square">1:1</option>
-    const audioSources=orderedSources(node,generatorSources(node));
-    if(canvasApiAudioMode(node,audioSources))return renderCanvasApiAudio(node,audioSources);
                     <option value="portrait">2:3</option>
                     <option value="landscape">3:2</option>
                     <option value="portrait43">3:4</option>
                     <option value="landscape43">4:3</option>
                     <option value="story">9:16</option>
-    const hasAudioAnalysisInput = audioSources.some(src => src.refs?.some(ref => mediaKindForRef(ref) === 'audio'));
                     <option value="wide">16:9</option>
                     <option value="ultrawide">21:9</option>
                     <option value="ultratall">9:21</option>
@@ -8942,6 +9022,15 @@ function llmInputAudios(node){
     providerSelect.onclick = e => e.stopPropagation();
     providerSelect.onchange = e => {
         e.stopPropagation();
+        if(hasAudioAnalysisInput){
+            node.apiProvider = e.target.value;
+            const models = providerAudioAnalysisModels(node.apiProvider);
+            node.model = models[0] || '';
+            modelSelect.innerHTML = audioAnalysisModelOptions(node.model, node.apiProvider);
+            scheduleSave();
+            return;
+        }
+        if(!imageApiProviders().some(p=>p.id===e.target.value)){node.audioProvider=e.target.value;node.audioManualSelection=true;refreshNodes([node.id]);scheduleSave();return;}
         node.apiProvider = e.target.value;
         const providerModels = providerImageModels(node.apiProvider);
         if(!providerModels.includes(resolveImageModel(node.model))) node.model = providerModels[0] || '';
@@ -8956,6 +9045,12 @@ function llmInputAudios(node){
     modelSelect.onclick = e => e.stopPropagation();
     modelSelect.onchange = e => {
         e.stopPropagation();
+        if(hasAudioAnalysisInput){
+            node.model = e.target.value;
+            scheduleSave();
+            return;
+        }
+        if(e.target.value.startsWith('audio:')){node.audioProvider=node.apiProvider;node.audioModel=e.target.value.slice(6);node.audioManualSelection=true;refreshNodes([node.id]);scheduleSave();return;}
         node.model = e.target.value;
         node._apiResolutionUserSet = false;
         if(node.resolution !== 'custom') node.resolution = defaultApiImageResolution(node.model);
@@ -8970,15 +9065,6 @@ function llmInputAudios(node){
     const customSizeRow = wrap.querySelector('.custom-size-row');
     const customRatioWInput = wrap.querySelector('.custom-ratio-w-input');
     const customRatioHInput = wrap.querySelector('.custom-ratio-h-input');
-        if(hasAudioAnalysisInput){
-            node.apiProvider = e.target.value;
-            const models = providerAudioAnalysisModels(node.apiProvider);
-            node.model = models[0] || '';
-            modelSelect.innerHTML = audioAnalysisModelOptions(node.model, node.apiProvider);
-            scheduleSave();
-            return;
-        }
-        if(!imageApiProviders().some(p=>p.id===e.target.value)){node.audioProvider=e.target.value;node.audioManualSelection=true;refreshNodes([node.id]);scheduleSave();return;}
     const customWInput = wrap.querySelector('.custom-w-input');
     const customHInput = wrap.querySelector('.custom-h-input');
     const fitSizeBtn = wrap.querySelector('.fit-size-btn');
@@ -8993,12 +9079,6 @@ function llmInputAudios(node){
             const raw = String(node.customRatio || '');
             if(raw.includes(':')){
                 const [w,h] = raw.split(':');
-        if(hasAudioAnalysisInput){
-            node.model = e.target.value;
-            scheduleSave();
-            return;
-        }
-        if(e.target.value.startsWith('audio:')){node.audioProvider=node.apiProvider;node.audioModel=e.target.value.slice(6);node.audioManualSelection=true;refreshNodes([node.id]);scheduleSave();return;}
                 node.customRatioWidth = node.customRatioWidth || w;
                 node.customRatioHeight = node.customRatioHeight || h;
             }
@@ -11102,6 +11182,14 @@ function renderRhSettingField(node, field, key, kind, label, value, options, wid
         <label class="field"><div class="setting-title">${safeLabel}</div><input class="setting-input rh-param-input" type="${inputType}" data-rh-param="${escapeAttr(key)}" data-rh-type="${escapeAttr(kind)}" value="${escapeAttr(value)}"></label>
     </div>`;
 }
+function setCanvasWorkflowParameters(node, patch){
+    if(node.type === 'rh'){
+        node.rhParams = node.rhParams || {};
+        for(const [key, value] of Object.entries(patch)) node.rhParams[key] = {...(node.rhParams[key] || {}), value:String(value)};
+    }else if(node.type === 'comfy'){
+        node.comfyParams = {...(node.comfyParams || {}), ...patch};
+    }else throw new Error('不是原生工作流节点');
+}
 function bindRhParamControls(container, node){
     container.querySelectorAll('button[data-rh-param]').forEach(btn => {
         btn.onmousedown = e => e.stopPropagation();
@@ -11110,9 +11198,8 @@ function bindRhParamControls(container, node){
             const key = btn.dataset.rhParam;
             node.rhParams = node.rhParams || {};
             const field = rhActiveFields(node).find(f => rhParamKey(f.nodeId, f.fieldName) === key);
-            const cur = node.rhParams[key] || {};
             const on = String(rhFieldValue(node, field)).toLowerCase() === 'true';
-            node.rhParams[key] = {...cur, value:String(!on)};
+            setCanvasWorkflowParameters(node, {[key]:!on});
             render();
             scheduleSave();
         };
@@ -11123,8 +11210,7 @@ function bindRhParamControls(container, node){
         control.oninput = control.onchange = e => {
             const key = control.dataset.rhParam;
             node.rhParams = node.rhParams || {};
-            const cur = node.rhParams[key] || {};
-            node.rhParams[key] = {...cur, value:e.target.value};
+            setCanvasWorkflowParameters(node, {[key]:e.target.value});
             const val = control.closest('.field')?.querySelector('.rh-param-val');
             if(val) val.textContent = e.target.value;
             scheduleSave();
@@ -11269,38 +11355,49 @@ async function rhBuildNodeInfoList(node, media){
 async function runRhNode(nodeId, opts={}){
     const node = nodes.find(n => n.id === nodeId);
     if(!node || (node.running && !opts.cascade)) return;
+    const assistant = Boolean(opts.assistantNativeActionId);
     const cascadeTargetId = cascadeTargetIdFromOptions(opts);
     ensureRhNodeSelection(node);
     const mode = rhCurrentKind(node);
     if(mode === 'model') return runRhModelNode(node, opts);
-    node.rhRandomValues = {};
     if(mode === 'workflow' && !String(node.workflowId || '').trim()){ alert(tr('canvas.rhNeedWorkflowId')); return; }
     if(mode === 'app' && !String(node.webappId || '').trim()){ alert(tr('canvas.rhNeedWebappId')); return; }
-    const selectedEntry = rhCurrentEntry(node);
+    const selectedRef = rhSelectedEntryRef(node);
+    const selectedEntry = selectedRef?.entry || null;
     if(!selectedEntry){
         alert(mode === 'workflow' ? '请先在 API 设置里添加 RunningHub 工作流' : '请先在 API 设置里添加 RunningHub 应用');
         return;
     }
-    if(mode === 'workflow') await ensureRunningHubWorkflowConfigForNode(node);
-    if(!rhActiveFields(node).length){
+    const selectedId = mode === 'workflow' ? String(node.workflowId || '').trim() : String(node.webappId || '').trim();
+    if(assistant && (selectedRef.kind!==mode || selectedRef.id!==selectedId || node.rhConfigKey!==`${mode}:${selectedId}` || node.apiProvider!=='runninghub' || node.count!==1 || node.outputEnabled!==true)){
+        const error=new Error('RH 手选工作流、应用或单次输出设置已变化，未提交任务');error.submissionKnownRejected=true;throw error;
+    }
+    const compiledNode={...node,rhRandomValues:{},rhParams:{...(node.rhParams||{})}};
+    if(mode === 'workflow') await ensureRunningHubWorkflowConfigForNode(compiledNode);
+    if(!rhActiveFields(compiledNode).length){
         alert(mode === 'workflow' ? '请先在 API 设置里编辑并保存这个 RunningHub 工作流参数' : '请先在 API 设置里编辑并保存这个 RunningHub 应用参数');
         return;
     }
     const media = rhMediaSources(node);
-    let out = outputForNode(node, 500);
+    let out = assistant?nodes.find(n=>n.id===opts.assistantOutputNodeId&&n.type==='output'):outputForNode(node, 500);
+    if(assistant && (!out || connections.filter(c=>c.from===node.id&&nodes.find(n=>n.id===c.to)?.type==='output').length!==1 || !connections.some(c=>c.from===node.id&&c.to===out.id))){
+        const error=new Error('RH 原生输出连接已变化，未提交任务');error.submissionKnownRejected=true;throw error;
+    }
     const pendingId = uid('p');
     const run = runSnapshot(node, media.prompt || 'RunningHub', media.refs);
     run.taskLabel = 'RunningHub';
     if(out) out._pending = [...(out._pending || []), makePendingForRun(pendingId, run, node, {refs:media.refs, cascadeTargetId})];
     if(!opts.cascade) node.running = true;
     refreshRunNodes(node, out);
+    let taskAccepted = false;
     try {
-        const nodeInfoList = await rhBuildNodeInfoList(node, media);
-        const workflowExtras = mode === 'workflow' ? await rhBuildWorkflowRequestExtras(node, media, nodeInfoList) : {};
+        const nodeInfoList = await rhBuildNodeInfoList(compiledNode, media);
+        const workflowExtras = mode === 'workflow' ? await rhBuildWorkflowRequestExtras(compiledNode, media, nodeInfoList) : {};
         const endpoint = mode === 'workflow' ? '/api/runninghub/workflow-submit' : '/api/runninghub/submit';
         const body = mode === 'workflow'
             ? {workflowId:node.workflowId.trim(), nodeInfoList, useWallet:rhUseWallet(node), ...workflowExtras}
             : {webappId:node.webappId.trim(), nodeInfoList, instanceType:node.instanceType || '', useWallet:rhUseWallet(node)};
+        if(opts.beforeSubmit) await opts.beforeSubmit();
         const submit = await cascadeFetch(endpoint, {
             method:'POST',
             headers:{'Content-Type':'application/json'},
@@ -11312,8 +11409,16 @@ async function runRhNode(nodeId, opts={}){
         });
         const taskId = submit.taskId;
         if(!taskId) throw new Error(tr('canvas.rhNoTaskId'));
+        taskAccepted = true;
         const useWallet = rhUseWallet(node);
         run.request = {task_id:taskId, webappId:node.webappId, workflowId:node.workflowId, backend:'runninghub', mode, useWallet};
+        const pending=pendingById(out,pendingId);
+        Object.assign(pending,{canvasTaskId:taskId,canvasTaskType:'runninghub',providerId:'runninghub',model:`${mode}:${selectedId}`,assistantNativeActionId:String(opts.assistantNativeActionId||''),assistantInputHash:String(opts.assistantRunInputHash||''),assistantCanvasId:String(opts.assistantCanvasId||''),queryRecoverable:true,rhMode:mode,useWallet});
+        if(assistant)node.assistantNativeRun={previousActionId:node.assistantNativeRun?.previousActionId||'',actionId:opts.assistantNativeActionId,taskKind:'runninghub',taskIds:[taskId],submissionStarted:true,startedAt:pending.startedAt,inputHash:String(opts.assistantRunInputHash||''),outputNodeId:out.id};
+        rememberUnsavedCanvasAcceptedTasks(node,[pending],out);
+        refreshRunNodes(node,out);
+        scheduleSave();
+        if(!await saveCanvas()) throw pauseCanvasAcceptedTasksUntilSaved(node,[pending],out);
         let result = null;
         for(let i = 0; i < 720; i++){
             if(cascadeTargetId) ensureCascadeActive(cascadeTargetId);
@@ -11339,11 +11444,19 @@ async function runRhNode(nodeId, opts={}){
         addGenerationLog({run, outputs, runMs:meta.runMs || 0});
         node.runStatus = 'done';
         node.runError = '';
+        if(assistant){node.assistantNativeRun.resultUrls=[...outputs];node.assistantNativeRun.status='succeeded';}
         refreshRunNodes(node, out);
         scheduleSave();
     } catch(err) {
         const meta = collectRunMeta(out, pendingId);
         addGenerationLog({run, outputs:[], runMs:meta.runMs || 0, error:err.message || String(err)});
+        const pending=pendingById(out,pendingId);
+        if(taskAccepted && pending){
+            pending.queryPaused=true;pending.queryRecoverable=true;pending.error=err.message||String(err);pending.cascadeTargetId='';
+            node.runStatus='query-paused';node.runError=pending.error;scheduleSave();
+            if(opts.cascade) throw err;
+            return;
+        }
         if(out) out._pending = (out._pending || []).filter(p => p.id !== pendingId);
         if(isCascadeAbortError(err)){
             if(opts.cascade) throw err;
@@ -11368,9 +11481,15 @@ async function runRhModelNode(node, opts={}){
         alert('请先在 API 设置里添加 RunningHub 模型 API');
         return;
     }
-    node.rhModel = model;
-    node.model = model;
-    node.apiProvider = 'runninghub';
+    if(opts.assistantNativeActionId){
+        if(selectedRef?.kind!=='model'||selectedRef.id!==node.rhModel||node.rhConfigKey!=='model:'+node.rhModel||node.model!==node.rhModel||node.apiProvider!=='runninghub'||node.rhMode!=='model'||node.count!==1||node.outputEnabled!==true){
+            const error=new Error('RH 手选模型或单次输出设置已变化，未提交任务');error.submissionKnownRejected=true;throw error;
+        }
+    }else{
+        node.rhModel = model;
+        node.model = model;
+        node.apiProvider = 'runninghub';
+    }
     const media = rhMediaSources(node);
     const prompt = media.prompt || '';
     const refs = imageRefsOnly(media.refs || []);
@@ -11384,7 +11503,7 @@ async function runRhModelNode(node, opts={}){
         prompt:prompt || 'Edit the reference images.',
         provider_id:'runninghub',
         model,
-        size:await generatorSizeForRun(node, refs),
+        size:await generatorSizeForRun(opts.assistantNativeActionId?{...node}:node, refs),
         reference_images:refs.slice(0, CANVAS_REFERENCE_IMAGE_MAX)
     };
     const quality = normalizedImageQuality(node.quality);
@@ -11394,12 +11513,22 @@ async function runRhModelNode(node, opts={}){
     if(!opts.cascade){
         node.running = true;
         refreshRunNodes(node, out);
-        setTimeout(() => { node.running = false; refreshRunNodes(node, out); }, 2000);
+        if(!opts.assistantNativeActionId)setTimeout(() => { node.running = false; refreshRunNodes(node, out); }, 2000);
     }
     rememberCanvasSubmissionWarning(node, '');
     try {
-        const submission = await submitCanvasImageTaskBatch(count, payload, {cascadeTargetId});
+        const submissionOptions={...opts,cascadeTargetId};
+        if(opts.assistantNativeActionId){
+            const validOutput=()=>nodes.includes(out)&&out?.type==='output'&&connections.some(c=>c.from===node.id&&c.to===out.id);
+            submissionOptions.beforeSubmit=async()=>{
+                if(!validOutput())throw new Error('RH 原生输出连接已变化，未提交任务');
+                if(opts.beforeSubmit)await opts.beforeSubmit();
+                if(!validOutput())throw new Error('RH 原生输出连接已变化，未提交任务');
+            };
+        }
+        const submission = await submitCanvasImageTaskBatch(count, payload, submissionOptions);
         const {taskInfos, warning, unknownCount} = submission;
+        if(opts.assistantNativeActionId)node.assistantNativeRun={previousActionId:node.assistantNativeRun?.previousActionId||'',actionId:opts.assistantNativeActionId,taskKind:'image',taskIds:taskInfos.map(task=>task.task_id),unknownCount,warning,startedAt};
         rememberCanvasSubmissionWarning(node, warning, unknownCount > 0);
         if(!out){
             const outputs = await waitCanvasDirectTasks(node, taskInfos, run, {cascadeTargetId, refs, requestSize:payload.size, providerId:payload.provider_id, model:payload.model,
@@ -11426,6 +11555,7 @@ async function runRhModelNode(node, opts={}){
                 appendGenerated:Boolean(opts.cascade)
             }))
         ];
+        if(opts.assistantNativeActionId)rememberUnsavedCanvasAcceptedTasks(node,pendingIds.map(id=>pendingById(out,id)).filter(Boolean),out);
         refreshRunNodes(node, out);
         scheduleSave();
         if(!await saveCanvas()) throw pauseCanvasAcceptedTasksUntilSaved(node, pendingIds.map(id => pendingById(out, id)).filter(Boolean), out);
@@ -11441,6 +11571,7 @@ async function runRhModelNode(node, opts={}){
         }
     } catch(err) {
         if(err.submissionUnknown) rememberCanvasSubmissionWarning(node, err.message, true);
+        if(opts.assistantNativeActionId && err.submissionKnownRejected)node.assistantNativeRun={actionId:opts.assistantNativeActionId,taskKind:'image',taskIds:[],knownRejected:true,error:err.message};
         const remainingPending = pendingIds.map(id => pendingById(out, id)).filter(Boolean);
         const removableIds = remainingPending.filter(p => !(p.queryRecoverable || (p.failed && p.recoverTaskId))).map(p => p.id);
         if(removableIds.length){
@@ -11602,9 +11733,9 @@ function updateComfyField(node, input, event){
         node.comfyParams = node.comfyParams || {};
         const field = comfyFields(node).find(f => f.id === paramId);
         const type = input.dataset.comfyType || field?.type || 'text';
-        if(type === 'boolean') node.comfyParams[paramId] = !Boolean(node.comfyParams[paramId] ?? field?.default ?? false);
-        else if(type === 'number' || type === 'slider') node.comfyParams[paramId] = Number(input.value) || 0;
-        else node.comfyParams[paramId] = input.value;
+        const value = type === 'boolean' ? !Boolean(node.comfyParams[paramId] ?? field?.default ?? false)
+            : (type === 'number' || type === 'slider') ? Number(input.value) || 0 : input.value;
+        setCanvasWorkflowParameters(node, {[paramId]:value});
         const val = input.closest('.field')?.querySelector('.comfy-param-val');
         if(val) val.textContent = node.comfyParams[paramId];
         if(type === 'boolean') render();
@@ -11910,9 +12041,6 @@ function refreshGeneratorInputViews(){
 async function runGenerator(genId, opts={}){
     const gen = nodes.find(n => n.id === genId);
     if(!gen || (gen.running && !opts.cascade)) return;
-    const cascadeTargetId = cascadeTargetIdFromOptions(opts);
-    const sources = orderedSources(gen, generatorSources(gen));
-    const prompt = opts.assistantProposal?.prompt ?? sources.map(s => s.prompt).filter(Boolean).join('\n\n');
     if(!opts.acceptedTask && canvasApiAudioMode(gen)){
         if(opts.assistantNativeActionId || opts.assistantProposal){
             const error = new Error('此节点当前使用音频分支，助手图片运行确认不适用；未提交任务');
@@ -11921,10 +12049,10 @@ async function runGenerator(genId, opts={}){
         }
         try{return await runCanvasApiAudio(gen,opts);}catch(error){if(opts.cascade)throw error;showErrorModal(error.message,'音频处理失败');return;}
     }
-    const refs = opts.assistantProposal ? opts.assistantProposal.referenceImages.map(url=>({url,kind:'image'})) : imageRefsOnly(sources.flatMap(s => s.refs || []));
-    if(!prompt && !refs.length){ alert(tr('canvas.needPromptOrImage')); return; }
-    if(!confirmCanvasUnknownResubmission(gen, opts)) return;
-    const count = opts.acceptedTask ? 1 : Math.max(1, Math.min(8, Number(gen.count || 1)));
+    const cascadeTargetId = cascadeTargetIdFromOptions(opts);
+    const compiledNode = opts.assistantNativeActionId ? {...gen,inputs:[...(gen.inputs||[])]} : gen;
+    const sources = orderedSources(compiledNode, generatorSources(gen));
+    const prompt = opts.assistantProposal?.prompt ?? sources.map(s => s.prompt).filter(Boolean).join('\n\n');
     const audioRefs = audioRefsOnly(sources.flatMap(source => source.refs || []));
     if(!opts.acceptedTask && audioRefs.length && providerChatModels(gen.apiProvider).includes(gen.model)){
         if(opts.assistantNativeActionId || opts.assistantProposal){
@@ -11934,13 +12062,17 @@ async function runGenerator(genId, opts={}){
         }
         return runAudioAnalysisGenerator(gen, prompt, audioRefs, opts);
     }
+    const refs = opts.assistantProposal ? opts.assistantProposal.referenceImages.map(url=>({url,kind:'image'})) : imageRefsOnly(sources.flatMap(s => s.refs || []));
+    if(!prompt && !refs.length){ alert(tr('canvas.needPromptOrImage')); return; }
+    if(!confirmCanvasUnknownResubmission(gen, opts)) return;
+    const count = opts.acceptedTask ? 1 : Math.max(1, Math.min(8, Number(gen.count || 1)));
     let out = outputForNode(gen, 460);
     const run = runSnapshot(gen, prompt || 'Edit the reference images.', refs);
     const payload = {
         prompt: prompt || 'Edit the reference images.',
         provider_id:resolveImageProviderId(gen.apiProvider || 'comfly'),
         model:resolveImageModel(gen.model),
-        size:await generatorSizeForRun(gen, refs),
+        size:await generatorSizeForRun(compiledNode, refs),
         reference_images:refs.slice(0, CANVAS_REFERENCE_IMAGE_MAX)
     };
     const quality = normalizedImageQuality(gen.quality);
@@ -11957,6 +12089,7 @@ async function runGenerator(genId, opts={}){
     try {
         const submission = await submitCanvasImageTaskBatch(count, payload, {...opts,cascadeTargetId});
         const {taskInfos, warning, unknownCount} = submission;
+        if(opts.assistantNativeActionId)gen.assistantNativeRun={actionId:opts.assistantNativeActionId,taskKind:'image',taskIds:taskInfos.map(task=>task.task_id),unknownCount,warning};
         rememberCanvasSubmissionWarning(gen, warning, unknownCount > 0);
         if(!out){
             const outputs = await waitCanvasDirectTasks(gen, taskInfos, run, {cascadeTargetId, refs, requestSize:payload.size, providerId:payload.provider_id, model:payload.model,
@@ -11999,6 +12132,7 @@ async function runGenerator(genId, opts={}){
         }
     } catch(err) {
         if(err.submissionUnknown) rememberCanvasSubmissionWarning(gen, err.message, true);
+        if(opts.assistantNativeActionId && err.submissionKnownRejected)gen.assistantNativeRun={actionId:opts.assistantNativeActionId,taskKind:'image',taskIds:[],knownRejected:true,error:err.message};
         const remainingPending = pendingIds.map(id => pendingById(out, id)).filter(Boolean);
         const removableIds = remainingPending.filter(p => !(p.queryRecoverable || (p.failed && p.recoverTaskId))).map(p => p.id);
         if(removableIds.length){
@@ -12062,6 +12196,7 @@ async function completeMidjourneyRun(node, out, run, result, append=false){
     scheduleSave();
 }
 async function runMidjourneyNode(nodeId, opts={}){
+    if(opts.assistantNativeActionId)return runCanvasAssistantCatalogImage(nodeId,opts);
     const node = nodes.find(item => item.id === nodeId);
     if(!node || (node.running && !opts.cascade)) return;
     const providerId = resolveMidjourneyProviderId(node.apiProvider || '');
@@ -12252,8 +12387,13 @@ function canvasVideoTaskIdForPending(pending){
     pending.queryRecoverable = true;
     return pending.canvasTaskId;
 }
-async function createCanvasVideoTask(payload, pending){
+async function createCanvasVideoTask(payload, pending, options={}){
     const taskId = canvasVideoTaskIdForPending(pending);
+    if(options.beforeSubmit)await options.beforeSubmit();
+    if(options.persistStarted&&!await options.persistStarted())throw new Error('视频提交开始状态未保存，请先保存；请求未提交');
+    if(options.beforeSubmit)await options.beforeSubmit();
+    if(options.validate)options.validate();
+    if(options.onSubmitting)options.onSubmitting();
     const response = await fetch('/api/canvas-video-tasks', {
         method:'POST',
         headers:{'Content-Type':'application/json'},
@@ -12262,6 +12402,8 @@ async function createCanvasVideoTask(payload, pending){
     if(!response.ok) throw new Error(await responseErrorMessage(response, '视频任务提交失败'));
     const task = await response.json();
     if(!task.task_id) throw new Error('视频任务未返回本地编号，未继续提交');
+    if(options.validateAccepted)options.validateAccepted(task,taskId);
+    if(options.onAccepted)await options.onAccepted(task);
     return task;
 }
 async function refreshCanvasImageTaskOnce(taskId, options={}){
@@ -12336,7 +12478,14 @@ async function waitCanvasVideoTaskResult(taskId, options={}){
     if(!taskId) throw new Error('视频任务缺少本地编号');
     let queryFailures = 0;
     let refreshAttempted = false;
+    const original=findPendingTask(taskId),pending=original?.pending;
+    const validateTask=task=>{
+        if(!pending?.assistantNativeActionId)return;
+        const binding={task_id:taskId,canvas_id:pending.assistantCanvasId,node_id:pending.run?.node?.id,assistant_action_id:pending.assistantNativeActionId,input_hash:pending.assistantInputHash,provider_id:pending.providerId,model:pending.model};
+        if(Object.entries(binding).some(([k,v])=>!v||task?.[k]!==v))throw new Error('原视频查询返回的任务归属、输入或模型不匹配');
+    };
     const consumeRefreshResult = refreshed => {
+        validateTask(refreshed);
         if(refreshed?.status === 'succeeded') return {done:true, result:refreshed.result || {}};
         if(refreshed?.status === 'failed'){
             const error = new Error(refreshed.error || '视频生成失败');
@@ -12387,6 +12536,7 @@ async function waitCanvasVideoTaskResult(taskId, options={}){
             throw error;
         }
         const task = await response.json();
+        validateTask(task);
         if(task.status === 'succeeded') return task.result || {};
         if(task.status === 'failed'){
             const error = new Error(task.error || '视频生成失败');
@@ -12426,6 +12576,28 @@ async function waitCanvasVideoTaskResult(taskId, options={}){
         await sleep(1800);
     }
 }
+function completeCanvasVideoTask(taskId, result, fallback=null){
+    const found=findPendingTask(taskId)||fallback;
+    if(!found)return false;
+    const {out,pending}=found,gen=nodes.find(n=>n.id===pending.run?.node?.id);
+    if(pending.assistantNativeActionId){
+        const run=gen?.assistantNativeRun;
+        const outputIds=connections.filter(c=>c.from===gen?.id).map(c=>c.to).filter(id=>nodes.some(n=>n.id===id&&n.type==='output'));
+        if(canvas?.id!==pending.assistantCanvasId||!nodes.includes(out)||out.type!=='output'||run?.actionId!==pending.assistantNativeActionId||run.taskKind!=='video'||run.outputNodeId!==out.id||outputIds.length!==1||outputIds[0]!==out.id||!((run.taskIds||[]).includes(taskId)||run.plannedTaskId===taskId))throw new Error('原视频输出或任务归属已变化，保留原任务，不回填到其它节点');
+    }
+    const outputUrls=resultMediaUrls(result).map(item=>{const url=outputUrlValue(item);return item&&typeof item==='object'?{...item,url,kind:item.kind||'video'}:{url,kind:'video'};}).filter(item=>item.url);
+    if(!outputUrls.length)throw new Error('视频任务成功但没有返回视频地址');
+    const runMs=nowMs()-Number(pending.startedAt||nowMs());
+    pending.run.request=requestMetaFromResult(result);
+    if(out)appendOutputImagesWithoutDuplicates(out,outputUrls,pending.run?.refs?.[0],[{run:pending.run||{},runMs,kind:'video'}]);
+    if(gen){
+        mergeGeneratedOutputs(gen,outputUrls,Boolean(pending.appendGenerated));gen.runStatus='done';gen.runError='';gen.running=false;
+        if(pending.assistantNativeActionId){gen.assistantNativeRun={...gen.assistantNativeRun,taskIds:[taskId],unknownCount:0,warning:''};gen.submissionUnknown=false;gen.submissionWarning='';}
+    }
+    if(out)out._pending=(out._pending||[]).filter(item=>item.id!==pending.id);
+    addGenerationLog({run:pending.run||{},outputs:outputUrls,runMs});refreshRunNodes(gen,out);scheduleSave();
+    return true;
+}
 async function pollCanvasVideoTask(taskId, options={}){
     if(!taskId || activeCanvasTaskPolls.has(taskId)) return;
     const found = findPendingTask(taskId);
@@ -12437,21 +12609,7 @@ async function pollCanvasVideoTask(taskId, options={}){
     refreshRunNodes(nodes.find(n => n.id === pending.run?.node?.id), out);
     try {
         const result = await waitCanvasVideoTaskResult(taskId, options);
-        const outputUrls = resultMediaUrls(result).map(item => {
-            const url = outputUrlValue(item);
-            return item && typeof item === 'object' ? {...item, url, kind:item.kind || 'video'} : {url, kind:'video'};
-        }).filter(item => item.url);
-        if(!outputUrls.length) throw new Error('视频任务成功但没有返回视频地址');
-        out._pending = (out._pending || []).filter(item => item.id !== pending.id);
-        const gen = nodes.find(n => n.id === pending.run?.node?.id);
-        appendOutputImages(out, outputUrls, pending.run?.refs?.[0], [{run:pending.run || {}, runMs:nowMs() - Number(pending.startedAt || nowMs()), kind:'video'}]);
-        if(gen){
-            mergeGeneratedOutputs(gen, outputUrls, Boolean(pending.appendGenerated));
-            gen.runStatus = 'done';
-            gen.runError = '';
-            gen.running = false;
-        }
-        addGenerationLog({run:pending.run || {}, outputs:outputUrls, runMs:nowMs() - Number(pending.startedAt || nowMs())});
+        completeCanvasVideoTask(taskId,result);
     } catch(error){
         const current = findPendingTask(taskId);
         if(!current) return;
@@ -12486,19 +12644,31 @@ async function runVideoNode(nodeId, opts={}){
     if(node.useFrameRoles && refs[0]) refs[0] = {...refs[0], role:'first_frame'};
     if(node.useFrameRoles && refs[1]) refs[1] = {...refs[1], role:'last_frame'};
     if(!prompt){ alert(tr('canvas.videoNeedsPrompt')); return; }
-    let out = outputForNode(node, 460);
+    const assistant=Boolean(opts.assistantNativeActionId);
+    const originalOut=assistant?nodes.find(n=>n.id===opts.assistantOutputNodeId&&n.type==='output'):null;
+    const validate=()=>{
+        const provider=(apiProviders||[]).find(p=>p.id===node.apiProvider&&p.enabled!==false);
+        if(!nodes.includes(node)||canvas?.id!==opts.assistantCanvasId||!originalOut||!nodes.includes(originalOut)||originalOut.type!=='output'||!connections.some(c=>c.from===node.id&&c.to===originalOut.id)||node.outputEnabled!==true||!provider||(provider.video_models||[]).indexOf(node.model)<0||!opts.assistantRunInputHash||opts.assistantMaxCalls!==1)throw new Error('原视频模型、画布或输出连接已变化，请重新读取；请求未提交');
+    };
+    let out = assistant?originalOut:outputForNode(node, 460);
     const pendingId = uid('p');
     const run = runSnapshot(node, prompt, refs);
     const pending = makePendingForRun(pendingId, run, node, {refs, cascadeTargetId});
     canvasVideoTaskIdForPending(pending);
+    if(assistant){
+        pending.assistantNativeActionId=opts.assistantNativeActionId;pending.assistantCanvasId=opts.assistantCanvasId;pending.assistantInputHash=opts.assistantRunInputHash;pending.providerId=node.apiProvider;pending.model=node.model;
+        Object.assign(node.assistantNativeRun,{plannedTaskId:pending.canvasTaskId,outputNodeId:out?.id,inputHash:opts.assistantRunInputHash,startedAt:nowMs()});
+    }
     if(out) out._pending = [...(out._pending || []), pending];
     if(!opts.cascade){ node.running = true; refreshRunNodes(node, out); }
     else refreshRunNodes(node, out);
+    let posted=false;
     try {
+        if(assistant)validate();
         const payload = {
                 prompt,
-                provider_id:resolveVideoProviderId(node.apiProvider || 'comfly'),
-                model:node.model || 'veo3-fast',
+                provider_id:assistant?node.apiProvider:resolveVideoProviderId(node.apiProvider || 'comfly'),
+                model:assistant?node.model:node.model || 'veo3-fast',
                 duration:Number(node.duration || 5),
                 aspect_ratio:node.aspectRatio || '16:9',
                 resolution:node.resolution || '',
@@ -12514,38 +12684,44 @@ async function runVideoNode(nodeId, opts={}){
                 generate_audio:Boolean(node.generateAudio),
                 multimodal:Boolean(node.multimodal)
         };
+        if(assistant)Object.assign(payload,{canvas_id:opts.assistantCanvasId,node_id:node.id,assistant_action_id:opts.assistantNativeActionId,input_hash:opts.assistantRunInputHash});
         if(!await saveCanvas()){
             pending.savePending = true;
             pending.queryPaused = true;
             pending.error = '编号未保存，视频请求未提交；请先保存画布再查询。';
             throw new Error(pending.error);
         }
-        const accepted = await createCanvasVideoTask(payload, pending);
+        const accepted = await createCanvasVideoTask(payload, pending,assistant?{
+            beforeSubmit:opts.beforeSubmit,validate,
+            persistStarted:()=>saveCanvas(),onSubmitting:()=>{posted=true;},
+            validateAccepted:(task,id)=>{const binding={task_id:id,canvas_id:opts.assistantCanvasId,node_id:node.id,assistant_action_id:opts.assistantNativeActionId,input_hash:opts.assistantRunInputHash,provider_id:payload.provider_id,model:payload.model};if(Object.entries(binding).some(([key,value])=>task[key]!==value))throw new Error('视频受理编号或归属不匹配，只查询原预分配编号');},
+            onAccepted:async task=>{
+                node.assistantNativeRun.taskIds=[task.task_id];node.submissionUnknown=false;
+                rememberUnsavedCanvasAcceptedTasks(node,[pending],out);
+            }
+        }:{});
         pending.canvasTaskId = accepted.task_id || pending.canvasTaskId;
         pending.queryRecoverable = true;
         pending.queryPaused = false;
         pending.savePending = false;
         refreshRunNodes(node, out);
+        if(assistant&&!await saveCanvas()){
+            pauseCanvasAcceptedTasksUntilSaved(node,[pending],out);
+            return;
+        }
         scheduleSave();
         const result = await waitCanvasVideoTaskResult(pending.canvasTaskId, {cascadeTargetId});
-        const meta = collectRunMeta(out, pendingId);
-        if(out) out._pending = (out._pending || []).filter(p => p.id !== pendingId);
-        const outputUrls = resultMediaUrls(result).map(item => {
-            const url = outputUrlValue(item);
-            return item && typeof item === 'object' ? {...item, url, kind:item.kind || 'video'} : {url, kind:'video'};
-        }).filter(item => item.url);
-        if(!outputUrls.length) throw new Error(tr('canvas.videoFailed'));
-        run.request = requestMetaFromResult(result);
-        appendOutputImages(out, outputUrls, refs[0], [{...meta, kind:'video'}]);
-        mergeGeneratedOutputs(node, outputUrls, Boolean(opts.cascade));
-        addGenerationLog({run, outputs:outputUrls, runMs:meta.runMs || 0});
-        node.runStatus = 'done'; node.runError = '';
-        refreshRunNodes(node, out);
-        scheduleSave();
+        completeCanvasVideoTask(pending.canvasTaskId,result,{out,pending});
     } catch(err) {
+        if(assistant){
+            const receipt=node.assistantNativeRun;
+            receipt.error=err.message||'视频运行未完成';receipt.knownRejected=!posted;receipt.submissionStarted=posted;
+            if(!posted){if(out)out._pending=(out._pending||[]).filter(p=>p.id!==pendingId);}
+            else if(!receipt.taskIds.length){node.submissionUnknown=true;receipt.unknownCount=1;receipt.warning='视频请求受理状态未知，仅查询原预分配编号，不重新提交';}
+        }
         const meta = collectRunMeta(out, pendingId);
         addGenerationLog({run, outputs:[], runMs:meta.runMs || 0, error:err.message || String(err)});
-        if(pending.canvasTaskId && out){
+        if(pending.canvasTaskId && out && (!assistant||posted)){
             pending.failed = true;
             pending.queryPaused = !err.taskLost;
             pending.taskLost = Boolean(err.taskLost);
@@ -12563,6 +12739,7 @@ async function runVideoNode(nodeId, opts={}){
     } finally {
         node.running = false;
         refreshRunNodes(node, out);
+        if(assistant)await saveCanvas();
     }
 }
 async function miniMaxDynamicParams(node, prompt, refs){
@@ -13485,7 +13662,8 @@ async function runComfyNode(nodeId, opts={}){
     const node = nodes.find(n => n.id === nodeId);
     if(!node || (node.running && !opts.cascade)) return;
     const cascadeTargetId = cascadeTargetIdFromOptions(opts);
-    const sources = orderedSources(node, generatorSources(node));
+    const compiledNode = opts.assistantNativeActionId ? {...node,inputs:[...(node.inputs||[])],comfyParams:{...(node.comfyParams||{})}} : node;
+    const sources = orderedSources(compiledNode, generatorSources(node));
     const prompt = sources.map(s => s.prompt).filter(Boolean).join('\n\n');
     const allRefs = sources.flatMap(s => s.refs || []);
     const refs = imageRefsOnly(allRefs);
@@ -13502,8 +13680,26 @@ async function runComfyNode(nodeId, opts={}){
     const pendingId = uid('p');
     const run = runSnapshot(node, prompt, refs);
     run.taskLabel = comfyRunLabel(node);
+    const assistantRun = opts.assistantNativeActionId ? (node.assistantNativeRun = {
+        actionId:opts.assistantNativeActionId,
+        taskKind:'comfy',
+        taskIds:[],
+        submissionStarted:false,
+        unknownCount:0,
+        warning:''
+    }) : null;
+    const comfyRunOptions = {
+        cascadeTargetId,
+        out,
+        pendingId,
+        beforeSubmit:opts.beforeSubmit,
+        onAccepted:taskId=>{
+            if(!assistantRun || !taskId)return;
+            if(!assistantRun.taskIds.includes(taskId))assistantRun.taskIds.push(taskId);
+        }
+    };
     const requestSize = mode === 'text' ? {width:Number(node.width || 1024), height:Number(node.height || 1024)} : null;
-    if(out) out._pending = [...(out._pending||[]), makePendingForRun(pendingId, run, node, {refs, requestSize, cascadeTargetId})];
+    if(out) out._pending = [...(out._pending||[]), makePendingForRun(pendingId, run, node, {refs, requestSize, cascadeTargetId, ...(assistantRun ? {assistantNativeActionId:assistantRun.actionId} : {})})];
     if(!opts.cascade){
         node.running = true;
         refreshRunNodes(node, out);
@@ -13521,7 +13717,7 @@ async function runComfyNode(nodeId, opts={}){
                 workflow_json:'Z-Image.json',
                 type:'zimage',
                 client_id:CLIENT_ID
-            }, {cascadeTargetId, out, pendingId});
+            }, comfyRunOptions);
             run.request = requestMetaFromResult(result);
             images = comfyResultOutputs(result);
         } else if(mode === 'enhance'){
@@ -13535,19 +13731,19 @@ async function runComfyNode(nodeId, opts={}){
                 },
                 type:'enhance',
                 client_id:CLIENT_ID
-            }, {cascadeTargetId, out, pendingId});
+            }, comfyRunOptions);
             run.request = requestMetaFromResult(enhance);
             if(enhance.error) throw new Error(actionFailed('canvas.comfyEnhance', enhance.error));
             if(!enhance.images?.length) throw new Error(noReturnedImage('canvas.comfyEnhance'));
             if(node.enhanceUpscale){
-                images = await runComfyUpscale(enhance.images?.[0], node.enhanceUpscaleRes || 2048, {cascadeTargetId, out, pendingId});
+                images = await runComfyUpscale(enhance.images?.[0], node.enhanceUpscaleRes || 2048, comfyRunOptions);
             } else {
                 images = enhance.images || [];
             }
         } else if(mode === 'custom'){
             const workflowName = validComfyWorkflowName(node.comfyWorkflow || comfyWorkflows[0]?.name || '');
             run.taskLabel = workflowName || tr('canvas.comfyCustom');
-            if(node.comfyWorkflow && node.comfyWorkflow !== workflowName) node.comfyWorkflow = workflowName;
+            if(compiledNode.comfyWorkflow && compiledNode.comfyWorkflow !== workflowName) compiledNode.comfyWorkflow = workflowName;
             const wf = await ensureComfyWorkflow(workflowName);
             if(!workflowName || !wf) throw new Error(tr('canvas.comfyNoWorkflow'));
             const fields = wf?.config?.fields || [];
@@ -13577,11 +13773,11 @@ async function runComfyNode(nodeId, opts={}){
             settingFields.forEach(f => {
                 if(!f.node || !f.input) return;
                 params[f.node] = params[f.node] || {};
-                if(comfyRandomEnabled(f) && comfyRandomActive(node, f.id)){
-                    node.comfyParams = node.comfyParams || {};
-                    node.comfyParams[f.id] = comfyRandomValue(f);
+                if(comfyRandomEnabled(f) && comfyRandomActive(compiledNode, f.id)){
+                    compiledNode.comfyParams = compiledNode.comfyParams || {};
+                    compiledNode.comfyParams[f.id] = comfyRandomValue(f);
                 }
-                params[f.node][f.input] = comfyParamValue(node, f);
+                params[f.node][f.input] = comfyParamValue(compiledNode, f);
             });
             const result = await runQueuedComfyGenerate({
                 prompt,
@@ -13589,7 +13785,7 @@ async function runComfyNode(nodeId, opts={}){
                 params,
                 type:'workflow-custom',
                 client_id:CLIENT_ID
-            }, {cascadeTargetId, out, pendingId});
+                }, comfyRunOptions);
             run.request = requestMetaFromResult(result);
             if(result.error) throw new Error(actionFailed('canvas.comfyCustom', result.error));
             images = comfyResultOutputs(result);
@@ -13612,11 +13808,11 @@ async function runComfyNode(nodeId, opts={}){
                     "314": { value:Boolean(names[2]) }
                 },
                 client_id:CLIENT_ID
-            }, {cascadeTargetId, out, pendingId});
+            }, comfyRunOptions);
             run.request = requestMetaFromResult(result);
             if(result.error) throw new Error(actionFailed('canvas.comfyEdit', result.error));
             if(!result.images?.length) throw new Error(noReturnedImage('canvas.comfyEdit'));
-            images = node.editUpscale ? await runComfyUpscale(result.images?.[0], node.editUpscaleRes || 2048, {cascadeTargetId, out, pendingId}) : result.images || [];
+            images = node.editUpscale ? await runComfyUpscale(result.images?.[0], node.editUpscaleRes || 2048, comfyRunOptions) : result.images || [];
         }
         const meta = collectRunMeta(out, pendingId);
         if(out) out._pending = (out._pending||[]).filter(p => p.id !== pendingId);
@@ -13653,6 +13849,7 @@ async function callCanvasLLM(node, message, messages=[], options={}){
     const model = resolveChatModel(node.model || node.llmMsModel, llmProv);
     const images = llmInputImages(node);
     const videos = llmInputVideos(node);
+    const audios = llmInputAudios(node);
     const result = await cascadeFetch('/api/canvas-llm', {
         method:'POST',
         headers:{'Content-Type':'application/json'},
@@ -13667,6 +13864,7 @@ async function callCanvasLLM(node, message, messages=[], options={}){
             messages,
             images,
             videos,
+            audios,
         })
     }, options).then(async r => {
         if(!r.ok){
@@ -13676,34 +13874,6 @@ async function callCanvasLLM(node, message, messages=[], options={}){
     });
     return result.text || '';
 }
-async function runLLMNode(nodeId, opts={}){
-    const node = nodes.find(n => n.id === nodeId);
-    const audios = llmInputAudios(node);
-    if(!node || (node.running && !opts.cascade)) return;
-    const cascadeTargetId = cascadeTargetIdFromOptions(opts);
-    const input = llmInputText(node) || node.userInput || '';
-    const audios = llmInputAudios(node);
-    if(!input && !audios.length){
-        if(opts.cascade) throw new Error('LLM 缺少提示词输入');
-        alert(tr('canvas.needPromptToLLM')); return;
-    }
-    if(!opts.cascade){ node.running = true; refreshNodes([node.id]); }
-    try {
-        node.outputText = await callCanvasLLM(node, input, [], {cascadeTargetId});
-        if(!opts.cascade) node.running = false;
-        node.runStatus = 'done'; node.runError = '';
-        refreshNodes([node.id]);
-        scheduleSave();
-            audios,
-    } catch(err) {
-        if(!opts.cascade) node.running = false;
-        if(isCascadeAbortError(err)){
-            refreshNodes([node.id]);
-            if(opts.cascade) throw err;
-            return;
-        }
-        node.runStatus = 'failed'; node.runError = err.message || String(err);
-        refreshNodes([node.id]);
 async function runAudioAnalysisGenerator(node, prompt, audios, opts={}){
     const message = String(prompt || '').trim() || '请分析这段音频，概括主要内容、说话人和关键信息。';
     if(!audios.length) throw new Error('请先连接音频素材');
@@ -13723,6 +13893,49 @@ async function runAudioAnalysisGenerator(node, prompt, audios, opts={}){
         return '';
     }
 }
+async function runLLMNode(nodeId, opts={}){
+    const node = nodes.find(n => n.id === nodeId);
+    if(!node || (node.running && !opts.cascade)) return;
+    const cascadeTargetId = cascadeTargetIdFromOptions(opts);
+    const input = llmInputText(node) || node.userInput || '';
+    const audios = llmInputAudios(node);
+    if(!input && !audios.length){
+        if(opts.cascade) throw new Error('LLM 缺少提示词输入');
+        alert(tr('canvas.needPromptToLLM')); return;
+    }
+    if(!opts.cascade){ node.running = true; refreshNodes([node.id]); }
+    try {
+        if(opts.beforeSubmit) await opts.beforeSubmit();
+        if(opts.assistantNativeActionId){
+            node.assistantNativeRun = {actionId:String(opts.assistantNativeActionId), taskKind:'llm', taskIds:[], submissionStarted:true};
+        }
+        const outputText = await callCanvasLLM(node, input || '请分析这段音频，概括主要内容、说话人和关键信息。', [], {cascadeTargetId});
+        if(opts.assistantNativeActionId && !String(outputText || '').trim()) throw new Error('LLM 返回空文本，未取得可保存结果');
+        node.outputText = outputText;
+        if(!opts.cascade) node.running = false;
+        node.runStatus = 'done'; node.runError = '';
+        if(opts.assistantNativeActionId){
+            node.assistantNativeRun.status='succeeded';
+            node.assistantNativeRun.outputText=node.outputText;
+        }
+        refreshNodes([node.id]);
+        scheduleGeneratorInputSync();
+        scheduleSave();
+    } catch(err) {
+        if(!opts.cascade) node.running = false;
+        if(isCascadeAbortError(err)){
+            refreshNodes([node.id]);
+            if(opts.cascade) throw err;
+            return;
+        }
+        node.runStatus = 'failed'; node.runError = err.message || String(err);
+        if(opts.assistantNativeActionId){
+            node.assistantNativeRun = node.assistantNativeRun || {actionId:String(opts.assistantNativeActionId),taskKind:'llm',taskIds:[]};
+            node.assistantNativeRun.status='failed';
+            node.assistantNativeRun.error=node.runError;
+            node.assistantNativeRun.knownRejected=!!err.submissionKnownRejected;
+        }
+        refreshNodes([node.id]);
         if(opts.cascade) throw err;
         alert(err.message || 'LLM 运行失败');
     }
@@ -14498,6 +14711,7 @@ function makePending(id, run, task={}){
 }
 function makePendingForRun(id, run, node, options={}, task={}){
     const pending = makePending(id, run, task);
+    if(options?.assistantNativeActionId) pending.assistantNativeActionId = String(options.assistantNativeActionId);
     const previewSize = pendingPreviewSizeForRun(node, options);
     if(previewSize) pending.previewSize = previewSize;
     if(options?.cascadeTargetId) pending.cascadeTargetId = String(options.cascadeTargetId);
@@ -14517,6 +14731,7 @@ function mergeGeneratedOutputs(node, outputs, append=false){
         if(!keepGeneratedMedia && kind !== 'image' && !(node.type === 'generator' && kind === 'audio')) return null;
         return kind === 'image' ? url : {...(typeof item==='object'?item:{}),url, kind};
     }).filter(Boolean);
+    if(clean.length){delete node.audioOutputText;outputNodesForSource(node.id).forEach(out=>delete out.audioOutputText);}
     if(!append){
         node.generatedOutputs = clean;
         syncConnectedOutputsFromGenerated(node, clean);
@@ -14543,7 +14758,6 @@ function collectRunMeta(out, id){
     return collectRunMetas(out, [id])[0] || {runMs:0, run:{}};
 }
 function findOutputByPendingId(pendingId){
-    if(clean.length){delete node.audioOutputText;outputNodesForSource(node.id).forEach(out=>delete out.audioOutputText);}
     return nodes.find(n => n.type === 'output' && (n._pending || []).some(p => p.id === pendingId));
 }
 function findPendingTask(taskId){
@@ -14636,15 +14850,17 @@ function rememberUnsavedCanvasAcceptedTasks(node, tasks, out=null){
         if(!taskId) return;
         const entry = {
             taskId, nodeId:String(node.id || ''), outputId:String(out?.id || ''),
-            taskType:task.canvasTaskType === 'comfy' ? 'comfy' : 'online-image',
+            taskType:['comfy','video','runninghub'].includes(task.canvasTaskType)?task.canvasTaskType:'online-image',
             segmentId:String(task.segmentId || '').slice(0, 128),
             x:Number(node.x || 0), y:Number(node.y || 0),
             providerId:String(task.providerId || '').slice(0, 128),
             model:String(task.model || '').slice(0, 256),
-            startedAt:Number(task.startedAt || nowMs())
+            useWallet:Boolean(task.useWallet), rhMode:String(task.rhMode || ''),
+            startedAt:Number(task.startedAt || nowMs()),
+            ...(node.assistantNativeRun?.actionId && node.assistantNativeRun.taskIds?.includes(taskId)?{assistantNativeActionId:String(node.assistantNativeRun.actionId),assistantTaskKind:node.assistantNativeRun.taskKind,assistantRunStartedAt:Number(node.assistantNativeRun.startedAt||task.startedAt||nowMs()),assistantPreviousActionId:String(node.assistantNativeRun.previousActionId||''),...(node.assistantNativeRun.taskKind==='video'?{assistantInputHash:node.assistantNativeRun.inputHash,assistantCanvasId:canvas?.id}: {})}:{}),
         };
         const index = entries.findIndex(item => item?.taskId === taskId);
-        if(index >= 0) entries[index] = entry;
+        if(index >= 0) entries[index] = {...entries[index],...entry};
         else entries.push(entry);
     });
     try {
@@ -14658,6 +14874,16 @@ function restoreUnsavedCanvasAcceptedTasks(){
     entries.forEach(entry => {
         const taskId = String(entry?.taskId || '');
         if(!taskId) return;
+        const source = nodes.find(node => node.id === entry.nodeId);
+        if(source && entry.assistantNativeActionId && ['image','comfy','video','runninghub'].includes(entry.assistantTaskKind)){
+            const run=source.assistantNativeRun;
+            const backupTime=Number(entry.assistantRunStartedAt||entry.startedAt||0);
+            const replacesOld=run&&run.actionId!==entry.assistantNativeActionId&&((Number(run.startedAt)>0&&Number(run.startedAt)<backupTime)||(!run.startedAt&&entry.assistantPreviousActionId===run.actionId));
+            if(!run || run.actionId===entry.assistantNativeActionId || replacesOld){
+                const current=replacesOld?null:run;
+                source.assistantNativeRun={...(current||{}),actionId:entry.assistantNativeActionId,taskKind:entry.assistantTaskKind,taskIds:[...new Set([...(current?.taskIds||[]),taskId])],submissionStarted:true,startedAt:backupTime,...(entry.assistantTaskKind==='video'?{plannedTaskId:taskId,inputHash:entry.assistantInputHash,outputNodeId:entry.outputId}: {}),...(entry.assistantTaskKind==='runninghub'?{inputHash:entry.assistantInputHash,outputNodeId:entry.outputId}: {})};
+            }
+        }
         const existing = findPendingTask(taskId);
         if(existing){
             existing.pending.savePending = true;
@@ -14667,8 +14893,8 @@ function restoreUnsavedCanvasAcceptedTasks(){
             recovered += 1;
             return;
         }
-        const source = nodes.find(node => node.id === entry.nodeId);
         let out = nodes.find(node => node.id === entry.outputId && node.type === 'output');
+        if(entry.assistantTaskKind==='video'&&entry.assistantNativeActionId&&(!out||!source||!connections.some(c=>c.from===source.id&&c.to===out.id)))return;
         if(!out && source) out = connections.filter(link => link.from === source.id)
             .map(link => nodes.find(node => node.id === link.to)).find(node => node?.type === 'output');
         if(!out){
@@ -14677,8 +14903,10 @@ function restoreUnsavedCanvasAcceptedTasks(){
             if(source) connections.push({id:uid('c'), from:source.id, to:out.id});
         }
         out._pending = [...(out._pending || []), {
-            id:uid('p'), canvasTaskId:taskId, canvasTaskType:entry.taskType === 'comfy' ? 'comfy' : 'online-image',
+            id:uid('p'), canvasTaskId:taskId, canvasTaskType:['comfy','video','runninghub'].includes(entry.taskType)?entry.taskType:'online-image',
+            ...(entry.assistantTaskKind==='video'?{assistantNativeActionId:entry.assistantNativeActionId,assistantInputHash:entry.assistantInputHash,assistantCanvasId:entry.assistantCanvasId}: {}),
             providerId:String(entry.providerId || ''), model:String(entry.model || ''),
+            useWallet:Boolean(entry.useWallet), rhMode:String(entry.rhMode || ''),
             segmentId:String(entry.segmentId || ''),
             startedAt:Number(entry.startedAt || nowMs()),
             run:{node:{id:String(entry.nodeId || '')}, refs:[]},
@@ -14743,6 +14971,10 @@ function rememberCanvasSubmissionWarning(node, warning, unknown=false){
 }
 async function createCanvasImageTask(payload, options={}){
     if(options.acceptedTask?.task_id) return options.acceptedTask;
+    if(options.beforeSubmit){
+        try{await options.beforeSubmit();}
+        catch(reason){const error=reason instanceof Error?reason:new Error(String(reason));error.submissionKnownRejected=true;throw error;}
+    }
     const res = await cascadeFetch('/api/canvas-image-tasks', {
         method:'POST',
         headers:{'Content-Type':'application/json'},
@@ -14781,6 +15013,7 @@ async function submitCanvasImageTaskBatch(count, payload, options={}){
     if(!taskInfos.length){
         const error = new Error(warning || tr('canvas.generationFailed'));
         error.submissionUnknown = unknownCount > 0;
+        error.submissionKnownRejected = unknownCount === 0;
         throw error;
     }
     return {taskInfos, warning, unknownCount};
@@ -14827,6 +15060,7 @@ async function waitCanvasComfyTaskResult(taskId, options={}){
             throw new Error(await responseErrorMessage(res, actionFailed('canvas.comfyGenerate')));
         }
         const data = await res.json();
+
         if(data.status === 'succeeded') return data.result || {};
         if(data.status === 'unknown'){
             const error = new Error(data.error || '本地任务记录已失效，远端状态未知，请勿直接重新提交');
@@ -14841,16 +15075,27 @@ async function waitCanvasComfyTaskResult(taskId, options={}){
     }
 }
 async function runQueuedComfyGenerate(payload, options={}){
-    const task = await createCanvasComfyTask(payload, options);
-    if(!task?.task_id) throw new Error('任务提交未返回编号，受理状态未知');
     const pending = pendingById(options.out, options.pendingId);
-    if(!pending) return waitCanvasComfyTaskResult(task.task_id, options);
-    const source = nodes.find(node => node.id === pending.run?.node?.id);
+    const source = nodes.find(node => node.id === pending?.run?.node?.id);
+    let task,submitted=false;
+    try{
+        if(options.beforeSubmit) await options.beforeSubmit();
+
+        submitted=true;
+        task = await createCanvasComfyTask(payload, options);
+        if(!task?.task_id) throw new Error('任务提交未返回编号，受理状态未知');
+    }catch(error){
+
+        throw error;
+    }
+    if(!pending){if(options.onAccepted)await options.onAccepted(task.task_id);return waitCanvasComfyTaskResult(task.task_id, options);}
     pending.canvasTaskId = task.task_id;
     pending.canvasTaskType = 'comfy';
     pending.queryRecoverable = true;
     pending.cascadeTargetId = '';
-    rememberUnsavedCanvasAcceptedTasks(source || {}, [pending], options.out);
+    try{if(options.onAccepted)await options.onAccepted(task.task_id);}
+    finally{rememberUnsavedCanvasAcceptedTasks(source || {}, [pending], options.out);}
+
     refreshRunNodes(source, options.out);
     if(!await saveCanvas()){
         const error = pauseCanvasAcceptedTasksUntilSaved(source || {}, [pending], options.out);
@@ -14891,14 +15136,11 @@ function completeCanvasComfyTask(taskId, result){
     if(!outputs.length) throw new Error(noReturnedImage('canvas.comfyGenerate'));
     const runMs = nowMs() - Number(pending.startedAt || nowMs());
     run.request = requestMetaFromResult(result);
-    out._pending = (out._pending || []).filter(item => item.id !== pending.id);
-    appendOutputImages(out, outputs, run.refs?.[0], [{run, runMs}]);
     const gen = nodes.find(node => node.id === run.node?.id);
+    appendOutputImages(out, outputs, run.refs?.[0], [{run, runMs}]);
+    out._pending = (out._pending || []).filter(item => item.id !== pending.id);
     if(gen){
-        if(gen.type === 'minimax' && pending.segmentId){
-            const segment = (gen.segments || []).find(item => item.id === pending.segmentId);
-            if(segment) outputs.forEach(item => miniMaxSetSegmentResult(gen, segment, item));
-        }
+
         mergeGeneratedOutputs(gen, outputs, Boolean(pending.appendGenerated));
         gen.runStatus = 'done';
         gen.runError = '';
@@ -14907,6 +15149,7 @@ function completeCanvasComfyTask(taskId, result){
     addGenerationLog({run, outputs, runMs});
     refreshRunNodes(gen, out);
     scheduleSave();
+    return true;
 }
 async function pollCanvasComfyTask(taskId){
     if(!taskId || activeCanvasComfyTaskPolls.has(taskId)) return;
@@ -14977,7 +15220,7 @@ async function queryRecoverPendingOutput(pendingId){
     const out = findOutputByPendingId(pendingId);
     const pending = pendingById(out, pendingId);
     if(!out || !pending || pending.querying) return;
-    if(pending.canvasTaskId && ['online-image', 'comfy', 'video'].includes(pending.canvasTaskType)){
+    if(pending.canvasTaskId && ['online-image', 'comfy', 'video', 'runninghub'].includes(pending.canvasTaskType)){
         return saveAndQueryCanvasPendingTask(pending);
     }
     const taskId = pending.recoverTaskId || extractUpstreamTaskId(pending.error || '');
@@ -15030,11 +15273,55 @@ async function saveAndQueryCanvasPendingTask(pending){
         delete pending.savePending;
         scheduleSave();
     }
-    return pending.canvasTaskType === 'comfy'
+    return pending.canvasTaskType === 'runninghub'
+        ? pollCanvasRunningHubTask(pending.canvasTaskId, {useWallet:Boolean(pending.useWallet)})
+        : pending.canvasTaskType === 'comfy'
         ? pollCanvasComfyTask(pending.canvasTaskId)
         : pending.canvasTaskType === 'video'
             ? pollCanvasVideoTask(pending.canvasTaskId, {forceRefresh:Boolean(pending.remoteRefreshable)})
             : pollCanvasImageTask(pending.canvasTaskId);
+}
+async function pollCanvasRunningHubTask(taskId, options={}){
+    if(!taskId || activeCanvasTaskPolls.has(taskId)) return 'running';
+    activeCanvasTaskPolls.add(taskId);
+    try {
+        while(true){
+            const found=findPendingTask(taskId);
+            if(!found) return 'missing';
+            if(found.pending.savePending) return 'paused';
+            let response;
+            try{
+                response=await fetch(`/api/runninghub/query?taskId=${encodeURIComponent(taskId)}&useWallet=${options.useWallet?'1':'0'}`);
+                if(!response.ok)throw new Error(await responseErrorMessage(response,tr('canvas.rhFailed')));
+                const json=await response.json();
+                if(json.success===false)throw new Error(json.detail||json.error||tr('canvas.rhFailed'));
+                const data=json.data||json;
+                if(data.status==='SUCCESS'){
+                    const outputs=data.urls||[];
+                    if(!outputs.length)throw new Error(tr('canvas.rhOutputsEmpty'));
+                    const meta=collectRunMeta(found.out,found.pending.id);
+                    found.out._pending=(found.out._pending||[]).filter(item=>item.id!==found.pending.id);
+                    appendOutputImages(found.out,outputs,found.pending.run?.refs?.[0],[meta]);
+                    const node=nodes.find(item=>item.id===found.pending.run?.node?.id);
+                    mergeGeneratedOutputs(node,outputs,Boolean(found.pending.appendGenerated));
+                    if(node){node.runStatus='done';node.runError='';node.running=false;if(node.assistantNativeRun?.taskIds?.includes(taskId) && node.assistantNativeRun.actionId===found.pending.assistantNativeActionId && node.assistantNativeRun.inputHash===found.pending.assistantInputHash && node.assistantNativeRun.outputNodeId===found.out.id){node.assistantNativeRun.resultUrls=[...outputs];node.assistantNativeRun.status='succeeded';}}
+                    addGenerationLog({run:found.pending.run||{},outputs,runMs:meta.runMs||0});
+                    refreshRunNodes(node,found.out);scheduleSave();return 'succeeded';
+                }
+                if(data.status==='FAILED'){
+                    found.pending.failed=true;found.pending.queryPaused=false;found.pending.error=data.failReason||tr('canvas.rhFailed');
+                    const node=nodes.find(item=>item.id===found.pending.run?.node?.id);
+                    if(node){node.runStatus='failed';node.runError=found.pending.error;node.running=false;}
+                    refreshRunNodes(node,found.out);scheduleSave();return 'failed';
+                }
+            }catch(error){
+                const current=findPendingTask(taskId);
+                if(current){current.pending.queryPaused=true;current.pending.queryRecoverable=true;current.pending.error=error.message||tr('canvas.rhFailed');const node=nodes.find(item=>item.id===current.pending.run?.node?.id);if(node){node.runStatus='query-paused';node.running=false;}refreshRunNodes(node,current.out);scheduleSave();}
+                return 'paused';
+            }
+            await sleep(2500);
+        }
+    } finally { activeCanvasTaskPolls.delete(taskId); }
 }
 async function pollCanvasImageTask(taskId, options={}){
     if(!taskId) return 'failed';
@@ -15089,6 +15376,7 @@ async function pollCanvasImageTask(taskId, options={}){
                 throw new Error(await responseErrorMessage(res, tr('canvas.generationFailed')));
             }
             const data = await res.json();
+            if(found.pending.assistantCatalogImage)validateCanvasAssistantCatalogTask(found.pending,data);
             if(data.status === 'succeeded'){
                 completeCanvasImageTask(taskId, data.result || {});
                 return 'succeeded';
@@ -15285,12 +15573,23 @@ function completeCanvasImageTask(taskId, result){
     const found = findPendingTask(taskId);
     if(!found) return;
     const {out, pending} = found;
+    if(pending.assistantCatalogImage){
+        const node=nodes.find(n=>n.id===pending.run?.node?.id),run=node?.assistantNativeRun;
+        if(canvas?.id!==pending.assistantCanvasId||run?.actionId!==pending.assistantNativeActionId||run.inputHash!==pending.assistantInputHash||run.outputNodeId!==out.id||out.id!==pending.assistantOutputNodeId||!connections.some(c=>c.from===node?.id&&c.to===out.id)){const error=new Error('原图片输出或助手归属已变化，保留原任务');error.queryPaused=true;throw error;}
+        if(!result.images?.length)throw new Error('原任务没有图片，不能登记成功');
+        if(node.type==='midjourney'){
+            if(!result.native_remote_task_id)throw new Error('Midjourney缺少原供应商编号，请只查询原任务');
+            node.lastTaskId=result.native_remote_task_id;
+            node.lastTaskStatus='SUCCESS';node.lastAction=result.native_mode||pending.run?.node?.mode||node.mode;
+            node.lastImageCount=result.images.length;node.lastPrompt=result.native_prompt??pending.run?.prompt??'';
+        }
+    }
     const meta = {
         runMs: nowMs() - Number(pending.startedAt || nowMs()),
         run: pending.run || {},
     };
     meta.run.request = requestMetaFromResult(result);
-    const images = result.images || [];
+    const images = pending.assistantCatalogImage&&result.image_items?.length ? result.image_items : result.images || [];
     out._pending = (out._pending || []).filter(p => p.id !== pending.id);
     appendOutputImages(out, images, meta.run?.refs?.[0], [meta]);
     const gen = nodes.find(n => n.id === meta.run?.node?.id);
@@ -15302,7 +15601,9 @@ function completeCanvasImageTask(taskId, result){
         gen.running = false;
     }
     addGenerationLog({run:meta.run, outputs:images, runMs:meta.runMs || 0});
+    syncGeneratorInputs();
     refreshRunNodes(gen, out);
+    refreshGeneratorInputViews();
     scheduleSave();
 }
 function failCanvasImageTask(taskId, message, taskData={}){
@@ -16410,7 +16711,6 @@ function clipboardNodeCount(){
 }
 function pasteNodes(){
     if(!canvas || !clipboard) return;
-    window.CanvasAudio.detachTask(copy);
     const clipNodes = Array.isArray(clipboard) ? clipboard : (Array.isArray(clipboard.nodes) ? clipboard.nodes : []);
     const clipConnections = Array.isArray(clipboard?.connections) ? clipboard.connections : [];
     if(!clipNodes.length) return;
@@ -16466,6 +16766,34 @@ function downloadBlob(blob, filename){
     link.click();
     link.remove();
     setTimeout(() => URL.revokeObjectURL(link.href), 1200);
+}
+async function canvasAssistantExportWorkflow({actionId,nodeId,nodeIds,connectionIds,includeResources,scopeHash,beforeDownload}){
+    if(!canvas || !Array.isArray(nodeIds) || !nodeIds.length) throw new Error('没有可导出的节点范围');
+    const idSet=new Set(nodeIds);
+    const storedNodes=serializableCanvasNodes();
+    const selectedNodes=nodeIds.map(id=>storedNodes.find(node=>node.id===id)).filter(Boolean).map(node=>{const item={...node};delete item.assistantExportReceipts;return item;});
+    const selectedConnections=(connections||[]).filter(edge=>idSet.has(edge.from)&&idSet.has(edge.to));
+    if(selectedNodes.length!==nodeIds.length) throw new Error('导出节点范围已变化，请重新读取画布');
+    const expectedConnectionIds=selectedConnections.map(edge=>edge.id).filter(Boolean);
+    if(JSON.stringify(expectedConnectionIds)!==JSON.stringify(connectionIds||expectedConnectionIds)) throw new Error('导出连线范围已变化，请重新读取画布');
+    const format=includeResources?'zip':'json';
+    const filename=workflowFilename(format);
+    let blob,contentType='application/json';
+    if(includeResources){
+        const res=await fetch('/api/canvas-workflows/export',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({nodes:selectedNodes,connections:selectedConnections,include_resources:true,filename})});
+        if(!res.ok) throw new Error(await responseErrorMessage(res,'导出包含资源的工作流失败'));
+        blob=await res.blob();contentType=res.headers.get('content-type')||'application/zip';
+        const bytes=new Uint8Array(await blob.slice(0,2).arrayBuffer());
+        if(blob.size<=0||bytes[0]!==0x50||bytes[1]!==0x4b) throw new Error('服务返回的 ZIP 文件无效');
+    }else{
+        const payload={format:'infinite-canvas-workflow',version:1,exported_at:Date.now(),nodes:selectedNodes,connections:selectedConnections};
+        blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
+        if(blob.size<=0) throw new Error('工作流 JSON 为空');
+    }
+    if(typeof beforeDownload!=='function')throw new Error('缺少导出内容复核，未发起下载');
+    await beforeDownload();
+    downloadBlob(blob,filename);
+    return {receipt:{actionId:String(actionId),status:'download_started',format,filename,nodeId:String(nodeId||''),nodeIds:[...nodeIds],connectionIds:expectedConnectionIds,includeResources:!!includeResources,scopeHash:String(scopeHash||''),bytes:blob.size,contentType,archiveMagic:includeResources?'PK':'',downloadedAt:Date.now()}};
 }
 function downloadUrl(url, filename='download'){
     if(!url) return Promise.resolve(false);
@@ -16702,8 +17030,6 @@ function startNodeDrag(e, node){
     }
     const isGroup = dragTarget.type === 'group' || dragTarget.type === 'promptGroup';
     const collected = new Map();
-        window.CanvasAudio.detachTask(copy);
-        window.CanvasAudio.migrate(copy);
     const collect = n => {
         if(!n || collected.has(n.id) || n.id === dragTarget.id) return;
         collected.set(n.id, {node:n, ox:n.x, oy:n.y});
@@ -17067,6 +17393,7 @@ function handoffExistingInputsToGroup(group, children){
 function updateGroupMembership(movedNodes){
     const pairs = [
         {childType:'image', groupType:'group'},
+        {childType:'audio', groupType:'group'},
         {childType:'prompt', groupType:'group'},
         {childType:'prompt', groupType:'promptGroup'}
     ];
@@ -17137,7 +17464,6 @@ function portPoint(id, kind){
     const nx = Number(n.x) || 0, ny = Number(n.y) || 0;
     return kind === 'out' ? {x:nx + w, y:ny + h / 2} : {x:nx, y:ny + h / 2};
 }
-        {childType:'audio', groupType:'group'},
 function canResolvePort(id){
     // 只跳过“真正的孤儿连线”（端点节点已不存在）；节点存在但暂时没 DOM 的，portPoint 会用几何坐标兜底。
     return Boolean(nodes.find(x => x.id === id));
@@ -17730,6 +18056,8 @@ async function canvasAssistantImageRequest(proposal){
     const node=nodes.find(n=>n.id===proposal.nodeId && n.type==='generator');
     if(!canvas || canvas.id!==proposal.canvasId || !node) throw new Error('画布或生成节点已变化，请重新提出方案');
     if(node.running || node._directPending?.length || nodes.some(n=>(n._pending||[]).some(p=>p.run?.node?.id===node.id))) throw new Error('该节点还有原任务，请先在画布查询或恢复原任务');
+    // 方案确认时以用户本轮明确选择的平台/模型为准，避免沿用画布中旧生成节点的配置。
+    if(proposal.provider && proposal.model){ node.apiProvider=proposal.provider; node.model=proposal.model; }
     const refs=proposal.referenceImages.map(url=>({url,kind:'image'}));
     return {prompt:proposal.prompt,provider_id:node.apiProvider,model:node.model,size:await generatorSizeForRun({...node},refs),
         reference_images:refs,quality:normalizedImageQuality(node.quality)||'auto',n:1};
@@ -17745,6 +18073,10 @@ async function canvasAssistantGenerateImage(proposal,task){
     node.assistantTaskId=task.task_id;
     await runGenerator(node.id,{assistantProposal:proposal,acceptedTask:task});
     await saveCanvas();
+}
+async function saveCanvasAssistantSnapshot(){
+
+    return saveCanvas();
 }
 window.onload = async () => {
     initCanvasClipBridge();
@@ -17763,13 +18095,76 @@ window.onload = async () => {
     if(openId){
         await openCanvas(openId);
         await loadCanvasPromptTemplates();
+        const nativeEditor=window.CanvasAssistantNative?.createEditor({
+            getState:()=>({id:canvas?.id,kind:'classic',updatedAt:Number(canvas?.updated_at||0),nodes,connections,readOnly:!!canvas?.readOnly}),
+            getSnapshot:()=>({nodes:serializableCanvasNodes(),connections}),
+            save:()=>saveCanvasAssistantSnapshot(),pushUndo:()=>pushUndo(),render:()=>render(),clipModel:window.CanvasClipModel,setGroupMembers:setCanvasGroupMembers,setWorkflowParameters:setCanvasWorkflowParameters,
+            exportWorkflow:typeof canvasAssistantExportWorkflow==='function'?canvasAssistantExportWorkflow:null,
+            deliverMediaExport:async(node,results,destination)=>{
+                if(destination==='download'){for(const r of results)await downloadUrl(r.url,r.name||'export.mp4');}
+                else {const host=window.CanvasClipBridge?.forNode(node.id);if(!host||!host.output(node.id,results,host.getContext()))throw new Error('原生剪辑输出未接入画布');}
+            },
+            runNode:(node,options)=>node.type==='msgen'?runMsGenNode(node.id,options):node.type==='midjourney'?runMidjourneyNode(node.id,options):node.type==='comfy'?runComfyNode(node.id,options):node.type==='rh'?runRhNode(node.id,options):node.type==='video'?runVideoNode(node.id,options):runGenerator(node.id,options),
+            runLLMNode:(node,options)=>runLLMNode(node.id,options),
+            connectNodes:(from,to)=>{if(!canConnect(from,to)||wouldCreateGeneratorCycle(from,to))return false;if(!connections.some(c=>c.from===from&&c.to===to))connections.push({id:uid('c'),from,to});syncGeneratorInputs();refreshGeneratorInputViews();return true;},
+            applyTask:(node,task,kind)=>{
+                if(kind==='depth')return updateCanvasDepthCapture(canvasDepthPair(node),task,node.depthCapture.operationId);
+                if(kind==='video'){
+                    const id=task.task_id||task.id;
+                    if(task.status==='succeeded')return completeCanvasVideoTask(id,task.result||task);
+                    const found=findPendingTask(id);
+                    if(!found)return false;
+                    if(['failed','cancelled','canceled'].includes(task.status)){found.pending.failed=true;found.pending.error=task.error||'原视频任务未成功';refreshRunNodes(node,found.out);return true;}
+                    return false;
+                }
+                if(kind==='comfy'){
+                    const id=task.task_id||task.id;
+                    if(task.status==='succeeded'){
+                        if(!findPendingTask(id))return false;
+                        completeCanvasComfyTask(id,task.result || task);
+                        return !findPendingTask(id);
+                    }
+                    if(task.status==='failed'){
+                        const found=findPendingTask(id);
+                        if(!found)return false;
+                        found.pending.error=task.error||'原生 ComfyUI 任务失败';
+                        found.pending.failed=true;
+                        refreshRunNodes(node,found.out);scheduleSave();
+                        return true;
+                    }
+                    return false;
+                }
+                const id=task.task_id||task.id;
+                if(task.status==='succeeded'){
+                    const images=resultMediaUrls(task.image_items?.length?task.image_items:task).map(item=>kind==='video'?(typeof item==='string'?{url:item,kind:'video'}:{...item,kind:item.kind||'video'}):item);
+                    if(!images.length)throw new Error('原任务成功但没有可回填的媒体结果');
+                    const direct=(node._directPending||[]).filter(p=>p.canvasTaskId===id);
+                    if(direct.length)materializeCanvasDirectTasks(node,direct);
+                    if(!findPendingTask(id))return false;
+                    completeCanvasImageTask(id,{...task,images});
+                    return !findPendingTask(id);
+                }else if(task.status==='failed'){
+                    const direct=(node._directPending||[]).filter(p=>p.canvasTaskId===id);
+                    if(direct.length)materializeCanvasDirectTasks(node,direct);
+                    if(!findPendingTask(id))return false;
+                    failCanvasImageTask(id,task.error||'原任务失败',task);
+                }
+            },
+            applyFields:(node,patch)=>{if(node.type==='generator')setCanvasGeneratorSizeFields(node,patch);else if(node.type==='msgen')setCanvasMsSizeFields(node,patch);else Object.assign(node,patch);},
+            createNode:type=>createNodeByType(type,defaultPoint(0,0)),
+            shotHost:()=>window.CanvasVideoDeconstructionBridge,shotModel:window.CanvasVideoDeconstructionModel,
+            check:proposal=>proposal.check(),
+        });
         window.CanvasAssistant?.mount({
             kind:'classic',
             getContext:()=>canvas ? {id:canvas.id,title:canvas.title,updatedAt:Number(canvas.updated_at||0),nodes,selectedNodeIds:[...selected],creationSettings:canvasAssistantCreationSettings()} : null,
-            save:()=>saveCanvas(),
+            save:()=>saveCanvasAssistantSnapshot(),
             refresh:()=>syncRemoteCanvasNow(),
             prepareImageRequest:canvasAssistantImageRequest,
             generateImage:canvasAssistantGenerateImage,
+            nativeSnapshot:()=>nativeEditor?.snapshot(),
+            executeNativeAction:proposal=>nativeEditor.execute(proposal),
+            syncNativeTask:proposal=>nativeEditor.syncTask(proposal),
             referencePreview:(item,size)=>item.kind==='video' ? canvasVideoPreviewHtml(item.url,size,'preload="none"') : canvasPreviewImgHtml(item.thumbnail||item.url,size,'loading="lazy" draggable="false"'),
             bindReferencePreviews:element=>bindCanvasPreviewImageFallbacks(element),
             openPromptTemplates:async callback=>{canvasAssistantTemplateCallback=callback;await openPromptTemplateModal('');},
@@ -17786,3 +18181,17 @@ window.onload = async () => {
         window.location.replace(canvasListUrlForProject(rememberedCanvasListProject()));
     }
 };
+
+function setCanvasGroupMembers(group, memberIds){
+    const targets = memberIds.map(id => nodes.find(n => n.id === id));
+    if(group.type !== 'group' || targets.some(n => !n || n.id === group.id || ['group','promptGroup'].includes(n.type))) throw new Error('原生分组成员无效');
+    group.items = [...memberIds];
+    if(targets.length){
+        const box = nodeBounds(memberIds);
+        Object.assign(group, {x:box.x - 24, y:box.y - 88, w:box.w + 48, h:box.h + 120});
+        if(targets.some(n => !['image','audio','prompt'].includes(n.type))) group.groupMode = 'workflow';
+        handoffExistingInputsToGroup(group, targets);
+    }
+    syncGeneratorInputs();
+    refreshGeneratorInputViews();
+}

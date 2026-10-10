@@ -41,7 +41,8 @@ test('classic canvas retries a same-time metadata conflict with the server title
             }})};
         }
     });
-    vm.runInContext(section('async function saveCanvas(){', 'async function loadConfig(){'), context);
+    vm.runInContext(section('function mergeCanvasAssistantChanges(', 'function canvasAssistantCreationSettings(')
+        +section('async function saveCanvas(){', 'async function loadConfig(){'), context);
     assert.equal(await vm.runInContext('saveCanvas()',context), false);
     assert.equal(context.canvas.title, '新标题');
     assert.equal(currentCanvasTitle.textContent, '新标题');

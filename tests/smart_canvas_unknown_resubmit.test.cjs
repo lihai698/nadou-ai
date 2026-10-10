@@ -23,6 +23,7 @@ function smartHarness(base, approve=()=>false){
     const context=vm.createContext({
         nodes,canvas,settings,smartLoopContext:null,undoSuppressed:false,
         selectedNode:()=>node,smartNodeInFlight:()=>false,
+        inputNodesFor:()=>[],imagesForNode:n=>n.images || [],
         window:{confirm:message=>{confirmations++;assert.match(message,/可能已受理.*重复计费/);return approve();}},
         buildPromptRequest:()=>({prompt:'隔离测试',displayPrompt:'隔离测试',refs:[]}),
         cloneSmartSettings:value=>({...value}),smartSettingsForNode:()=>settings,
@@ -47,6 +48,9 @@ function smartHarness(base, approve=()=>false){
         rememberSmartAcceptedTasks:()=>false,
         clearSmartUnsavedAcceptedTasks:()=>{},
     });
+    vm.runInContext(readFileSync(path.join(__dirname, '../static/js/canvas-audio.js'), 'utf8'),context);
+    vm.runInContext(readFileSync(path.join(__dirname, '../static/js/smart-canvas-audio-host.js'), 'utf8'),context);
+    vm.runInContext(section('function audioRefsOnly(', 'function thumbMediaHtml('),context);
     vm.runInContext(section('function smartUnknownSubmissionForNode(', 'function smartTaskSubmissionWarning('),context);
     vm.runInContext(section('function smartTaskSubmissionWarning(', 'async function runApiGeneration('),context);
     vm.runInContext(section('async function runApiGeneration(', 'function smartCompactJson('),context);

@@ -3160,6 +3160,11 @@ class GenerateRequest(BaseModel):
     type: str = "zimage"
     client_id: str = ""
     convert_to_jpg: bool = False
+    assistant_action_id: str = Field(default="", max_length=100)
+    canvas_id: str = Field(default="", max_length=100)
+    node_id: str = Field(default="", max_length=100)
+    input_hash: str = Field(default="", max_length=64)
+    segment_id: str = Field(default="", max_length=100)
 
 class DeleteHistoryRequest(BaseModel):
     timestamp: float
@@ -3214,6 +3219,14 @@ class OnlineImageRequest(BaseModel):
     reference_images: List[AIReference] = []
     operation: str = ""
     resolution_type: str = ""
+    assistant_action_id: str = Field(default="", max_length=100)
+    canvas_id: str = Field(default="", max_length=100)
+    node_id: str = Field(default="", max_length=100)
+    input_hash: str = Field(default="", max_length=64)
+    assistant_slot_key: str = Field(default="", max_length=80)
+    native_node_type: str = ""
+    native_configuration_hash: str = Field(default="", max_length=64)
+    native_config: Dict[str, Any] = {}
 
 class MidjourneySubmitRequest(BaseModel):
     provider_id: str = ""
@@ -3266,6 +3279,7 @@ _CANVAS_TASK_PERSISTED_FIELDS = frozenset({
     "upstream_task_ids", "remote_query_modes", "upstream_task_statuses", "upstream_task_errors", "upstream_task_results",
     "jimeng_pending", "submit_id",
     "kind", "queue_info", "message", "operation",
+    "assistant_action_id", "canvas_id", "node_id", "input_hash", "assistant_slot_key", "assistant_request_hash",
 })
 _CANVAS_RESULT_PERSISTED_FIELDS = frozenset({
     "images", "image_items", "videos", "audios", "texts", "files", "items",
@@ -3299,6 +3313,10 @@ class CanvasVideoRequest(BaseModel):
 class CanvasVideoTaskRequest(CanvasVideoRequest):
     # The canvas saves this ID before POST, so a lost response cannot force a new submission.
     client_task_id: str = Field(min_length=20, max_length=100)
+    assistant_action_id: str = Field(default="", max_length=100)
+    canvas_id: str = Field(default="", max_length=100)
+    node_id: str = Field(default="", max_length=100)
+    input_hash: str = Field(default="", max_length=64)
 
 
 class CanvasDepthCaptureRequest(BaseModel):
@@ -15705,7 +15723,52 @@ async def fetch_upstream_models(provider_id: str):
         raise HTTPException(status_code=400, detail=f"{provider.get('name') or provider_id} 未配置 API Key")
     return await fetch_models_from_upstream(provider.get("base_url") or "", api_key, provider_protocol(provider), provider.get("image_request_mode") or "openai")
 
+async def query_native_catalog_image_task(kind, provider_id, task_id):
+    if kind=='midjourney':return {**await get_midjourney_task(task_id,provider_id),'native_remote_task_id':task_id}
+    if kind!='msgen' or provider_id!='modelscope':raise HTTPException(409,'原生图片查询归属无效')
+    token=modelscope_api_key()
+    if not token:raise HTTPException(400,'未配置ModelScope API Key')
+    async with httpx.AsyncClient(timeout=AI_REQUEST_TIMEOUT) as client:
+        response=await client.get(f'{modelscope_image_api_root()}/tasks/{urllib.parse.quote(task_id,safe="")}',headers={'Authorization':f'Bearer {token}','X-ModelScope-Task-Type':'image_generation'})
+        response.raise_for_status();data=response.json()
+    status=str(data.get('task_status') or '').upper()
+    if status in {'FAILED','FAIL','ERROR','CANCELED','CANCELLED','TIMEOUT','REVOKED'}:return {'status':'failed','error':'魔搭原任务未成功'}
+    if status!='SUCCEED':return {'status':'running','task_id':task_id}
+    images=[]
+    for url in data.get('output_images') or []:
+        local=await save_ai_image_to_output(url,prefix='ms_native_')
+        if local:images.append(local)
+    if not images:raise HTTPException(502,'魔搭原任务成功但没有可保存图片')
+    return {'status':'succeeded','task_id':task_id,'images':images,'image_items':[image_output_meta(url) for url in images]}
+
+
+async def build_native_catalog_image_result(payload, on_remote_accept=None):
+    config=payload.native_config;refs=[ref.url for ref in payload.reference_images]
+    if payload.native_node_type=='msgen':
+        width,height=parse_size_pair(config['size']);loras=config.get('loras')
+        if config['modelKey']=='zimage':result=await generate_cloud(CloudGenRequest(prompt=payload.prompt,resolution=config['size'],loras=loras))
+        elif config['modelKey']=='qwen_edit':result=await generate_angle_cloud(CloudGenRequest(prompt=payload.prompt,model=config['model'],resolution=config['size'],image_urls=refs,loras=loras))
+        else:result=await ms_generate(MsGenerateRequest(prompt=payload.prompt,model=config['model'],width=width,height=height,size=config['size'],image_urls=refs,loras=loras))
+        url=result.get('url')
+        if not isinstance(url,str) or not url.startswith(('/output/','/assets/','/api/storage-files/')):raise HTTPException(502,'原魔搭返回的素材尚未保存本地，不能登记成功')
+        return {'images':[url],'image_items':[image_output_meta(url)],'request':{'provider_id':config['provider'],'model':config['model'],'size':config['size']}}
+    if payload.native_node_type!='midjourney':raise HTTPException(422,'未知原生图片节点')
+    submitted=await submit_midjourney(MidjourneySubmitRequest(provider_id=config['provider'],prompt=payload.prompt,mode=config['mode'],size=config['size'],version=config['version'],speed=config['speed'],reference_images=payload.reference_images[:4]))
+    task_id=submitted.get('task_id')
+    if not task_id:raise HTTPException(502,'Midjourney未返回原任务编号，受理状态未知')
+    if on_remote_accept:await on_remote_accept(task_id,query_mode='midjourney')
+    deadline=time.monotonic()+AI_REQUEST_TIMEOUT
+    while time.monotonic()<deadline:
+        result=await query_native_catalog_image_task('midjourney',config['provider'],task_id)
+        if result.get('status')=='succeeded':return {**result,'native_remote_task_id':task_id}
+        if result.get('status')=='failed':raise HTTPException(502,result.get('error') or 'Midjourney原任务未成功')
+        await asyncio.sleep(IMAGE_POLL_INTERVAL)
+    raise HTTPException(504,'Midjourney查询超时，请继续查询原任务')
+
+
 async def build_online_image_result(payload: OnlineImageRequest, on_remote_accept=None):
+    if payload.native_node_type:
+        return await build_native_catalog_image_result(payload, on_remote_accept=on_remote_accept or CANVAS_IMAGE_REMOTE_ACCEPT_CALLBACK.get())
     provider = get_api_provider(payload.provider_id)
     default_model = (provider.get("image_models") or [IMAGE_MODEL])[0]
     model = selected_model(payload.model, default_model)
@@ -16392,7 +16455,7 @@ def _interrupted_canvas_task(task: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _public_canvas_task(task: Dict[str, Any]) -> Dict[str, Any]:
-    return {key: value for key, value in task.items() if key != "process_id"}
+    return {key: value for key, value in task.items() if key not in {"process_id", "assistant_request_hash"}}
 
 
 def _canvas_remote_records(task: Mapping[str, Any]) -> List[Dict[str, str]]:
@@ -16760,6 +16823,50 @@ async def create_canvas_image_task(payload: OnlineImageRequest, request: Request
 
 
 async def enqueue_canvas_image_task(payload: OnlineImageRequest, request: Request, task_id=None):
+    binding = {}
+    if payload.assistant_action_id:
+        for key in ("assistant_action_id", "canvas_id", "node_id", "input_hash"):
+            value = getattr(payload, key)
+            pattern = r"[0-9a-f]{64}" if key == "input_hash" else r"[A-Za-z0-9_-]{1,100}"
+            if not re.fullmatch(pattern, value):
+                raise HTTPException(422, "助手图片任务须有完整有效的画布、节点、动作和输入绑定")
+            binding[key] = value
+    if payload.native_node_type:
+        if not binding or payload.native_node_type not in {'msgen','midjourney'} or payload.n!=1:
+            raise HTTPException(422,'原生目录图片任务须有完整助手归属和一次预算')
+        from backend.canvas_assistant_native import catalog_image_inputs, native_run_input_hash
+        from backend.canvas_assistant_msgen import prepare_msgen_run_config
+        from backend.canvas_assistant_midjourney import prepare_midjourney_run_config
+        document=load_canvas(payload.canvas_id)
+        node=next((n for n in document['nodes'] if n['id']==payload.node_id),{})
+        run=node.get('assistantNativeRun') or {}
+        outputs=[n for n in document['nodes'] if n.get('type')=='output' and any(c.get('from')==node.get('id') and c.get('to')==n['id'] for c in document.get('connections',[]))]
+        if (document.get('readOnly') or document.get('readonly') or node.get('type')!=payload.native_node_type
+            or run.get('actionId')!=payload.assistant_action_id or run.get('taskIds') or node.get('submissionUnknown')
+            or node.get('count')!=1 or node.get('outputEnabled') is not True or len(outputs)!=1
+            or native_run_input_hash(document,payload.node_id)!=payload.input_hash):
+            raise HTTPException(409,'原生图片画布、输入、输出或受理归属已变化，未提交')
+        inputs=catalog_image_inputs(document,node)
+        config=prepare_msgen_run_config(node,canvas_assistant_providers(),image_count=len(inputs['reference_images'])) if payload.native_node_type=='msgen' else prepare_midjourney_run_config(node,canvas_assistant_providers(),reference_count=len(inputs['reference_images']),has_prompt=bool(inputs['prompt']))
+        if config['configurationHash']!=payload.native_configuration_hash or payload.provider_id!=config['provider'] or payload.model!=config['model']:
+            raise HTTPException(409,'原魔搭或Midjourney平台/模型/LoRA配置已变化，未提交')
+        # 仅服务器读取的已保存输入和配置进入供应商请求，不接受客户端改写。
+        payload.prompt=inputs['prompt'] or 'Blend connected images.'
+        payload.reference_images=[AIReference(**ref) for ref in inputs['reference_images']]
+        payload.native_config=config
+        if payload.native_node_type=='msgen':
+            payload.size=config['size']
+        identity={**binding,'native_node_type':payload.native_node_type}
+        task_id='canvas_img_'+hashlib.sha256(json.dumps(identity,sort_keys=True).encode()).hexdigest()[:32]
+        binding.update(native_node_type=payload.native_node_type,assistant_request_hash=hashlib.sha256(json.dumps(model_dump_compat(payload),ensure_ascii=False,sort_keys=True).encode()).hexdigest())
+    if payload.assistant_slot_key:
+        if not binding or not re.fullmatch(r"[0-9]{1,3}:[0-9]{1,3}",payload.assistant_slot_key):
+            raise HTTPException(422,"循环轮槽必须有完整助手归属和有效步骤编号")
+        identity={**binding,"assistant_slot_key":payload.assistant_slot_key}
+        slot_id="canvas_img_"+hashlib.sha256(json.dumps(identity,sort_keys=True,separators=(",",":")).encode()).hexdigest()[:32]
+        if task_id is not None and task_id!=slot_id:raise HTTPException(409,"循环原轮槽任务编号不一致，只查询原任务")
+        task_id=slot_id
+        binding.update(assistant_slot_key=payload.assistant_slot_key,assistant_request_hash=hashlib.sha256(json.dumps(model_dump_compat(payload),ensure_ascii=False,sort_keys=True,separators=(",",":")).encode()).hexdigest())
     task_id = task_id or f"canvas_img_{uuid.uuid4().hex}"
     trace_fields = task_context(
         task_id,
@@ -16769,6 +16876,8 @@ async def enqueue_canvas_image_task(payload: OnlineImageRequest, request: Reques
     with CANVAS_TASK_LOCK:
         previous = CANVAS_TASKS.get(task_id) or _read_canvas_task_record(task_id)
         if previous:
+            if (payload.assistant_slot_key or payload.native_node_type) and (previous.get("type")!="online-image" or any(previous.get(k)!=v for k,v in {**binding,"provider_id":payload.provider_id,"model":payload.model}.items())):
+                raise HTTPException(409,"同一循环轮槽的原请求或归属不同，只查询原任务，不重新提交")
             return {"task_id": task_id, "status": previous.get("status", "unknown")}
         CANVAS_TASKS[task_id] = {
             "id": task_id,
@@ -16780,6 +16889,7 @@ async def enqueue_canvas_image_task(payload: OnlineImageRequest, request: Reques
             "error": "",
             "provider_id": payload.provider_id,
             "model": payload.model,
+            **binding,
             "input_summary": task_input_summary(
                 prompt=payload.prompt,
                 provider_id=payload.provider_id,
@@ -16873,7 +16983,7 @@ async def refresh_canvas_image_task(task_id: str):
             statuses[remote_id] = "unknown"
             continue
         try:
-            result = await query_image_task(
+            result = await query_native_catalog_image_task(recorded['native_node_type'],provider_id,remote_id) if recorded.get('native_node_type') else await query_image_task(
                 ImageTaskQueryRequest(provider_id=provider_id, task_id=remote_id)
             )
         except Exception as exc:
@@ -16890,7 +17000,7 @@ async def refresh_canvas_image_task(task_id: str):
             if isinstance(result, dict):
                 result_template.update({
                     key: result[key]
-                    for key in ("type", "model", "provider_id", "provider_name", "timestamp")
+                    for key in ("type", "model", "provider_id", "provider_name", "timestamp", "native_remote_task_id")
                     if result.get(key) is not None
                 })
                 for image in result.get("images") or []:
@@ -17067,6 +17177,17 @@ async def _run_canvas_comfy_task(task_id: str, payload: GenerateRequest):
 
 @app.post("/api/canvas-comfy-tasks")
 async def create_canvas_comfy_task(payload: GenerateRequest, request: Request):
+    binding = {}
+    if payload.assistant_action_id:
+        for key in ("assistant_action_id", "canvas_id", "node_id", "input_hash"):
+            value = getattr(payload, key)
+            pattern = r"[0-9a-f]{64}" if key == "input_hash" else r"[A-Za-z0-9_-]{1,100}"
+            if not re.fullmatch(pattern, value):
+                raise HTTPException(422, "助手 ComfyUI 任务须有完整有效的画布、节点、动作和输入绑定")
+            binding[key] = value
+        if payload.segment_id and not re.fullmatch(r"[A-Za-z0-9_-]{1,100}", payload.segment_id):
+            raise HTTPException(422, "助手 ComfyUI 原片段编号无效")
+        binding.update(segment_id=payload.segment_id, provider_id="comfyui", model=payload.workflow_json)
     task_id = f"canvas_comfy_{uuid.uuid4().hex}"
     trace_fields = task_context(
         task_id,
@@ -17075,6 +17196,7 @@ async def create_canvas_comfy_task(payload: GenerateRequest, request: Request):
     )
     with CANVAS_TASK_LOCK:
         CANVAS_TASKS[task_id] = {
+            **binding,
             "id": task_id,
             "type": "comfy",
             "status": "queued",
@@ -17097,7 +17219,7 @@ async def create_canvas_comfy_task(payload: GenerateRequest, request: Request):
             CANVAS_TASKS.pop(task_id, None)
             raise HTTPException(status_code=503, detail="本地 ComfyUI 任务记录无法保存，本次请求未提交")
     asyncio.create_task(run_canvas_comfy_task(task_id, payload))
-    return {"task_id": task_id, "status": "queued", **trace_fields}
+    return {"task_id": task_id, "status": "queued", **trace_fields, **binding}
 
 @app.get("/api/canvas-comfy-tasks/{task_id}")
 async def get_canvas_comfy_task(task_id: str):
@@ -18702,8 +18824,17 @@ def public_canvas_video_task(task: Dict[str, Any]) -> Dict[str, Any]:
         "kind",
         "queue_info",
         "message",
+        "assistant_action_id",
+        "canvas_id",
+        "node_id",
+        "input_hash",
     }
     public = {key: task[key] for key in allowed if key in task}
+    for key in ("assistant_action_id", "canvas_id", "node_id", "input_hash"):
+        value = public.get(key)
+        pattern = r"[0-9a-f]{64}" if key == "input_hash" else r"[A-Za-z0-9_-]{1,100}"
+        if key in public and (not isinstance(value, str) or not re.fullmatch(pattern, value)):
+            public.pop(key)
     result = public.get("result")
     if isinstance(result, dict):
         safe_result = {}
@@ -18782,6 +18913,40 @@ def visible_canvas_video_task(recorded: Dict[str, Any]) -> Dict[str, Any]:
     return CANVAS_VIDEO_TASK_VOLATILE.get(task_id) or recorded
 
 
+def validate_canvas_video_assistant_task(
+    payload: CanvasVideoTaskRequest,
+    existing: Optional[Dict[str, Any]] = None,
+    *,
+    check_provider: bool = False,
+) -> Dict[str, str]:
+    """助手任务固定归属与完整请求；旧手动任务保留原有兼容行为。"""
+    binding = {}
+    if payload.assistant_action_id:
+        for key in ("assistant_action_id", "canvas_id", "node_id", "input_hash"):
+            value = getattr(payload, key)
+            pattern = r"[0-9a-f]{64}" if key == "input_hash" else r"[A-Za-z0-9_-]{1,100}"
+            if not re.fullmatch(pattern, value):
+                raise HTTPException(422, "助手视频任务须有完整有效的画布、节点、动作和输入绑定")
+            binding[key] = value
+        binding["request_hash"] = hashlib.sha256(
+            json.dumps(model_dump_compat(payload), ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest()
+    if existing and (binding or existing.get("assistant_action_id")):
+        expected = {**binding, "provider_id":payload.provider_id, "model":payload.model}
+        if not binding or existing.get("type") != "video" or any(existing.get(key) != value for key, value in expected.items()):
+            raise HTTPException(409, "同一视频任务编号的归属或参数不一致，请只查询原任务")
+    if binding and check_provider:
+        if not payload.provider_id or not payload.model:
+            raise HTTPException(409, "请先在原视频节点手动选择平台和模型，助手不使用默认配置")
+        try:
+            provider = get_api_provider_exact(payload.provider_id)
+        except HTTPException as exc:
+            raise HTTPException(409, "原视频平台不存在或已停用，本次视频请求未提交") from exc
+        if provider.get("id") != payload.provider_id or provider.get("enabled") is False or payload.model not in model_list_from_values(provider.get("video_models") or []):
+            raise HTTPException(409, "原视频平台或所属模型已变化，本次视频请求未提交")
+    return binding
+
+
 async def run_canvas_video_task(task_id: str, payload: CanvasVideoTaskRequest) -> None:
     async with CANVAS_VIDEO_TASK_GATE:
         await _run_canvas_video_task(task_id, payload)
@@ -18814,6 +18979,7 @@ async def _run_canvas_video_task(task_id: str, payload: CanvasVideoTaskRequest) 
             }
         return
     try:
+        validate_canvas_video_assistant_task(payload, task, check_provider=True)
         callback_token = CANVAS_VIDEO_REMOTE_ACCEPT_CALLBACK.set(
             lambda remote_id, **meta: persist_canvas_video_remote_accept(
                 task_id, remote_id, **meta
@@ -18980,6 +19146,7 @@ async def _run_canvas_video_task(task_id: str, payload: CanvasVideoTaskRequest) 
 async def create_canvas_video_task(payload: CanvasVideoTaskRequest):
     task_id = payload.client_task_id
     canvas_video_task_path(task_id)
+    binding = validate_canvas_video_assistant_task(payload)
     try:
         with canvas_video_task_record_lock(task_id):
             # 磁盘记录是跨进程的幂等依据；本进程的完成缓存只影响展示。
@@ -18987,8 +19154,10 @@ async def create_canvas_video_task(payload: CanvasVideoTaskRequest):
             if not existing:
                 existing = CANVAS_VIDEO_TASK_VOLATILE.get(task_id)
             if existing:
+                validate_canvas_video_assistant_task(payload, existing)
                 visible = visible_canvas_video_task(existing)
                 return public_canvas_video_task(interrupted_canvas_video_task(visible))
+            validate_canvas_video_assistant_task(payload, check_provider=True)
             input_summary = task_input_summary(
                 prompt=payload.prompt,
                 provider_id=payload.provider_id,
@@ -19007,6 +19176,7 @@ async def create_canvas_video_task(payload: CanvasVideoTaskRequest):
                 "created_at": time.time(), "updated_at": time.time(),
                 "process_id": CANVAS_VIDEO_TASK_PROCESS_ID,
                 "provider_id": payload.provider_id, "model": payload.model,
+                **binding,
                 "result": None, "error": "", "input_summary": input_summary,
                 "remote": {
                     "status": REMOTE_PENDING,
@@ -19916,6 +20086,106 @@ def canvas_assistant_reference_assets():
     return items
 
 
+async def query_canvas_assistant_native_task(kind, task_id):
+    if kind == 'depth':
+        return await asyncio.to_thread(get_canvas_depth_capture, task_id)
+    reader = {'image': get_canvas_image_task, 'video': get_canvas_video_task, 'comfy': get_canvas_comfy_task}.get(kind)
+    if not reader:
+        raise HTTPException(422, '未开放的节点原任务查询种类')
+    return await reader(task_id)
+
+
+async def control_canvas_assistant_native_task(action, kind, task_id):
+    """只控制现有编号；不调用任何生成提交入口。"""
+    if action == 'task_refresh':
+        reader = {'image':refresh_canvas_image_task, 'video':refresh_canvas_video_task}.get(kind)
+        if reader:
+            return await reader(task_id)
+    elif action == 'task_cancel' and kind == 'depth':
+        return await asyncio.to_thread(cancel_canvas_depth_capture, task_id)
+    raise HTTPException(422, '原任务服务不支持此控制操作')
+
+
+def canvas_assistant_workflow_fields(node):
+    """只读取当前原生工作流字段；不把密钥或工作流原始代码提供给助手。"""
+    if node.get('type') == 'comfy':
+        name = node.get('comfyWorkflow')
+        if not name:
+            raise HTTPException(409, '请先在原生节点选择工作流')
+        return get_workflow(name).get('config', {}).get('fields') or []
+    if node.get('type') == 'rh':
+        mode = node.get('rhMode') or 'app'
+        provider = runninghub_provider_with_workflow_store(runninghub_provider() or {})
+        selected = re.fullmatch(r'(app|workflow|model):(.+)', str(node.get('rhConfigKey') or ''))
+        if selected:
+            selected_mode, selected_id = selected.groups()
+            entries = provider.get('rh_workflows' if selected_mode == 'workflow' else 'rh_apps') or []
+            found = selected_id in (provider.get('image_models') or []) if selected_mode == 'model' else any(
+                runninghub_entry_id(item, selected_mode) == selected_id and item.get('enabled') is not False and item.get('hidden') is not True for item in entries if isinstance(item, dict))
+            if found and (mode != selected_mode or selected_mode != 'model' and str(node.get('workflowId' if selected_mode == 'workflow' else 'webappId') or '') != selected_id):
+                raise HTTPException(409, '节点工作流选择和保存编号不一致，请在原生节点重新选择并保存')
+        if mode == 'model':
+            return []
+        key = str(node.get('workflowId' if mode == 'workflow' else 'webappId') or '')
+        entries = provider.get('rh_workflows' if mode == 'workflow' else 'rh_apps') or []
+        entry = next((item for item in entries if isinstance(item, dict) and runninghub_entry_id(item, mode) == key), None)
+        if entry and (entry.get('enabled') is False or entry.get('hidden') is True):
+            raise HTTPException(409, '原生选中的工作流已停用，请重新手动选择')
+        def usable(fields):
+            enabled = [field for field in fields if isinstance(field, dict) and field.get('enabled') is True]
+            return enabled or fields
+        if entry and entry.get('fields'):
+            return usable(entry['fields'])
+        if mode == 'workflow':
+            config = load_runninghub_workflow_store().get(runninghub_workflow_store_key(key)) or {}
+            if isinstance(config.get('fields'), list):
+                return usable(config['fields'])
+        return (node.get('rhWorkflowInfo' if mode == 'workflow' else 'rhAppInfo') or {}).get('nodeInfoList') or []
+    return []
+
+def prepare_canvas_assistant_media_export(canvas_id,node,options,request_id=None):
+    from backend.canvas_assistant_media_export import prepare_media_export
+    from backend.canvas_clip import find_media_tools
+    _,ffprobe=find_media_tools(DATA_DIR)
+    def probe(path):
+        result=subprocess.run([ffprobe,'-v','error','-show_streams','-show_format','-of','json',str(path)],capture_output=True,text=True,timeout=30)
+        if result.returncode:raise HTTPException(409,'无法探测原本地媒体')
+        return json.loads(result.stdout)
+    return prepare_media_export(canvas_id,node,options,local_media_path_from_url,[OUTPUT_DIR,ASSETS_DIR,*_current_storage_dirs().values()],probe,request_id=request_id)
+
+
+async def control_canvas_assistant_media_export(proposal,*,submit=False):
+    from pathlib import Path
+    from backend.canvas_assistant_media_export import validate_media_export_snapshot,verify_clip_export
+    from backend.canvas_clip import find_media_tools
+    plan=proposal['mediaExportPlan'];canvas=load_canvas(plan['canvasId'])
+    node=next((n for n in canvas['nodes'] if n['id']==plan['nodeId']),None)
+    if not node or canvas.get('readOnly') or canvas.get('readonly'):raise HTTPException(409,'原导出画布或节点不可写')
+    from backend.canvas_assistant_native import _related_task_busy
+    from backend.canvas_assistant_operations import is_busy
+    if submit and (is_busy(node) or _related_task_busy(canvas,node)):raise HTTPException(409,'原节点仍有其它任务，未开始媒体导出')
+    roots=[OUTPUT_DIR,ASSETS_DIR,*_current_storage_dirs().values()]
+    _,ffprobe=find_media_tools(DATA_DIR)
+    def probe(path):
+        result=subprocess.run([ffprobe,'-v','error','-show_streams','-show_format','-of','json',str(path)],capture_output=True,text=True,timeout=30)
+        if result.returncode:raise HTTPException(409,'无法探测原本地媒体')
+        return json.loads(result.stdout)
+    await asyncio.to_thread(validate_media_export_snapshot,plan,node,local_media_path_from_url,roots,probe)
+    binding={k:plan[k] for k in ('canvasId','nodeId','rangeHash','requestId')}
+    results=[]
+    if plan['mode']=='clip-task':
+        manager=canvas_clip_manager()
+        if submit:await asyncio.to_thread(create_canvas_clip_export,plan['nativeRequest'])
+        with manager.lock:task_id=manager.requests.get((plan['canvasId'],plan['nodeId'],plan['requestId']))
+        if not task_id:return {'status':'unknown','results':[],'message':'未找到原导出受理记录，不重复提交'}
+        task=manager.get(task_id);binding['taskId']=task_id
+        checked=await asyncio.to_thread(verify_clip_export,plan,task,binding,local_media_path_from_url,roots,probe)
+        results=task['results'];checked['error']=task.get('error','')
+    else:
+        raise HTTPException(409,'此媒体导出类型已不支持')
+    return {'status':checked['status'],'results':[{k:r[k] for k in ('url','name','kind','durationSeconds','sourceClipId') if k in r} for r in results],'taskId':checked.get('taskId'),'error':checked.get('error',''),'message':checked.get('message','')}
+
+
 app.include_router(create_assistant_router(
     root=lambda: os.path.join(DATA_DIR, "canvas_assistant"),
     load_canvas=load_canvas,
@@ -19927,6 +20197,13 @@ app.include_router(create_assistant_router(
     load_reference_assets=canvas_assistant_reference_assets,
     submit_image=submit_canvas_assistant_image,
     query_image=get_canvas_image_task,
+    query_native_task=query_canvas_assistant_native_task,
+    control_native_task=control_canvas_assistant_native_task,
+    workflow_fields=canvas_assistant_workflow_fields,
+    resolve_result_file=local_media_path_from_url,
+    result_roots=lambda:[OUTPUT_DIR,ASSETS_DIR,*_current_storage_dirs().values()],
+    media_export_prepare=prepare_canvas_assistant_media_export,
+    media_export_control=control_canvas_assistant_media_export,
 ))
 
 # --- 对话管理 ---
@@ -22102,6 +22379,8 @@ async def generate_angle_cloud(req: CloudGenRequest):
                 raise HTTPException(status_code=submit_res.status_code, detail=f"ModelScope 提交失败：{upstream_response_error_summary(submit_res)}")
 
             task_id = submit_res.json().get("task_id")
+            callback=CANVAS_IMAGE_REMOTE_ACCEPT_CALLBACK.get()
+            if callback and task_id:await callback(task_id,query_mode='modelscope')
             write_diagnostic(
                 f"ModelScope 角度任务已提交：task_id={redact_log_text(_safe_upstream_text(task_id, 120))}"
             )
@@ -22195,6 +22474,8 @@ async def generate_cloud(req: CloudGenRequest):
                 raise HTTPException(status_code=submit_res.status_code, detail=f"ModelScope 提交失败：{upstream_response_error_summary(submit_res)}")
 
             task_id = submit_res.json().get("task_id")
+            callback=CANVAS_IMAGE_REMOTE_ACCEPT_CALLBACK.get()
+            if callback and task_id:await callback(task_id,query_mode='modelscope')
             write_diagnostic(
                 f"ModelScope Z-Image 任务已提交：task_id={redact_log_text(_safe_upstream_text(task_id, 120))}"
             )
@@ -22296,6 +22577,8 @@ async def ms_generate(req: MsGenerateRequest):
                 raise HTTPException(status_code=submit_res.status_code, detail=f"ModelScope 提交失败：{upstream_response_error_summary(submit_res)}")
 
             task_id = submit_res.json().get("task_id")
+            callback=CANVAS_IMAGE_REMOTE_ACCEPT_CALLBACK.get()
+            if callback and task_id:await callback(task_id,query_mode='modelscope')
             write_diagnostic(
                 "ModelScope 通用生图任务已提交："
                 f"model={redact_log_text(_safe_upstream_text(req.model, 120))} "

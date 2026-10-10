@@ -11,17 +11,19 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 COMMAND_TIMEOUT_SECONDS = 180
+PYTHON_SUITE_TIMEOUT_SECONDS = 1800
 
 
-def run_check(label, command, count_pattern=None):
+def run_check(label, command, count_pattern=None, *, cwd=None, timeout=None):
+    deadline = COMMAND_TIMEOUT_SECONDS if timeout is None else timeout
     try:
         result = subprocess.run(
-            command, cwd=ROOT, capture_output=True, text=True,
+            command, cwd=ROOT if cwd is None else cwd, capture_output=True, text=True,
             encoding="utf-8", errors="replace", check=False,
-            timeout=COMMAND_TIMEOUT_SECONDS,
+            timeout=deadline,
         )
     except subprocess.TimeoutExpired as exc:
-        print(f"失败：{label}（超过 {COMMAND_TIMEOUT_SECONDS} 秒）", flush=True)
+        print(f"失败：{label}（超过 {deadline} 秒）", flush=True)
         print((exc.stdout or "") + (exc.stderr or ""), flush=True)
         raise SystemExit(124)
     output = (result.stdout or "") + (result.stderr or "")
@@ -45,16 +47,28 @@ def prepare_python_sandbox(target):
         shutil.copy2(ROOT / name, target / name)
     for name in ("run.bat", "安装依赖.bat", "检查核心流程.bat", "mac-启动服务.sh", "mac-安装依赖.sh"):
         shutil.copy2(ROOT / name, target / name)
-    for name in ("backend", "tests", "static", "tools", "workflows"):
+    # Agent 功能依赖项目根目录的内置 Skill 文件。核心检查使用临时公开代码副本，
+    # 因此必须把 skills 一并复制，否则沙箱里的 Agent 路由会把所有 Skill 读取判定为缺失。
+    for name in ("backend", "tests", "static", "tools", "workflows", "skills"):
         source = ROOT / name
         if source.is_dir():
             shutil.copytree(source, target / name)
+    public_knowledge = ROOT / "docs" / "创作助手项目知识"
+    if public_knowledge.is_dir():
+        (target / "docs").mkdir(exist_ok=True)
+        shutil.copytree(public_knowledge, target / "docs" / "创作助手项目知识")
 
 
 def main():
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
         sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    try:
+        python_timeout = int(os.environ.get("NADOU_CORE_PYTHON_TIMEOUT_SECONDS", str(PYTHON_SUITE_TIMEOUT_SECONDS)))
+        if python_timeout <= 0:
+            raise ValueError
+    except ValueError:
+        raise SystemExit("NADOU_CORE_PYTHON_TIMEOUT_SECONDS 必须是正整数秒数。")
     node = os.environ.get("NODE_BINARY") or shutil.which("node")
     if not node:
         raise SystemExit("缺少 Node.js 18+；安装后重试，或用 NODE_BINARY 指定可执行文件。")
@@ -73,24 +87,12 @@ def main():
     with tempfile.TemporaryDirectory(prefix="nadou-core-check-") as sandbox_name:
         sandbox = Path(sandbox_name)
         prepare_python_sandbox(sandbox)
-        result = subprocess.run(
+        print(f"开始：Python 后端与数据回归（完整测试，最多 {python_timeout} 秒）", flush=True)
+        python_count = run_check(
+            "Python 后端与数据回归（临时公开代码副本）",
             [sys.executable, "-m", "unittest", "discover", "-s", "tests", "-v"],
-            cwd=sandbox, capture_output=True, text=True,
-            encoding="utf-8", errors="replace", check=False,
-            timeout=COMMAND_TIMEOUT_SECONDS,
+            r"Ran (\d+) tests?", cwd=sandbox, timeout=python_timeout,
         )
-        output = (result.stdout or "") + (result.stderr or "")
-        if result.returncode:
-            print("失败：Python 后端与数据回归", flush=True)
-            print(output, flush=True)
-            raise SystemExit(result.returncode)
-        match = re.search(r"Ran (\d+) tests?", output)
-        if not match or int(match.group(1)) <= 0:
-            print("失败：Python 后端与数据回归（没有可确认的测试计数）", flush=True)
-            print(output, flush=True)
-            raise SystemExit(1)
-        python_count = int(match.group(1))
-        print(f"通过：Python 后端与数据回归（{python_count} 项；临时公开代码副本）", flush=True)
 
     javascript_files = sorted((ROOT / "static" / "js").glob("*.js"))
     for script in javascript_files:

@@ -39,6 +39,7 @@ function scenario(kind, responses){
         actionFailed:()=> '生成失败',
         tr:key=>key === 'smart.comfyTaskRestart' ? '后端已重启' : '生成失败',
         resultMediaUrls:value=>value.images || [],
+        findPendingTask:()=>null,
         sleep:async ms=>{delays.push(ms);},
     });
     vm.runInContext(functions[kind], context);

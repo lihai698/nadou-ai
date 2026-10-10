@@ -48,6 +48,7 @@ test('assistant task cannot execute in a different canvas',async()=>{
 test('smart assistant run metadata uses its confirmed prompt rather than the unrelated bottom composer',async()=>{
     let metadata;
     const c=vm.createContext({nodes:[{id:'image-a',type:'smart-image'}],settings:{engine:'api'},smartNodeInFlight:()=>false,
+        smartApiAudioMode:()=>false,
         confirmSmartUnknownResubmission:()=>true,cloneSmartSettings:s=>({...s}),smartSettingsForNode:()=>({engine:'api',model:'image'}),
         smartRunNeedsPrompt:()=>true,isApiLikeEngine:()=>true,snapshotRunMeta:()=>metadata={promptText:'unrelated composer',promptHtml:'wrong'},
         escapeHtml:s=>s.replaceAll('<','&lt;'),smartRunSnapshot:()=>({}),rememberRecentSmartSettings:()=>{throw Error('stop before generation');}});

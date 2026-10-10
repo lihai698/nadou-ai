@@ -1,7 +1,10 @@
 .canvas-assistant { position:fixed; right:18px; bottom:18px; z-index:58; width:300px; max-width:calc(100vw - 24px); height:360px; max-height:calc(100vh - 100px); display:flex; flex-direction:column; color:var(--text); background:var(--panel); border:1px solid var(--line); border-radius:16px; box-shadow:0 16px 44px var(--shadow); backdrop-filter:blur(16px); overflow:hidden; font-family:inherit; font-size:12px; line-height:1.5; }
 .canvas-assistant[hidden], .canvas-assistant-dock[hidden] { display:none; }
+.canvas-assistant:not(.canvas-assistant-reference-picker) { background:rgb(from var(--panel) r g b / var(--assistant-bg-alpha,.8)); backdrop-filter:none; }
 .canvas-assistant * { box-sizing:border-box; }
 .canvas-assistant button,.canvas-assistant select,.canvas-assistant textarea,.canvas-assistant-dock button { font:inherit; color:inherit; }
+.canvas-assistant input[type="number"] { font:inherit; color:var(--text); background:var(--card-solid,var(--card)); border:1px solid var(--line); border-radius:7px; padding:3px 5px; }
+.canvas-assistant input[type="number"]:focus-visible { outline:2px solid var(--strong); outline-offset:2px; }
 .canvas-assistant button { display:inline-flex; align-items:center; justify-content:center; gap:5px; min-height:28px; padding:4px 7px; border:1px solid transparent; border-radius:9px; background:transparent; cursor:pointer; }
 .canvas-assistant button:hover { background:var(--soft); border-color:var(--line); }
 .canvas-assistant button:disabled { opacity:.45; cursor:not-allowed; }
@@ -10,6 +13,16 @@
 .canvas-assistant-heading { display:flex; align-items:center; gap:6px; font-size:13px; font-weight:750; white-space:nowrap; }
 .canvas-assistant-head-actions { display:flex; gap:2px; }
 .canvas-assistant-head-actions button { width:26px; padding:4px; }
+.canvas-assistant-head-actions button,.canvas-assistant .canvas-assistant-model-toggle { background:var(--card-solid,var(--card)); }
+.canvas-assistant-heading,.canvas-assistant-subhead,.canvas-assistant-message,.canvas-assistant-messages>.canvas-assistant-note,.canvas-assistant textarea { text-shadow:0 1px 1px var(--card-solid,var(--card)),0 -1px 1px var(--card-solid,var(--card)),1px 0 1px var(--card-solid,var(--card)),-1px 0 1px var(--card-solid,var(--card)); }
+.canvas-assistant-head-actions [data-action="appearance"][aria-expanded="true"] { background:var(--soft); border-color:var(--line); }
+.canvas-assistant-appearance { position:absolute; top:48px; right:10px; z-index:3; width:200px; max-width:calc(100% - 20px); padding:10px; border:1px solid var(--line); border-radius:12px; background:var(--card-solid,var(--card)); box-shadow:0 8px 24px var(--shadow); }
+.canvas-assistant-appearance[hidden] { display:none; }
+.canvas-assistant-appearance label { display:flex; justify-content:space-between; gap:8px; align-items:center; font-size:11px; }
+.canvas-assistant-appearance output { font-variant-numeric:tabular-nums; }
+.canvas-assistant-appearance input[type="range"] { display:block; width:100%; margin:10px 0 6px; accent-color:var(--strong); cursor:pointer; }
+.canvas-assistant-opacity-hints { display:flex; justify-content:space-between; font-size:10px; color:var(--muted); }
+.canvas-assistant-appearance input:focus-visible,.canvas-assistant-head-actions [data-action="appearance"]:focus-visible { outline:2px solid var(--strong); outline-offset:2px; }
 .canvas-assistant-subhead { padding:6px 10px; color:var(--muted); border-bottom:1px solid var(--line); font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:none; }
 .canvas-assistant-messages { flex:1; min-height:0; overflow:auto; overscroll-behavior:contain; padding:10px; display:flex; flex-direction:column; gap:10px; user-select:text; cursor:auto; }
 .canvas-assistant-message { white-space:pre-wrap; overflow-wrap:anywhere; }
@@ -24,7 +37,15 @@
 .canvas-assistant .canvas-assistant-view { flex:none; min-height:23px; padding:2px 6px; font-size:11px; white-space:nowrap; border-color:var(--line); background:var(--card); }
 .canvas-assistant-view[hidden] { display:none; }
 .canvas-assistant-chip { display:inline-flex; gap:4px; align-items:center; font-size:11px; padding:2px 6px; background:var(--soft); border:1px solid var(--line); border-radius:999px; max-width:100%; overflow-wrap:anywhere; }
-.canvas-assistant-input { display:flex; gap:4px; align-items:center; padding:6px; border:1px solid var(--line); border-radius:11px; background:var(--soft); }
+.canvas-assistant-input { position:relative; display:flex; gap:4px; align-items:center; padding:6px; border:1px solid var(--line); border-radius:11px; background:var(--soft); overflow:hidden; }
+.canvas-assistant-skill-prefix { position:absolute; top:5px; left:6px; z-index:1; display:inline-flex; align-items:center; gap:5px; white-space:nowrap; color:var(--muted); }
+.canvas-assistant-skill-prefix[hidden] { display:none; }
+.canvas-assistant-skill-chip { display:inline-flex; align-items:center; gap:2px; padding:0 2px 0 5px; border:1px solid var(--line); border-radius:5px; color:var(--text); background:var(--card-solid,var(--panel)); }
+.canvas-assistant-skill-name { max-width:92px; overflow:hidden; text-overflow:ellipsis; font-size:11px; }
+.canvas-assistant .canvas-assistant-skill-chip button { min-height:20px; padding:0 2px; border-radius:3px; }
+.canvas-assistant .canvas-assistant-skill-chip svg { width:12px; height:12px; }
+.canvas-assistant-skill-toggle.has-selection::after { content:''; width:5px; height:5px; border-radius:50%; background:currentColor; }
+.canvas-assistant-input,.canvas-assistant-user,.canvas-assistant-change,.canvas-assistant-error { background:rgb(from var(--soft) r g b / var(--assistant-bg-alpha,.8)); }
 .canvas-assistant textarea { flex:1; min-width:0; width:100%; height:68px; min-height:56px; resize:none; padding:0; color:var(--text); border:0; background:transparent; outline-offset:2px; }
 .canvas-assistant textarea::placeholder { color:var(--muted); }
 .canvas-assistant-send-row { display:flex; flex-wrap:wrap; gap:5px; margin-top:6px; align-items:center; }
@@ -38,6 +59,32 @@
 .canvas-assistant-model-row input[type="checkbox"] { width:16px; height:16px; margin:0; accent-color:var(--strong); cursor:pointer; }
 .canvas-assistant-model-row input:disabled { cursor:not-allowed; opacity:.45; }
 .canvas-assistant-model-picker[hidden] { display:none; }
+.canvas-assistant.canvas-assistant-skill-picker { position:fixed; right:auto; bottom:auto; z-index:61; width:300px; height:auto; max-width:calc(100vw - 24px); max-height:calc(100vh - 24px); display:flex; gap:7px; padding:8px; border-radius:12px; background:var(--card-solid,var(--panel)); box-shadow:0 8px 24px var(--shadow); backdrop-filter:none; }
+.canvas-assistant-skill-picker[hidden] { display:none; }
+.canvas-assistant-skill-head { display:flex; justify-content:space-between; align-items:center; flex:none; }
+.canvas-assistant-skill-count { color:var(--muted); font-size:11px; }
+.canvas-assistant-skill-search { width:100%; flex:none; padding:7px 9px; border:1px solid var(--line); border-radius:8px; background:var(--soft); color:var(--text); font:inherit; }
+.canvas-assistant-skill-categories { display:flex; gap:3px; flex-wrap:wrap; flex:none; }
+.canvas-assistant-skill-categories button[aria-pressed="true"] { border-color:var(--line); background:var(--soft); }
+.canvas-assistant-skill-list { min-height:0; max-height:260px; overflow:auto; overscroll-behavior:contain; display:flex; flex-direction:column; gap:4px; }
+.canvas-assistant .canvas-assistant-skill-option { flex:none; flex-direction:column; align-items:flex-start; gap:1px; padding:7px; text-align:left; overflow-wrap:anywhere; }
+.canvas-assistant .canvas-assistant-skill-option[aria-pressed="true"] { border-color:var(--line); background:var(--soft); }
+.canvas-assistant-skill-option small { color:var(--muted); font-size:11px; }
+.canvas-assistant-turn-skills { margin-bottom:-5px; }
+.canvas-assistant-progress { border:1px solid var(--line); border-radius:9px; color:var(--muted); font-size:11px; }
+.canvas-assistant-progress > summary { display:flex; align-items:center; gap:7px; padding:8px; cursor:pointer; list-style:none; }
+.canvas-assistant-progress > summary::-webkit-details-marker { display:none; }
+.canvas-assistant-progress > summary::before { content:'›'; color:var(--text); font-size:15px; line-height:1; }
+.canvas-assistant-progress[open] > summary::before { transform:rotate(90deg); }
+.canvas-assistant-progress-label { flex:1; min-width:0; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.canvas-assistant-progress > summary small { flex:none; font-size:10px; }
+.canvas-assistant-progress-body { padding:8px; border-top:1px solid var(--line); overflow-wrap:anywhere; }
+.canvas-assistant-progress-step { padding:3px 0; }
+.canvas-assistant-progress-controls:empty,.canvas-assistant-progress-controls > div:empty { display:none; }
+.canvas-assistant-progress-controls { display:flex; gap:6px; flex-wrap:wrap; }
+.canvas-assistant .canvas-assistant-progress-controls button { padding:4px 8px; border-color:var(--line); background:var(--card); font-size:11px; }
+.canvas-assistant-progress > summary:focus-visible { outline:2px solid var(--strong); outline-offset:2px; border-radius:8px; }
+.canvas-assistant-progress-body .canvas-assistant-proposal { margin:8px 0 0; }
 .canvas-assistant .canvas-assistant-model-picker select { width:100%; min-width:0; height:34px; padding:0 10px; border:1px solid var(--line-2,var(--line)); border-radius:999px; background:var(--card-solid,var(--card)); color:var(--text); font-size:11px; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 body:has(.smart-assistant-toggle) .canvas-assistant-model-picker select { height:24px; border-color:var(--line); background:var(--card); font-size:10.5px; font-weight:500; }
 .canvas-assistant-model-picker select:focus-visible,.canvas-assistant-model-toggle:focus-visible { outline:2px solid var(--strong); outline-offset:2px; }

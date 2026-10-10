@@ -14,6 +14,7 @@ function harness(replies){
     const calls = [];
     const delays = [];
     const context = vm.createContext({
+        findPendingTask:()=>null,
         cascadeTargetIdFromOptions:options => options?.cascadeTargetId || '',
         cascadeFetch:async (url, init={}) => {
             calls.push({url, init});

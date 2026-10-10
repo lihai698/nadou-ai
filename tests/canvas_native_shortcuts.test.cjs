@@ -65,6 +65,7 @@ function loadClassicEditor(initialNodes, initialConnections, selectedIds) {
         },
         setTimeout,
     });
+    vm.runInContext(readFileSync(path.join(__dirname, '../static/js/canvas-audio.js'), 'utf8'), context);
     vm.runInContext(source.slice(fnStart, fnEnd) + source.slice(keyStart, keyEnd), context);
 
     const dispatch = (key, options = {}) => {
@@ -148,6 +149,7 @@ function loadSmartEditor(initialNodes, initialConnections, selectedIds) {
         document: {activeElement: body},
         setTimeout,
     });
+    vm.runInContext(readFileSync(path.join(__dirname, '../static/js/canvas-audio.js'), 'utf8'), context);
     vm.runInContext(
         source.slice(fnStart, fnEnd)
         + source.slice(viewAdjustStart, viewAdjustEnd)
@@ -200,7 +202,11 @@ test('普通画布生产 Ctrl+C/V 处理器复制并粘贴节点和内部连线'
 test('智能画布生产 Ctrl+C/V 处理器复制并粘贴节点和内部连线', async () => {
     const editor = loadSmartEditor([
         {id: 'prompt', type: 'smart-prompt', x: 80, y: 100, text: 'A'},
-        {id: 'image', type: 'smart-image', x: 480, y: 160, images: []},
+        {
+            id: 'image', type: 'smart-image', x: 480, y: 160, images: [],
+            viewAdjust: {sourceNodeId: 'prompt', sourceImageIndex: 0},
+            blockedInputRefs: ['prompt|1'],
+        },
     ], [{id: 'link', from: 'prompt', to: 'image'}], ['prompt', 'image']);
 
     editor.dispatch('c', {ctrlKey: true});
@@ -212,4 +218,8 @@ test('智能画布生产 Ctrl+C/V 处理器复制并粘贴节点和内部连线'
     assert.equal(editor.context.canvas.connections.length, 2);
     assert.equal(editor.context.selectedIds.length, 2);
     assert.equal(editor.undoSnapshots.length, 1);
+    const copiedPromptId = editor.context.nodes[2].id;
+    const copiedImage = editor.context.nodes[3];
+    assert.equal(copiedImage.viewAdjust.sourceNodeId, copiedPromptId);
+    assert.deepEqual(Array.from(copiedImage.blockedInputRefs), [`${copiedPromptId}|1`]);
 });

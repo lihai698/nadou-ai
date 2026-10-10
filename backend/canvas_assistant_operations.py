@@ -149,9 +149,20 @@ def new_node(kind, op, node_id, x, y, settings, created_at):
     return node
 
 
+def audio_task_active(node):
+    # 查询暂停、受理未知仍属于原任务；running=false 不能解除操作保护。
+    return bool(node.get("audioTaskId") and node.get("audioStatus") not in {"done", "failed", "cancelled", "canceled"})
+
+
 def is_busy(node):
     capture = node.get("depthCapture") or {}
-    return bool(node.get("running") or node.get("pending") or node.get("pendingTasks") or node.get("jimengPending") or
+    terminal = {"succeeded", "success", "completed", "failed", "cancelled", "canceled", "ready", "no-speech", "dismissed"}
+    def unfinished(items):
+        if not isinstance(items, list):
+            return bool(items)
+        return any(not isinstance(item, dict) or str(item.get("status", "")).lower() not in terminal for item in items)
+    return bool(audio_task_active(node) or node.get("running") or node.get("pending") or unfinished(node.get("pendingTasks")) or unfinished(node.get("_pending")) or
+                unfinished(node.get("_directPending")) or node.get("jimengPending") or
                 (capture and capture.get("status") not in {"succeeded", "failed", "cancelled"}))
 
 
@@ -165,7 +176,7 @@ def allowed_connection(kind, source, target):
         if a == "smart-loop":
             return b == "smart-image" or (b == "smart-loop" and (source.get("showPrompt") or source.get("imageInput")))
         return False
-    generators = {"generator", "midjourney", "msgen", "comfy", "ltxDirector", "video", "rh", "minimax"}
+    generators = {"generator", "midjourney", "msgen", "comfy", "video", "rh"}
     if a in generators:
         return b == "output" or b in generators
     if b == "loop":

@@ -15,7 +15,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 REPO = "lihai698/nadou-ai"
 LAST_UPSTREAM_VERSION = "2026.08.28"
-PUBLIC_DIRS = {".github", "CLI", "backend", "docs", "packages", "python", "static", "tests", "tools", "workflows"}
+PUBLIC_DIRS = {".github", "CLI", "backend", "docs", "packages", "python", "static", "tests", "tools", "workflows", "skills"}
+ASSISTANT_RESOURCE_DIRS = {"poster-layout", "reference-edit", "prompt-polish", "project-knowledge"}
 ROOT_NAMES = {
     ".gitignore", "LICENSE", "README.md", "VERSION", "requirements.lock", "requirements.txt",
     "main.py", "get-pip.py", "run.bat", "安装依赖.bat",
@@ -51,6 +52,9 @@ def included(relative):
     if len(parts) == 1:
         return parts[0] in ROOT_NAMES
     if parts[0] not in PUBLIC_DIRS:
+        return False
+    if parts[0] == "skills" and (len(parts) < 4 or parts[1] != "canvas-assistant"
+            or parts[2] not in ASSISTANT_RESOURCE_DIRS or Path(relative).suffix.lower() not in {".md", ".json"}):
         return False
     if parts[0] == "packages" and Path(relative).suffix.lower() != ".whl":
         return False
@@ -118,6 +122,22 @@ def check_release(files, allow_current_version=False, preflight=False):
     for needed in ("main.py", "VERSION", "LICENSE", "README.md", "static/index.html", "static/update-notes.json"):
         if needed not in paths:
             raise ValueError(f"发布内容缺少：{needed}")
+    knowledge_index = "skills/canvas-assistant/project-knowledge/index.json"
+    required = {knowledge_index, *(f"skills/canvas-assistant/{name}/SKILL.md"
+                                  for name in ASSISTANT_RESOURCE_DIRS if name != "project-knowledge")}
+    missing = required - paths
+    if missing:
+        raise ValueError("发布内容缺少：" + ", ".join(sorted(missing)))
+    index = json.loads(dict(files)[knowledge_index].read_text(encoding="utf-8"))
+    if not isinstance(index, dict) or not isinstance(index.get("entries"), list) or not index["entries"]:
+        raise ValueError("项目知识索引格式无效")
+    for entry in index["entries"]:
+        name = entry.get("file") if isinstance(entry, dict) else None
+        if not isinstance(name, str) or not name or Path(name).is_absolute() or ".." in Path(name).parts or "\\" in name:
+            raise ValueError("项目知识卡片路径无效")
+        relative = "skills/canvas-assistant/project-knowledge/" + name
+        if not included(relative) or relative not in paths:
+            raise ValueError(f"发布内容缺少：{relative}")
     version = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
     notes = json.loads((ROOT / "static/update-notes.json").read_text(encoding="utf-8"))
     if not version_tuple(version) or notes.get("version") != version:

@@ -20,7 +20,7 @@ function harness(error){
     const notices = [];
     const calls = {video:0, posts:0, saves:0};
     const context = vm.createContext({
-        nodes, canvas, settings, promptInput:{innerHTML:''}, smartLoopContext:null,
+        nodes, canvas, settings, window:{}, promptInput:{innerHTML:''}, smartLoopContext:null,
         selectedId:'source', selectedIds:[], selectedImage:{nodeId:'', index:-1}, undoSuppressed:false,
         selectedNode:()=>sourceNode, smartNodeInFlight:()=>false,
         confirmSmartUnknownResubmission:()=>true,
@@ -52,6 +52,8 @@ function harness(error){
         resultMediaUrls:value=>value?.videos || [],
         escapeHtml:value=>String(value ?? ''), escapeAttr:value=>String(value ?? ''),
     });
+    vm.runInContext(readFileSync(path.join(__dirname, '../static/js/canvas-audio.js'), 'utf8'),context);
+    vm.runInContext(readFileSync(path.join(__dirname, '../static/js/smart-canvas-audio-host.js'), 'utf8'),context);
     vm.runInContext(
         section('function smartPendingTasks(', 'class JimengPendingSignal')
         + section('function prepareSmartVideoTask(', 'async function refreshSmartVideoCanvasTaskOnce')

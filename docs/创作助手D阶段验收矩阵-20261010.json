@@ -1,0 +1,4372 @@
+{
+  "version": 1,
+  "preparedDate": "2026-10-10",
+  "ownerThreadId": "01a121b4-a847-7113-9cfe-d37badc8c446",
+  "integrationThreadId": "01a121b4-a847-7113-9cfe-d37badc8c446",
+  "source": {
+    "path": "docs/创作助手项目知识/验收清单.json",
+    "sha256": "2527b80f3667722c3b2d71ec48bf1a0f66f00b971db7a02e87d4486937320e74",
+    "nativeCatalogPath": "backend/canvas_assistant_native.py",
+    "nativeCatalogSha256": "9771dec3baf8f3af1d528ecc3ca7113abb200a9e59ca8b45281fe84ae36ffcd6",
+    "snapshotDate": "2026-10-10"
+  },
+  "authorization": {
+    "realModelCallsApproved": 24,
+    "imageSubmissionsApproved": null,
+    "imageSubmissionsPolicy": "unlimited_after_user_update_2026-10-10",
+    "videoSubmissionsApproved": 0,
+    "moneyCapApproved": null,
+    "approvalBasis": "首批按24次文本/视觉、1次图片授权；用户后续明确解除Agnes生图次数限制",
+    "automaticRegenerationsApproved": 0,
+    "additionalTextVisionCallsApproved": 0,
+    "currentWorkScope": "local_development_and_mock_acceptance_only",
+    "latestDecision": "暂不追加，只完成本地开发和模拟验收",
+    "realTextVisionCallsConsumed": 24,
+    "realAcceptanceDisposition": "deferred_by_user_no_new_requests"
+  },
+  "firstBatchProposal": {
+    "caseIds": [
+      "D-READ-CLASSIC",
+      "D-C01",
+      "D-RESUME-ORIGINAL"
+    ],
+    "maxTextVisionCalls": 24,
+    "maxImageSubmissions": 1,
+    "maxVideoSubmissions": 0,
+    "maxAutomaticRegenerations": 0,
+    "status": "completed_with_d_c01_passed"
+  },
+  "summary": {
+    "nodeTypes": 21,
+    "features": 407,
+    "supplierApplicableFeatures": 83
+  },
+  "nodeCases": [
+    {
+      "id": "D-N-classic.clip",
+      "capabilityId": "classic.clip",
+      "kind": "classic",
+      "nativeType": "clip",
+      "sourceFeatureIds": [
+        "classic.clip.controls",
+        "classic.clip.parameters",
+        "classic.clip.inputs_outputs",
+        "classic.clip.execution",
+        "classic.clip.persistence",
+        "classic.clip.control.88a998a101",
+        "classic.clip.control.63d90d9773",
+        "classic.clip.control.2f9daa8289",
+        "classic.clip.control.13d61fea9f",
+        "classic.clip.control.76420433f2",
+        "classic.clip.control.c591423b98",
+        "classic.clip.control.f52168156c"
+      ],
+      "snapshotAvailableActions": [
+        "update",
+        "preview",
+        "query",
+        "task_refresh",
+        "task_cancel",
+        "connect",
+        "export",
+        "create",
+        "clip_edit",
+        "media_export"
+      ],
+      "snapshotPlannedActions": [],
+      "realModelState": "pending",
+      "runState": "not_open_in_snapshot",
+      "features": [
+        {
+          "featureId": "classic.clip.controls",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.clip.parameters",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.clip.inputs_outputs",
+          "supplierApplicable": true,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.clip.execution",
+          "supplierApplicable": true,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.clip.persistence",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.clip.control.88a998a101",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.clip.control.63d90d9773",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.clip.control.2f9daa8289",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.clip.control.13d61fea9f",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.clip.control.76420433f2",
+          "supplierApplicable": true,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.clip.control.c591423b98",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.clip.control.f52168156c",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        }
+      ],
+      "catalogSnapshotDate": "2026-10-10"
+    },
+    {
+      "id": "D-N-classic.comfy",
+      "capabilityId": "classic.comfy",
+      "kind": "classic",
+      "nativeType": "comfy",
+      "sourceFeatureIds": [
+        "classic.comfy.controls",
+        "classic.comfy.parameters",
+        "classic.comfy.inputs_outputs",
+        "classic.comfy.execution",
+        "classic.comfy.persistence",
+        "classic.comfy.field.comfyMode",
+        "classic.comfy.field.comfyWorkflow",
+        "classic.comfy.field.count",
+        "classic.comfy.field.customHeight",
+        "classic.comfy.field.customRatio",
+        "classic.comfy.field.customRatioHeight",
+        "classic.comfy.field.customRatioWidth",
+        "classic.comfy.field.customSize",
+        "classic.comfy.field.customWidth",
+        "classic.comfy.field.editModel",
+        "classic.comfy.field.editUpscale",
+        "classic.comfy.field.editUpscaleRes",
+        "classic.comfy.field.enhanceStrength",
+        "classic.comfy.field.enhanceUpscale",
+        "classic.comfy.field.enhanceUpscaleRes",
+        "classic.comfy.field.height",
+        "classic.comfy.field.mode",
+        "classic.comfy.field.outputEnabled",
+        "classic.comfy.field.quality",
+        "classic.comfy.field.ratio",
+        "classic.comfy.field.resolution",
+        "classic.comfy.field.width",
+        "classic.comfy.random.toggle",
+        "classic.comfy.schema",
+        "classic.comfy.original_task.query",
+        "classic.comfy.control.34485225b5",
+        "classic.comfy.control.e69bf52cb6",
+        "classic.comfy.control.d721fd5257",
+        "classic.comfy.control.4eafa9e925",
+        "classic.comfy.control.458337ca25"
+      ],
+      "snapshotAvailableActions": [
+        "update",
+        "preview",
+        "query",
+        "task_refresh",
+        "task_cancel",
+        "connect",
+        "export",
+        "create",
+        "workflow_parameters",
+        "run"
+      ],
+      "snapshotPlannedActions": [],
+      "realModelState": "pending",
+      "runState": "open_limited_contract",
+      "features": [
+        {
+          "featureId": "classic.comfy.controls",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.comfy.parameters",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.comfy.inputs_outputs",
+          "supplierApplicable": true,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.comfy.execution",
+          "supplierApplicable": true,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.comfy.persistence",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.comfy.field.comfyMode",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.comfy.field.comfyWorkflow",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.comfy.field.count",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.comfy.field.customHeight",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.comfy.field.customRatio",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.comfy.field.customRatioHeight",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.comfy.field.customRatioWidth",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.comfy.field.customSize",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.comfy.field.customWidth",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.comfy.field.editModel",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.comfy.field.editUpscale",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.comfy.field.editUpscaleRes",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.comfy.field.enhanceStrength",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.comfy.field.enhanceUpscale",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.comfy.field.enhanceUpscaleRes",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.comfy.field.height",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.comfy.field.mode",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.comfy.field.outputEnabled",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.comfy.field.quality",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.comfy.field.ratio",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.comfy.field.resolution",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.comfy.field.width",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.comfy.random.toggle",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.comfy.schema",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.comfy.original_task.query",
+          "supplierApplicable": true,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.comfy.control.34485225b5",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.comfy.control.e69bf52cb6",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.comfy.control.d721fd5257",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.comfy.control.4eafa9e925",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.comfy.control.458337ca25",
+          "supplierApplicable": true,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        }
+      ],
+      "catalogSnapshotDate": "2026-10-10"
+    },
+    {
+      "id": "D-N-classic.generator",
+      "capabilityId": "classic.generator",
+      "kind": "classic",
+      "nativeType": "generator",
+      "sourceFeatureIds": [
+        "classic.generator.controls",
+        "classic.generator.parameters",
+        "classic.generator.inputs_outputs",
+        "classic.generator.execution",
+        "classic.generator.persistence",
+        "classic.generator.field.apiProvider",
+        "classic.generator.field.count",
+        "classic.generator.field.customHeight",
+        "classic.generator.field.customRatio",
+        "classic.generator.field.customRatioHeight",
+        "classic.generator.field.customRatioWidth",
+        "classic.generator.field.customSize",
+        "classic.generator.field.customWidth",
+        "classic.generator.field.model",
+        "classic.generator.field.outputEnabled",
+        "classic.generator.field.quality",
+        "classic.generator.field.ratio",
+        "classic.generator.field.resolution",
+        "classic.generator.control.a9294edc6f",
+        "classic.generator.control.d199a2447b",
+        "classic.generator.control.96d134ae8a"
+      ],
+      "snapshotAvailableActions": [
+        "update",
+        "preview",
+        "query",
+        "task_refresh",
+        "task_cancel",
+        "connect",
+        "export",
+        "create",
+        "run"
+      ],
+      "snapshotPlannedActions": [],
+      "realModelState": "pending",
+      "runState": "open_limited_contract",
+      "features": [
+        {
+          "featureId": "classic.generator.controls",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.generator.parameters",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.generator.inputs_outputs",
+          "supplierApplicable": true,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.generator.execution",
+          "supplierApplicable": true,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.generator.persistence",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.generator.field.apiProvider",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.generator.field.count",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.generator.field.customHeight",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.generator.field.customRatio",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.generator.field.customRatioHeight",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.generator.field.customRatioWidth",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.generator.field.customSize",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.generator.field.customWidth",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.generator.field.model",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.generator.field.outputEnabled",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.generator.field.quality",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.generator.field.ratio",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.generator.field.resolution",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.generator.control.a9294edc6f",
+          "supplierApplicable": true,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.generator.control.d199a2447b",
+          "supplierApplicable": true,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.generator.control.96d134ae8a",
+          "supplierApplicable": true,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        }
+      ],
+      "catalogSnapshotDate": "2026-10-10"
+    },
+    {
+      "id": "D-N-classic.group",
+      "capabilityId": "classic.group",
+      "kind": "classic",
+      "nativeType": "group",
+      "sourceFeatureIds": [
+        "classic.group.controls",
+        "classic.group.parameters",
+        "classic.group.inputs_outputs",
+        "classic.group.execution",
+        "classic.group.persistence",
+        "classic.group.field.groupMode",
+        "classic.group.control.afd8a25f30"
+      ],
+      "snapshotAvailableActions": [
+        "update",
+        "preview",
+        "query",
+        "task_refresh",
+        "task_cancel",
+        "connect",
+        "export",
+        "create",
+        "group_members"
+      ],
+      "snapshotPlannedActions": [],
+      "realModelState": "pending",
+      "runState": "not_open_in_snapshot",
+      "features": [
+        {
+          "featureId": "classic.group.controls",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.group.parameters",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.group.inputs_outputs",
+          "supplierApplicable": true,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.group.execution",
+          "supplierApplicable": true,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.group.persistence",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.group.field.groupMode",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.group.control.afd8a25f30",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        }
+      ],
+      "catalogSnapshotDate": "2026-10-10"
+    },
+    {
+      "id": "D-N-classic.image",
+      "capabilityId": "classic.image",
+      "kind": "classic",
+      "nativeType": "image",
+      "sourceFeatureIds": [
+        "classic.image.controls",
+        "classic.image.parameters",
+        "classic.image.inputs_outputs",
+        "classic.image.execution",
+        "classic.image.persistence",
+        "classic.image.field.duration",
+        "classic.image.field.height",
+        "classic.image.field.kind",
+        "classic.image.field.mime",
+        "classic.image.field.role",
+        "classic.image.field.width"
+      ],
+      "snapshotAvailableActions": [
+        "update",
+        "preview",
+        "query",
+        "task_refresh",
+        "task_cancel",
+        "connect",
+        "export",
+        "create"
+      ],
+      "snapshotPlannedActions": [],
+      "realModelState": "pending",
+      "runState": "not_open_in_snapshot",
+      "features": [
+        {
+          "featureId": "classic.image.controls",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.image.parameters",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.image.inputs_outputs",
+          "supplierApplicable": true,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.image.execution",
+          "supplierApplicable": true,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.image.persistence",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.image.field.duration",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.image.field.height",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.image.field.kind",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.image.field.mime",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.image.field.role",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.image.field.width",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        }
+      ],
+      "catalogSnapshotDate": "2026-10-10"
+    },
+    {
+      "id": "D-N-classic.llm",
+      "capabilityId": "classic.llm",
+      "kind": "classic",
+      "nativeType": "llm",
+      "sourceFeatureIds": [
+        "classic.llm.controls",
+        "classic.llm.parameters",
+        "classic.llm.inputs_outputs",
+        "classic.llm.execution",
+        "classic.llm.persistence",
+        "classic.llm.field.llmProvider",
+        "classic.llm.field.mode",
+        "classic.llm.field.model",
+        "classic.llm.field.showSystem",
+        "classic.llm.control.2410d860f0",
+        "classic.llm.control.4b3510b8d8",
+        "classic.llm.control.6725e7bbcd",
+        "classic.llm.control.63d90d9773",
+        "classic.llm.control.235b33f0a6"
+      ],
+      "snapshotAvailableActions": [
+        "update",
+        "preview",
+        "query",
+        "task_refresh",
+        "task_cancel",
+        "connect",
+        "export",
+        "create",
+        "run"
+      ],
+      "snapshotPlannedActions": [],
+      "realModelState": "pending",
+      "runState": "open_limited_contract",
+      "features": [
+        {
+          "featureId": "classic.llm.controls",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.llm.parameters",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.llm.inputs_outputs",
+          "supplierApplicable": true,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.llm.execution",
+          "supplierApplicable": true,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.llm.persistence",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.llm.field.llmProvider",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.llm.field.mode",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.llm.field.model",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.llm.field.showSystem",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.llm.control.2410d860f0",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.llm.control.4b3510b8d8",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.llm.control.6725e7bbcd",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.llm.control.63d90d9773",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.llm.control.235b33f0a6",
+          "supplierApplicable": true,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        }
+      ],
+      "catalogSnapshotDate": "2026-10-10"
+    },
+    {
+      "id": "D-N-classic.loop",
+      "capabilityId": "classic.loop",
+      "kind": "classic",
+      "nativeType": "loop",
+      "sourceFeatureIds": [
+        "classic.loop.controls",
+        "classic.loop.parameters",
+        "classic.loop.inputs_outputs",
+        "classic.loop.execution",
+        "classic.loop.persistence",
+        "classic.loop.field.count",
+        "classic.loop.field.imageBatchSize",
+        "classic.loop.field.imageInput",
+        "classic.loop.field.loopStart",
+        "classic.loop.field.mode",
+        "classic.loop.field.showPrompt",
+        "classic.loop.field.videoBatchSize",
+        "classic.loop.field.videoInput",
+        "classic.loop.control.ad3221dd66",
+        "classic.loop.control.2b66a2b53a",
+        "classic.loop.control.d24c10d37d",
+        "classic.loop.control.4b47dbae97",
+        "classic.loop.control.21179deb9a"
+      ],
+      "snapshotAvailableActions": [
+        "update",
+        "preview",
+        "query",
+        "task_refresh",
+        "task_cancel",
+        "connect",
+        "export",
+        "create"
+      ],
+      "snapshotPlannedActions": [],
+      "realModelState": "pending",
+      "runState": "not_open_in_snapshot",
+      "features": [
+        {
+          "featureId": "classic.loop.controls",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.loop.parameters",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.loop.inputs_outputs",
+          "supplierApplicable": true,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.loop.execution",
+          "supplierApplicable": true,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.loop.persistence",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.loop.field.count",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.loop.field.imageBatchSize",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.loop.field.imageInput",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.loop.field.loopStart",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.loop.field.mode",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.loop.field.showPrompt",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.loop.field.videoBatchSize",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.loop.field.videoInput",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.loop.control.ad3221dd66",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.loop.control.2b66a2b53a",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.loop.control.d24c10d37d",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.loop.control.4b47dbae97",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.loop.control.21179deb9a",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        }
+      ],
+      "catalogSnapshotDate": "2026-10-10"
+    },
+    {
+      "id": "D-N-classic.midjourney",
+      "capabilityId": "classic.midjourney",
+      "kind": "classic",
+      "nativeType": "midjourney",
+      "sourceFeatureIds": [
+        "classic.midjourney.controls",
+        "classic.midjourney.parameters",
+        "classic.midjourney.inputs_outputs",
+        "classic.midjourney.execution",
+        "classic.midjourney.persistence",
+        "classic.midjourney.field.apiProvider",
+        "classic.midjourney.field.count",
+        "classic.midjourney.field.lastAction",
+        "classic.midjourney.field.lastImageCount",
+        "classic.midjourney.field.mode",
+        "classic.midjourney.field.outputEnabled",
+        "classic.midjourney.field.size",
+        "classic.midjourney.field.speed",
+        "classic.midjourney.field.version",
+        "classic.midjourney.action.upscale",
+        "classic.midjourney.action.variation",
+        "classic.midjourney.action.reroll",
+        "classic.midjourney.action.low_variation",
+        "classic.midjourney.action.high_variation",
+        "classic.midjourney.action.zoom.2",
+        "classic.midjourney.action.zoom.1_5",
+        "classic.midjourney.action.pan.left",
+        "classic.midjourney.action.pan.right",
+        "classic.midjourney.action.pan.up",
+        "classic.midjourney.action.inpaint",
+        "classic.midjourney.action.remix_subtle",
+        "classic.midjourney.action.remix_strong",
+        "classic.midjourney.action.modal",
+        "classic.midjourney.control.e0094a4878"
+      ],
+      "snapshotAvailableActions": [
+        "update",
+        "preview",
+        "query",
+        "task_refresh",
+        "task_cancel",
+        "connect",
+        "export",
+        "create",
+        "run"
+      ],
+      "snapshotPlannedActions": [],
+      "realModelState": "pending",
+      "runState": "open_limited_contract",
+      "features": [
+        {
+          "featureId": "classic.midjourney.controls",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.midjourney.parameters",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.midjourney.inputs_outputs",
+          "supplierApplicable": true,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.midjourney.execution",
+          "supplierApplicable": true,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.midjourney.persistence",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.midjourney.field.apiProvider",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.midjourney.field.count",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.midjourney.field.lastAction",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.midjourney.field.lastImageCount",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.midjourney.field.mode",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.midjourney.field.outputEnabled",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.midjourney.field.size",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.midjourney.field.speed",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.midjourney.field.version",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.midjourney.action.upscale",
+          "supplierApplicable": true,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.midjourney.action.variation",
+          "supplierApplicable": true,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.midjourney.action.reroll",
+          "supplierApplicable": true,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.midjourney.action.low_variation",
+          "supplierApplicable": true,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.midjourney.action.high_variation",
+          "supplierApplicable": true,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.midjourney.action.zoom.2",
+          "supplierApplicable": true,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.midjourney.action.zoom.1_5",
+          "supplierApplicable": true,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.midjourney.action.pan.left",
+          "supplierApplicable": true,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.midjourney.action.pan.right",
+          "supplierApplicable": true,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.midjourney.action.pan.up",
+          "supplierApplicable": true,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.midjourney.action.inpaint",
+          "supplierApplicable": true,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.midjourney.action.remix_subtle",
+          "supplierApplicable": true,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.midjourney.action.remix_strong",
+          "supplierApplicable": true,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.midjourney.action.modal",
+          "supplierApplicable": true,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.midjourney.control.e0094a4878",
+          "supplierApplicable": true,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        }
+      ],
+      "catalogSnapshotDate": "2026-10-10"
+    },
+    {
+      "id": "D-N-classic.msgen",
+      "capabilityId": "classic.msgen",
+      "kind": "classic",
+      "nativeType": "msgen",
+      "sourceFeatureIds": [
+        "classic.msgen.controls",
+        "classic.msgen.parameters",
+        "classic.msgen.inputs_outputs",
+        "classic.msgen.execution",
+        "classic.msgen.persistence",
+        "classic.msgen.field.count",
+        "classic.msgen.field.fitImage",
+        "classic.msgen.field.msCustomHeight",
+        "classic.msgen.field.msCustomModel",
+        "classic.msgen.field.msCustomRatio",
+        "classic.msgen.field.msCustomRatioHeight",
+        "classic.msgen.field.msCustomRatioWidth",
+        "classic.msgen.field.msCustomSize",
+        "classic.msgen.field.msCustomWidth",
+        "classic.msgen.field.msHeight",
+        "classic.msgen.field.msLoraEnabled",
+        "classic.msgen.field.msLoraId",
+        "classic.msgen.field.msLoraStrength",
+        "classic.msgen.field.msRatio",
+        "classic.msgen.field.msResolution",
+        "classic.msgen.field.msWidth",
+        "classic.msgen.field.msgenModel",
+        "classic.msgen.field.outputEnabled",
+        "classic.msgen.control.c1c13bf487",
+        "classic.msgen.control.969d3f89e7",
+        "classic.msgen.control.d3e963a0a4",
+        "classic.msgen.control.4eafa9e925",
+        "classic.msgen.control.a9294edc6f",
+        "classic.msgen.control.d199a2447b",
+        "classic.msgen.control.33d895efd2"
+      ],
+      "snapshotAvailableActions": [
+        "update",
+        "preview",
+        "query",
+        "task_refresh",
+        "task_cancel",
+        "connect",
+        "export",
+        "create",
+        "lora_parameters",
+        "run"
+      ],
+      "snapshotPlannedActions": [],
+      "realModelState": "pending",
+      "runState": "open_limited_contract",
+      "features": [
+        {
+          "featureId": "classic.msgen.controls",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.msgen.parameters",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.msgen.inputs_outputs",
+          "supplierApplicable": true,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.msgen.execution",
+          "supplierApplicable": true,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.msgen.persistence",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.msgen.field.count",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.msgen.field.fitImage",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.msgen.field.msCustomHeight",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.msgen.field.msCustomModel",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.msgen.field.msCustomRatio",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.msgen.field.msCustomRatioHeight",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.msgen.field.msCustomRatioWidth",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.msgen.field.msCustomSize",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.msgen.field.msCustomWidth",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.msgen.field.msHeight",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.msgen.field.msLoraEnabled",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.msgen.field.msLoraId",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.msgen.field.msLoraStrength",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.msgen.field.msRatio",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.msgen.field.msResolution",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.msgen.field.msWidth",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.msgen.field.msgenModel",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.msgen.field.outputEnabled",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.msgen.control.c1c13bf487",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.msgen.control.969d3f89e7",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.msgen.control.d3e963a0a4",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.msgen.control.4eafa9e925",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.msgen.control.a9294edc6f",
+          "supplierApplicable": true,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.msgen.control.d199a2447b",
+          "supplierApplicable": true,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.msgen.control.33d895efd2",
+          "supplierApplicable": true,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        }
+      ],
+      "catalogSnapshotDate": "2026-10-10"
+    },
+    {
+      "id": "D-N-classic.output",
+      "capabilityId": "classic.output",
+      "kind": "classic",
+      "nativeType": "output",
+      "sourceFeatureIds": [
+        "classic.output.controls",
+        "classic.output.parameters",
+        "classic.output.inputs_outputs",
+        "classic.output.execution",
+        "classic.output.persistence"
+      ],
+      "snapshotAvailableActions": [
+        "update",
+        "preview",
+        "query",
+        "task_refresh",
+        "task_cancel",
+        "connect",
+        "export",
+        "create"
+      ],
+      "snapshotPlannedActions": [],
+      "realModelState": "pending",
+      "runState": "not_open_in_snapshot",
+      "features": [
+        {
+          "featureId": "classic.output.controls",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.output.parameters",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.output.inputs_outputs",
+          "supplierApplicable": true,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.output.execution",
+          "supplierApplicable": true,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.output.persistence",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        }
+      ],
+      "catalogSnapshotDate": "2026-10-10"
+    },
+    {
+      "id": "D-N-classic.prompt",
+      "capabilityId": "classic.prompt",
+      "kind": "classic",
+      "nativeType": "prompt",
+      "sourceFeatureIds": [
+        "classic.prompt.controls",
+        "classic.prompt.parameters",
+        "classic.prompt.inputs_outputs",
+        "classic.prompt.execution",
+        "classic.prompt.persistence",
+        "classic.prompt.control.afd8a25f30"
+      ],
+      "snapshotAvailableActions": [
+        "update",
+        "preview",
+        "query",
+        "task_refresh",
+        "task_cancel",
+        "connect",
+        "export",
+        "create"
+      ],
+      "snapshotPlannedActions": [],
+      "realModelState": "pending",
+      "runState": "not_open_in_snapshot",
+      "features": [
+        {
+          "featureId": "classic.prompt.controls",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.prompt.parameters",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.prompt.inputs_outputs",
+          "supplierApplicable": true,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.prompt.execution",
+          "supplierApplicable": true,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.prompt.persistence",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.prompt.control.afd8a25f30",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        }
+      ],
+      "catalogSnapshotDate": "2026-10-10"
+    },
+    {
+      "id": "D-N-classic.prompt_group",
+      "capabilityId": "classic.prompt_group",
+      "kind": "classic",
+      "nativeType": "promptGroup",
+      "sourceFeatureIds": [
+        "classic.prompt_group.controls",
+        "classic.prompt_group.parameters",
+        "classic.prompt_group.inputs_outputs",
+        "classic.prompt_group.execution",
+        "classic.prompt_group.persistence",
+        "classic.prompt_group.control.afd8a25f30"
+      ],
+      "snapshotAvailableActions": [
+        "update",
+        "preview",
+        "query",
+        "task_refresh",
+        "task_cancel",
+        "connect",
+        "export"
+      ],
+      "snapshotPlannedActions": [],
+      "realModelState": "pending",
+      "runState": "not_open_in_snapshot",
+      "features": [
+        {
+          "featureId": "classic.prompt_group.controls",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.prompt_group.parameters",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.prompt_group.inputs_outputs",
+          "supplierApplicable": true,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.prompt_group.execution",
+          "supplierApplicable": true,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.prompt_group.persistence",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.prompt_group.control.afd8a25f30",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        }
+      ],
+      "catalogSnapshotDate": "2026-10-10"
+    },
+    {
+      "id": "D-N-classic.runninghub",
+      "capabilityId": "classic.runninghub",
+      "kind": "classic",
+      "nativeType": "rh",
+      "sourceFeatureIds": [
+        "classic.runninghub.controls",
+        "classic.runninghub.parameters",
+        "classic.runninghub.inputs_outputs",
+        "classic.runninghub.execution",
+        "classic.runninghub.persistence",
+        "classic.runninghub.field.count",
+        "classic.runninghub.field.customHeight",
+        "classic.runninghub.field.customRatio",
+        "classic.runninghub.field.customRatioHeight",
+        "classic.runninghub.field.customRatioWidth",
+        "classic.runninghub.field.customSize",
+        "classic.runninghub.field.customWidth",
+        "classic.runninghub.field.instanceType",
+        "classic.runninghub.field.model",
+        "classic.runninghub.field.outputEnabled",
+        "classic.runninghub.field.quality",
+        "classic.runninghub.field.ratio",
+        "classic.runninghub.field.resolution",
+        "classic.runninghub.field.rhConfigKey",
+        "classic.runninghub.field.rhMode",
+        "classic.runninghub.field.rhModel",
+        "classic.runninghub.field.rhPayment",
+        "classic.runninghub.field.webappId",
+        "classic.runninghub.field.workflowId",
+        "classic.runninghub.random.toggle",
+        "classic.runninghub.schema",
+        "classic.runninghub.original_task.query",
+        "classic.runninghub.control.9752a9fd48"
+      ],
+      "snapshotAvailableActions": [
+        "update",
+        "preview",
+        "query",
+        "task_refresh",
+        "task_cancel",
+        "connect",
+        "export",
+        "create",
+        "workflow_parameters",
+        "run"
+      ],
+      "snapshotPlannedActions": [],
+      "realModelState": "pending",
+      "runState": "open_limited_contract",
+      "features": [
+        {
+          "featureId": "classic.runninghub.controls",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.runninghub.parameters",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.runninghub.inputs_outputs",
+          "supplierApplicable": true,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.runninghub.execution",
+          "supplierApplicable": true,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.runninghub.persistence",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.runninghub.field.count",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.runninghub.field.customHeight",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.runninghub.field.customRatio",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.runninghub.field.customRatioHeight",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.runninghub.field.customRatioWidth",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.runninghub.field.customSize",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.runninghub.field.customWidth",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.runninghub.field.instanceType",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.runninghub.field.model",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.runninghub.field.outputEnabled",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.runninghub.field.quality",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.runninghub.field.ratio",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.runninghub.field.resolution",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.runninghub.field.rhConfigKey",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.runninghub.field.rhMode",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.runninghub.field.rhModel",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.runninghub.field.rhPayment",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.runninghub.field.webappId",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.runninghub.field.workflowId",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.runninghub.random.toggle",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.runninghub.schema",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.runninghub.original_task.query",
+          "supplierApplicable": true,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.runninghub.control.9752a9fd48",
+          "supplierApplicable": true,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        }
+      ],
+      "catalogSnapshotDate": "2026-10-10"
+    },
+    {
+      "id": "D-N-classic.shot_table",
+      "capabilityId": "classic.shot_table",
+      "kind": "classic",
+      "nativeType": "shot-table",
+      "sourceFeatureIds": [
+        "classic.shot_table.entry_reuse",
+        "classic.shot_table.expand_edit",
+        "classic.shot_table.mobile_navigation",
+        "classic.shot_table.selection",
+        "classic.shot_table.builtin_columns",
+        "classic.shot_table.custom_add",
+        "classic.shot_table.custom_rename",
+        "classic.shot_table.custom_delete_confirmation",
+        "classic.shot_table.cell_edit",
+        "classic.shot_table.prompt_edit",
+        "classic.shot_table.motion_sync",
+        "classic.shot_table.time_quantization",
+        "classic.shot_table.row_limits",
+        "classic.shot_table.prepare_quote",
+        "classic.shot_table.vision_selection",
+        "classic.shot_table.speech_selection",
+        "classic.shot_table.analysis_confirmation",
+        "classic.shot_table.retry_shot",
+        "classic.shot_table.retry_speech",
+        "classic.shot_table.reanalysis_confirmation",
+        "classic.shot_table.cancel",
+        "classic.shot_table.query_recovery",
+        "classic.shot_table.hand_edit_preservation",
+        "classic.shot_table.generation_selection",
+        "classic.shot_table.materialize_native",
+        "classic.shot_table.generation_reuse",
+        "classic.shot_table.save_reopen",
+        "classic.shot_table.copy_remap",
+        "classic.shot_table.readonly",
+        "classic.shot_table.scale_display",
+        "classic.shot_table.source_guard",
+        "classic.shot_table.media_retention"
+      ],
+      "snapshotAvailableActions": [
+        "update",
+        "preview",
+        "query",
+        "task_refresh",
+        "task_cancel",
+        "connect",
+        "export",
+        "shot_edit",
+        "shot_column",
+        "shot_select",
+        "shot_materialize"
+      ],
+      "snapshotPlannedActions": [],
+      "realModelState": "pending",
+      "runState": "not_open_in_snapshot",
+      "features": [
+        {
+          "featureId": "classic.shot_table.entry_reuse",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.shot_table.expand_edit",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.shot_table.mobile_navigation",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.shot_table.selection",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.shot_table.builtin_columns",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.shot_table.custom_add",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.shot_table.custom_rename",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.shot_table.custom_delete_confirmation",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.shot_table.cell_edit",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.shot_table.prompt_edit",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.shot_table.motion_sync",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.shot_table.time_quantization",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.shot_table.row_limits",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.shot_table.prepare_quote",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.shot_table.vision_selection",
+          "supplierApplicable": true,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.shot_table.speech_selection",
+          "supplierApplicable": true,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.shot_table.analysis_confirmation",
+          "supplierApplicable": true,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.shot_table.retry_shot",
+          "supplierApplicable": true,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.shot_table.retry_speech",
+          "supplierApplicable": true,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.shot_table.reanalysis_confirmation",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.shot_table.cancel",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.shot_table.query_recovery",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.shot_table.hand_edit_preservation",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.shot_table.generation_selection",
+          "supplierApplicable": true,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.shot_table.materialize_native",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.shot_table.generation_reuse",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.shot_table.save_reopen",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.shot_table.copy_remap",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.shot_table.readonly",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.shot_table.scale_display",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.shot_table.source_guard",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.shot_table.media_retention",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        }
+      ],
+      "catalogSnapshotDate": "2026-10-10"
+    },
+    {
+      "id": "D-N-classic.video",
+      "capabilityId": "classic.video",
+      "kind": "classic",
+      "nativeType": "video",
+      "sourceFeatureIds": [
+        "classic.video.controls",
+        "classic.video.parameters",
+        "classic.video.inputs_outputs",
+        "classic.video.execution",
+        "classic.video.persistence",
+        "classic.video.field.apiProvider",
+        "classic.video.field.aspectRatio",
+        "classic.video.field.cameraFixed",
+        "classic.video.field.duration",
+        "classic.video.field.enableUpsample",
+        "classic.video.field.enhancePrompt",
+        "classic.video.field.generateAudio",
+        "classic.video.field.model",
+        "classic.video.field.multimodal",
+        "classic.video.field.outputEnabled",
+        "classic.video.field.resolution",
+        "classic.video.field.useFrameRoles",
+        "classic.video.field.watermark",
+        "classic.video.control.abb7b87710",
+        "classic.video.control.9275fb7dbb",
+        "classic.video.control.e3d757bcf7",
+        "classic.video.control.a92ef71d9f",
+        "classic.video.control.aa9f217c81",
+        "classic.video.control.d46e2e1d92",
+        "classic.video.control.b311c8ba29",
+        "classic.video.control.47c8726b74",
+        "classic.video.control.a44f24ac18",
+        "classic.video.control.89174fe72e"
+      ],
+      "snapshotAvailableActions": [
+        "update",
+        "preview",
+        "query",
+        "task_refresh",
+        "task_cancel",
+        "connect",
+        "export",
+        "create",
+        "run"
+      ],
+      "snapshotPlannedActions": [],
+      "realModelState": "pending",
+      "runState": "open_limited_contract",
+      "features": [
+        {
+          "featureId": "classic.video.controls",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.video.parameters",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.video.inputs_outputs",
+          "supplierApplicable": true,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.video.execution",
+          "supplierApplicable": true,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.video.persistence",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.video.field.apiProvider",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.video.field.aspectRatio",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.video.field.cameraFixed",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.video.field.duration",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.video.field.enableUpsample",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.video.field.enhancePrompt",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.video.field.generateAudio",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.video.field.model",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.video.field.multimodal",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.video.field.outputEnabled",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.video.field.resolution",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.video.field.useFrameRoles",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.video.field.watermark",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.video.control.abb7b87710",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.video.control.9275fb7dbb",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.video.control.e3d757bcf7",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.video.control.a92ef71d9f",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.video.control.aa9f217c81",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.video.control.d46e2e1d92",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.video.control.b311c8ba29",
+          "supplierApplicable": true,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.video.control.47c8726b74",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.video.control.a44f24ac18",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "classic.video.control.89174fe72e",
+          "supplierApplicable": true,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        }
+      ],
+      "catalogSnapshotDate": "2026-10-10"
+    },
+    {
+      "id": "D-N-smart.group",
+      "capabilityId": "smart.group",
+      "kind": "smart",
+      "nativeType": "smart-group",
+      "sourceFeatureIds": [
+        "smart.group.controls",
+        "smart.group.parameters",
+        "smart.group.inputs_outputs",
+        "smart.group.execution",
+        "smart.group.persistence",
+        "smart.group.control.d24c10d37d",
+        "smart.group.control.c20f7618d3",
+        "smart.group.control.afd8a25f30",
+        "smart.group.control.f26549da9c",
+        "smart.group.control.f288ea3fc6",
+        "smart.group.control.bd0deb6240",
+        "smart.group.control.7eb336e42c",
+        "smart.group.control.eb563b1dfe",
+        "smart.group.control.75b269496f",
+        "smart.group.control.685e2d0bf8",
+        "smart.group.control.acf967bd8f",
+        "smart.group.control.13d61fea9f",
+        "smart.group.control.b6dcc71b7a",
+        "smart.group.control.6152209524",
+        "smart.group.control.5b5f449fab"
+      ],
+      "snapshotAvailableActions": [
+        "update",
+        "preview",
+        "query",
+        "task_refresh",
+        "task_cancel",
+        "connect",
+        "export",
+        "create",
+        "group_members",
+        "run"
+      ],
+      "snapshotPlannedActions": [],
+      "realModelState": "pending",
+      "runState": "open_limited_contract",
+      "features": [
+        {
+          "featureId": "smart.group.controls",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.group.parameters",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.group.inputs_outputs",
+          "supplierApplicable": true,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.group.execution",
+          "supplierApplicable": true,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.group.persistence",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.group.control.d24c10d37d",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.group.control.c20f7618d3",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.group.control.afd8a25f30",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.group.control.f26549da9c",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.group.control.f288ea3fc6",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.group.control.bd0deb6240",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.group.control.7eb336e42c",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.group.control.eb563b1dfe",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.group.control.75b269496f",
+          "supplierApplicable": true,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.group.control.685e2d0bf8",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.group.control.acf967bd8f",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.group.control.13d61fea9f",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.group.control.b6dcc71b7a",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.group.control.6152209524",
+          "supplierApplicable": true,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.group.control.5b5f449fab",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        }
+      ],
+      "catalogSnapshotDate": "2026-10-10"
+    },
+    {
+      "id": "D-N-smart.image",
+      "capabilityId": "smart.image",
+      "kind": "smart",
+      "nativeType": "smart-image",
+      "sourceFeatureIds": [
+        "smart.image.controls",
+        "smart.image.parameters",
+        "smart.image.inputs_outputs",
+        "smart.image.execution",
+        "smart.image.persistence",
+        "smart.image.field.apiProvider",
+        "smart.image.field.engine",
+        "smart.image.field.model",
+        "smart.image.control.d24c10d37d",
+        "smart.image.control.c20f7618d3",
+        "smart.image.control.afd8a25f30",
+        "smart.image.control.f26549da9c",
+        "smart.image.control.f288ea3fc6",
+        "smart.image.control.bd0deb6240",
+        "smart.image.control.7eb336e42c",
+        "smart.image.control.eb563b1dfe",
+        "smart.image.control.75b269496f",
+        "smart.image.control.685e2d0bf8"
+      ],
+      "snapshotAvailableActions": [
+        "update",
+        "preview",
+        "query",
+        "task_refresh",
+        "task_cancel",
+        "connect",
+        "export",
+        "create",
+        "run"
+      ],
+      "snapshotPlannedActions": [],
+      "realModelState": "pending",
+      "runState": "open_limited_contract",
+      "features": [
+        {
+          "featureId": "smart.image.controls",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.image.parameters",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.image.inputs_outputs",
+          "supplierApplicable": true,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.image.execution",
+          "supplierApplicable": true,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.image.persistence",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.image.field.apiProvider",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.image.field.engine",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.image.field.model",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.image.control.d24c10d37d",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.image.control.c20f7618d3",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.image.control.afd8a25f30",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.image.control.f26549da9c",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.image.control.f288ea3fc6",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.image.control.bd0deb6240",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.image.control.7eb336e42c",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.image.control.eb563b1dfe",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.image.control.75b269496f",
+          "supplierApplicable": true,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.image.control.685e2d0bf8",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        }
+      ],
+      "catalogSnapshotDate": "2026-10-10"
+    },
+    {
+      "id": "D-N-smart.loop",
+      "capabilityId": "smart.loop",
+      "kind": "smart",
+      "nativeType": "smart-loop",
+      "sourceFeatureIds": [
+        "smart.loop.controls",
+        "smart.loop.parameters",
+        "smart.loop.inputs_outputs",
+        "smart.loop.execution",
+        "smart.loop.persistence",
+        "smart.loop.field.count",
+        "smart.loop.field.imageBatchSize",
+        "smart.loop.field.imageInput",
+        "smart.loop.field.loopStart",
+        "smart.loop.field.mode",
+        "smart.loop.field.showPrompt",
+        "smart.loop.field.videoBatchSize",
+        "smart.loop.field.videoInput",
+        "smart.loop.control.d24c10d37d",
+        "smart.loop.control.c20f7618d3",
+        "smart.loop.control.afd8a25f30",
+        "smart.loop.control.f26549da9c",
+        "smart.loop.control.f288ea3fc6",
+        "smart.loop.control.bd0deb6240",
+        "smart.loop.control.7eb336e42c",
+        "smart.loop.control.eb563b1dfe",
+        "smart.loop.control.75b269496f",
+        "smart.loop.control.685e2d0bf8",
+        "smart.loop.control.ad3221dd66",
+        "smart.loop.control.2b66a2b53a",
+        "smart.loop.control.4b47dbae97",
+        "smart.loop.control.2f9daa8289",
+        "smart.loop.control.21179deb9a",
+        "smart.loop.control.0006d696d8",
+        "smart.loop.control.791b40bfbe",
+        "smart.loop.control.7e07036031",
+        "smart.loop.control.1a1c0f139f"
+      ],
+      "snapshotAvailableActions": [
+        "update",
+        "preview",
+        "query",
+        "task_refresh",
+        "task_cancel",
+        "connect",
+        "export",
+        "create",
+        "loop_prompts",
+        "run"
+      ],
+      "snapshotPlannedActions": [],
+      "realModelState": "pending",
+      "runState": "open_limited_contract",
+      "features": [
+        {
+          "featureId": "smart.loop.controls",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.loop.parameters",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.loop.inputs_outputs",
+          "supplierApplicable": true,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.loop.execution",
+          "supplierApplicable": true,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.loop.persistence",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.loop.field.count",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.loop.field.imageBatchSize",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.loop.field.imageInput",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.loop.field.loopStart",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.loop.field.mode",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.loop.field.showPrompt",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.loop.field.videoBatchSize",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.loop.field.videoInput",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.loop.control.d24c10d37d",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.loop.control.c20f7618d3",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.loop.control.afd8a25f30",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.loop.control.f26549da9c",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.loop.control.f288ea3fc6",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.loop.control.bd0deb6240",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.loop.control.7eb336e42c",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.loop.control.eb563b1dfe",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.loop.control.75b269496f",
+          "supplierApplicable": true,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.loop.control.685e2d0bf8",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.loop.control.ad3221dd66",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.loop.control.2b66a2b53a",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.loop.control.4b47dbae97",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.loop.control.2f9daa8289",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.loop.control.21179deb9a",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.loop.control.0006d696d8",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.loop.control.791b40bfbe",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.loop.control.7e07036031",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.loop.control.1a1c0f139f",
+          "supplierApplicable": true,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        }
+      ],
+      "catalogSnapshotDate": "2026-10-10"
+    },
+    {
+      "id": "D-N-smart.prompt",
+      "capabilityId": "smart.prompt",
+      "kind": "smart",
+      "nativeType": "smart-prompt",
+      "sourceFeatureIds": [
+        "smart.prompt.controls",
+        "smart.prompt.parameters",
+        "smart.prompt.inputs_outputs",
+        "smart.prompt.execution",
+        "smart.prompt.persistence",
+        "smart.prompt.field.llmEnabled",
+        "smart.prompt.field.llmModel",
+        "smart.prompt.field.llmProvider",
+        "smart.prompt.field.llmSystemEnabled",
+        "smart.prompt.field.promptSeparator",
+        "smart.prompt.field.promptSplitEnabled",
+        "smart.prompt.control.d24c10d37d",
+        "smart.prompt.control.c20f7618d3",
+        "smart.prompt.control.afd8a25f30",
+        "smart.prompt.control.f26549da9c",
+        "smart.prompt.control.f288ea3fc6",
+        "smart.prompt.control.bd0deb6240",
+        "smart.prompt.control.7eb336e42c",
+        "smart.prompt.control.eb563b1dfe",
+        "smart.prompt.control.75b269496f",
+        "smart.prompt.control.685e2d0bf8",
+        "smart.prompt.control.0415f31a96",
+        "smart.prompt.control.674900a77b"
+      ],
+      "snapshotAvailableActions": [
+        "update",
+        "preview",
+        "query",
+        "task_refresh",
+        "task_cancel",
+        "connect",
+        "export",
+        "create",
+        "run"
+      ],
+      "snapshotPlannedActions": [],
+      "realModelState": "pending",
+      "runState": "open_limited_contract",
+      "features": [
+        {
+          "featureId": "smart.prompt.controls",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.prompt.parameters",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.prompt.inputs_outputs",
+          "supplierApplicable": true,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.prompt.execution",
+          "supplierApplicable": true,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.prompt.persistence",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.prompt.field.llmEnabled",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.prompt.field.llmModel",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.prompt.field.llmProvider",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.prompt.field.llmSystemEnabled",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.prompt.field.promptSeparator",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.prompt.field.promptSplitEnabled",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.prompt.control.d24c10d37d",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.prompt.control.c20f7618d3",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.prompt.control.afd8a25f30",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.prompt.control.f26549da9c",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.prompt.control.f288ea3fc6",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.prompt.control.bd0deb6240",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.prompt.control.7eb336e42c",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.prompt.control.eb563b1dfe",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.prompt.control.75b269496f",
+          "supplierApplicable": true,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.prompt.control.685e2d0bf8",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.prompt.control.0415f31a96",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.prompt.control.674900a77b",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        }
+      ],
+      "catalogSnapshotDate": "2026-10-10"
+    },
+    {
+      "id": "D-N-smart.shot_table",
+      "capabilityId": "smart.shot_table",
+      "kind": "smart",
+      "nativeType": "smart-shot-table",
+      "sourceFeatureIds": [
+        "smart.shot_table.entry_reuse",
+        "smart.shot_table.expand_edit",
+        "smart.shot_table.mobile_navigation",
+        "smart.shot_table.selection",
+        "smart.shot_table.builtin_columns",
+        "smart.shot_table.custom_add",
+        "smart.shot_table.custom_rename",
+        "smart.shot_table.custom_delete_confirmation",
+        "smart.shot_table.cell_edit",
+        "smart.shot_table.prompt_edit",
+        "smart.shot_table.motion_sync",
+        "smart.shot_table.time_quantization",
+        "smart.shot_table.row_limits",
+        "smart.shot_table.prepare_quote",
+        "smart.shot_table.vision_selection",
+        "smart.shot_table.speech_selection",
+        "smart.shot_table.analysis_confirmation",
+        "smart.shot_table.retry_shot",
+        "smart.shot_table.retry_speech",
+        "smart.shot_table.reanalysis_confirmation",
+        "smart.shot_table.cancel",
+        "smart.shot_table.query_recovery",
+        "smart.shot_table.hand_edit_preservation",
+        "smart.shot_table.generation_selection",
+        "smart.shot_table.materialize_native",
+        "smart.shot_table.generation_reuse",
+        "smart.shot_table.save_reopen",
+        "smart.shot_table.copy_remap",
+        "smart.shot_table.readonly",
+        "smart.shot_table.scale_display",
+        "smart.shot_table.source_guard",
+        "smart.shot_table.media_retention"
+      ],
+      "snapshotAvailableActions": [
+        "update",
+        "preview",
+        "query",
+        "task_refresh",
+        "task_cancel",
+        "connect",
+        "export",
+        "shot_edit",
+        "shot_column",
+        "shot_select",
+        "shot_materialize"
+      ],
+      "snapshotPlannedActions": [],
+      "realModelState": "pending",
+      "runState": "not_open_in_snapshot",
+      "features": [
+        {
+          "featureId": "smart.shot_table.entry_reuse",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.shot_table.expand_edit",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.shot_table.mobile_navigation",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.shot_table.selection",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.shot_table.builtin_columns",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.shot_table.custom_add",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.shot_table.custom_rename",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.shot_table.custom_delete_confirmation",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.shot_table.cell_edit",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.shot_table.prompt_edit",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.shot_table.motion_sync",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.shot_table.time_quantization",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.shot_table.row_limits",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.shot_table.prepare_quote",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.shot_table.vision_selection",
+          "supplierApplicable": true,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.shot_table.speech_selection",
+          "supplierApplicable": true,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.shot_table.analysis_confirmation",
+          "supplierApplicable": true,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.shot_table.retry_shot",
+          "supplierApplicable": true,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.shot_table.retry_speech",
+          "supplierApplicable": true,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.shot_table.reanalysis_confirmation",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.shot_table.cancel",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.shot_table.query_recovery",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.shot_table.hand_edit_preservation",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.shot_table.generation_selection",
+          "supplierApplicable": true,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.shot_table.materialize_native",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.shot_table.generation_reuse",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.shot_table.save_reopen",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.shot_table.copy_remap",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.shot_table.readonly",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.shot_table.scale_display",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.shot_table.source_guard",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        },
+        {
+          "featureId": "smart.shot_table.media_retention",
+          "supplierApplicable": false,
+          "understanding": "pending",
+          "execution": "pending",
+          "quality": "pending",
+          "evidence": []
+        }
+      ],
+      "catalogSnapshotDate": "2026-10-10"
+    },
+    {
+      "id": "D-N-classic.audio",
+      "capabilityId": "classic.audio",
+      "kind": "classic",
+      "nativeType": "audio",
+      "sourceFeatureIds": [],
+      "snapshotAvailableActions": [
+        "preview",
+        "query"
+      ],
+      "snapshotPlannedActions": [],
+      "realModelState": "not_applicable_read_only",
+      "runState": "not_open_in_snapshot",
+      "features": []
+    }
+  ],
+  "combinedCases": [
+    {
+      "id": "D-C01",
+      "status": "passed",
+      "evidence": [
+        "output/assistant-live-model-verification/d-c01-evidence.json",
+        "output/assistant-live-model-verification/d-c01-real-completed.png",
+        "output/assistant-live-model-verification/d-c01-refresh-recovered.png"
+      ]
+    },
+    {
+      "id": "D-C02",
+      "status": "blocked",
+      "evidence": [
+        "output/assistant-live-model-verification/d-c02-blocked-evidence.json"
+      ],
+      "blockedReason": "GPT CLI 文本/视觉调用达到已授权24次上限；用户决定暂不追加，真实案例延后。"
+    },
+    {
+      "id": "D-C03",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "id": "D-C04",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "id": "D-C05",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "id": "D-C06",
+      "status": "pending",
+      "evidence": []
+    }
+  ],
+  "boundaryCases": [
+    {
+      "id": "D-RESUME-ORIGINAL",
+      "status": "passed",
+      "evidence": [
+        "output/assistant-live-model-verification/d-c01-evidence.json",
+        "output/assistant-live-model-verification/d-c01-refresh-recovered.png"
+      ]
+    },
+    {
+      "id": "D-TWO-CONFIRMERS",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "id": "D-UNKNOWN-SUBMISSION",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "id": "D-UNSUPPORTED-MEDIA",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "id": "D-QUALITY-REVISION",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "id": "D-MISSING-DEPENDENCY",
+      "status": "pending",
+      "evidence": []
+    }
+  ],
+  "testModelSelection": {
+    "decisionDate": "2026-10-10",
+    "source": "explicit_user_platform_selection",
+    "text": {
+      "providerId": "codex",
+      "providerName": "GPT CLI",
+      "protocol": "codex",
+      "candidateModel": "gpt-6.1-sol",
+      "modelChoiceStatus": "suggested_unless_user_selected_other"
+    },
+    "image": {
+      "providerId": "agnes-ai",
+      "providerName": "Agnes AI",
+      "candidateModel": "agnes-image-2.1-flash",
+      "modelChoiceStatus": "suggested_unless_user_selected_other"
+    },
+    "configurationCheck": {
+      "publicStatusPort": 3000,
+      "textReady": true,
+      "imageReady": true,
+      "cliInstalled": true,
+      "cliVersion": "codex-cli 0.160.1"
+    },
+    "actualCallCheck": "passed",
+    "visualInputCheck": "passed",
+    "spendingScope": "count_cap_only_money_cap_unknown"
+  },
+  "handoff": {
+    "id": "PH-20261010-creative-assistant-unified-04",
+    "sourceThreadId": "01a120a7-8420-70c0-8265-ac351ca80500",
+    "receiverThreadId": "01a121b4-a847-7113-9cfe-d37badc8c446",
+    "state": "accepted",
+    "ownership": "remaining_B_C_D_in_receiver"
+  },
+  "firstBatchResult": {
+    "caseStatuses": {
+      "D-READ-CLASSIC": "passed",
+      "D-C01": "passed",
+      "D-RESUME-ORIGINAL": "passed"
+    },
+    "providerCalls": {
+      "codex": "gpt-6.1-sol",
+      "agnes": "agnes-image-2.1-flash"
+    },
+    "textVisionCalls": 10,
+    "imageSubmissions": 1,
+    "videoSubmissions": 0,
+    "automaticRegenerations": 0,
+    "evidence": "output/assistant-live-model-verification/d-c01-evidence.json",
+    "limitations": [
+      "D-C01视觉为首张作品人工与模型范围核验，其余487项功能/视频能力仍pending"
+    ]
+  },
+  "localAcceptanceScopeDocument": "docs/创作助手本地验收与支持范围-20261010.md",
+  "historicalSourceSnapshot": {
+    "checklistSha256": "39cac36969159f4a49cac5becf0ced8ab57ca770c7fd6e08c0299d5861312414",
+    "nativeCatalogSha256": "8bee228e27c6f012b755df8a9420b6d4664c9aec5c615ba647c8f221720b84a8",
+    "scope": "D_initial_preparation_snapshot"
+  },
+  "retiredFeatures": {
+    "date": "2026-10-10",
+    "capabilityIds": [
+      "classic.ltx_director",
+      "classic.minimax",
+      "smart.minimax"
+    ],
+    "reason": "用户确认删除LTX与两画布MiniMax H3，其余保持原样",
+    "sourceBackup": "output/remove-directors/before-source.zip",
+    "historicalEvidenceRetained": true
+  }
+}

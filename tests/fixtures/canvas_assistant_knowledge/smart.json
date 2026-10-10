@@ -1,0 +1,127 @@
+{
+  "id": "fixture-smart",
+  "kind": "smart",
+  "updated_at": 1,
+  "settings": {},
+  "nodes": [
+    {
+      "id": "smart-image",
+      "type": "smart-image",
+      "x": 120,
+      "y": 90,
+      "title": "智能图片节点",
+      "images": [],
+      "created_at": 1791519151683,
+      "scale": 1
+    },
+    {
+      "id": "smart-prompt",
+      "type": "smart-prompt",
+      "x": 120,
+      "y": 90,
+      "w": 316,
+      "h": 240,
+      "title": "智能提示词节点",
+      "text": "公开节点验收文本",
+      "promptSeparator": ";",
+      "promptSplitEnabled": false,
+      "llmEnabled": false,
+      "llmProvider": "assistant-mock",
+      "llmModel": "chat-user",
+      "llmSystemEnabled": false,
+      "llmSystemPrompt": "You are a helpful prompt assistant.",
+      "llmInstruction": "",
+      "created_at": 1791519151685
+    },
+    {
+      "id": "smart-loop",
+      "type": "smart-loop",
+      "x": 120,
+      "y": 90,
+      "w": 340,
+      "h": 168,
+      "title": "智能循环节点",
+      "count": 1,
+      "mode": "serial",
+      "showPrompt": true,
+      "imageInput": false,
+      "loopStart": 1,
+      "imageBatchSize": 1,
+      "variablePrompt": "",
+      "created_at": 1791519151686
+    },
+    {
+      "id": "smart-group",
+      "type": "smart-group",
+      "x": 120,
+      "y": 90,
+      "w": 340,
+      "h": 260,
+      "title": "智能分组节点",
+      "items": [
+        "smart-prompt"
+      ],
+      "created_at": 1791519151686
+    },
+    {
+      "id": "smart-shot-table",
+      "type": "smart-shot-table",
+      "name": "公开镜头表示例",
+      "x": 450,
+      "y": 90,
+      "w": 1120,
+      "h": 390,
+      "shotTableData": {
+        "version": 1,
+        "revision": 0,
+        "source": {
+          "nodeId": "smart-image",
+          "resultId": "",
+          "sourceUrl": "/output/fixture-video.mp4",
+          "title": "公开视频"
+        },
+        "columns": [
+          {
+            "id": "visual",
+            "label": "画面",
+            "kind": "builtin"
+          }
+        ],
+        "rows": [
+          {
+            "id": "shot-1",
+            "index": 1,
+            "startSeconds": 0,
+            "endSeconds": 1,
+            "durationSeconds": 1,
+            "keyframeUrl": "",
+            "cells": {
+              "visual": "森林中走过的红衣人物"
+            },
+            "imagePrompt": "森林中的红衣人物",
+            "motionPrompt": "镜头缓慢推进",
+            "carriedOver": false,
+            "visionFailed": false
+          }
+        ],
+        "selectedRowIds": [
+          "shot-1"
+        ],
+        "analysisSettings": {},
+        "generationMap": {},
+        "task": {
+          "status": "idle"
+        }
+      }
+    }
+  ],
+  "connections": [
+    {
+      "id": "e1",
+      "from": "smart-prompt",
+      "to": "smart-loop",
+      "kind": "input",
+      "role": "prompt"
+    }
+  ]
+}

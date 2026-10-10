@@ -44,6 +44,9 @@ function editor() {
         const clearTimeout = () => {};
         const setTimeout = () => 1;
     `, context);
+    vm.runInContext(readFileSync(path.join(__dirname, '../static/js/canvas-audio.js'), 'utf8'),context);
+    vm.runInContext(readFileSync(path.join(__dirname, '../static/js/smart-canvas-audio-host.js'), 'utf8'),context);
+    vm.runInContext(section('function invalidateSmartVideoDeconstruction(){', 'function initSmartVideoDeconstructionBridge(){'),context);
     vm.runInContext(section('const UNDO_LIMIT =', 'let comfyWorkflowCache ='), context);
     vm.runInContext(section('function scheduleSave(){', 'async function saveCanvas(){'), context);
     vm.runInContext(section('async function saveCanvas(){', 'function imageMetaFromNode('), context);
