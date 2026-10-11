@@ -11,7 +11,8 @@ if ! python3 tools/dependency_marker.py --check >/dev/null 2>&1; then
     exit 1
   fi
 fi
-if ! python3 tools/check-environment.py --port 3000; then
+APP_PORT="$(python3 tools/check-environment.py --print-port)" || exit 1
+if ! python3 tools/check-environment.py --port "$APP_PORT"; then
   echo "Environment check failed. Fix the message above and try again."
   exit 1
 fi
@@ -36,11 +37,11 @@ case "$(printf '%s' "$BIND_HOST" | tr '[:upper:]' '[:lower:]')" in
     APP_HOST="$BIND_HOST"
     ;;
 esac
-APP_URL="http://${APP_HOST}:3000/"
+APP_URL="http://${APP_HOST}:${APP_PORT}/"
 
 echo "Starting nadou ai..."
 echo "Visit: ${APP_URL}"
-echo "Local: http://127.0.0.1:3000/"
+echo "Local: http://127.0.0.1:${APP_PORT}/"
 echo "Press Ctrl+C to stop."
 echo ""
 

@@ -16,7 +16,7 @@ function savingEditor(){
         saveCanvasAgain:false, localCanvasDirty:true, lastCanvasUpdatedAt:1,
         saveTimer:null, CLIENT_ID:'test', currentCanvasTitle:null, currentCanvasTime:null,
         sanitizeConnections(){}, setStatus(){}, clearUnsavedCanvasAcceptedTasks(){},
-        clearUnsavedCanvasUnknownWarnings(){}, loadCanvasList(){},
+        clearUnsavedCanvasUnknownWarnings(){}, gateCanvasList:null, loadCanvasList(){},
         setTimeout(){return 1;}, clearTimeout(){}, console,
         fetch:async(url, init)=>{
             const body = JSON.parse(init.body);
@@ -30,6 +30,39 @@ function savingEditor(){
     vm.runInContext(section('function serializableCanvasNode(', 'async function loadConfig('), context);
     return {context, requests, releases, save:()=>vm.runInContext('saveCanvas()',context)};
 }
+test('return waits for pending save and prevents duplicate navigation', async()=>{
+    assert.equal((source.match(/async function returnToCanvasManager\(/g)||[]).length,1);
+    let finish;
+    const button={disabled:false}, location={href:'editor'}, errors=[];
+    const context=vm.createContext({backToManagerBtn:button,canvas:{project:'current'},
+        localCanvasDirty:true,savingCanvasNow:false,saveTimer:1,saveCanvasAgain:false,
+        saveCanvas:()=>new Promise(resolve=>{finish=()=>{context.localCanvasDirty=false;resolve(true);};}),
+        canvasListUrlForProject:p=>`list?project=${p}`,requestedCanvasListProject:()=>'',rememberedCanvasListProject:()=>'',
+        window:{location},showErrorModal:m=>errors.push(m)});
+    vm.runInContext(section('async function returnToCanvasManager(', 'clearCurrentCanvasBtn?.addEventListener'),context);
+    const leaving=vm.runInContext('returnToCanvasManager()',context);
+    assert.equal(location.href,'editor');assert.equal(button.disabled,true);
+    await vm.runInContext('returnToCanvasManager()',context);
+    assert.equal(location.href,'editor');
+    finish();await leaving;
+    assert.equal(location.href,'list?project=current');assert.equal(button.disabled,false);assert.deepEqual(errors,[]);
+});
+test('return stays on editor and reports failed saving', async()=>{
+    const button={disabled:false}, location={href:'editor'}, errors=[];
+    const context=vm.createContext({backToManagerBtn:button,canvas:{project:'current'},
+        localCanvasDirty:true,savingCanvasNow:false,saveTimer:1,saveCanvasAgain:false,
+        saveCanvas:async()=>false,window:{location},showErrorModal:m=>errors.push(m)});
+    vm.runInContext(section('async function returnToCanvasManager(', 'clearCurrentCanvasBtn?.addEventListener'),context);
+    await vm.runInContext('returnToCanvasManager()',context);
+    assert.equal(location.href,'editor');assert.equal(button.disabled,false);assert.equal(errors.length,1);
+});
+test('standalone editor save does not refresh removed manager list', async()=>{
+    const e=savingEditor();let listCalls=0;
+    e.context.loadCanvasList=()=>{listCalls++;};
+    const saving=e.save();e.releases[0](true);assert.equal(await saving,true);assert.equal(listCalls,0);
+    e.context.gateCanvasList={};const legacy=e.save();e.releases[1](true);
+    assert.equal(await legacy,true);assert.equal(listCalls,1);
+});
 test('accepted task waits for an earlier autosave and persists its own snapshot', async()=>{
     const e = savingEditor();
     const earlier = e.save();

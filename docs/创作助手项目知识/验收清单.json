@@ -14825,5 +14825,173 @@
       "savedActionEvidence": [],
       "scopeNote": "目录和已保存动作只证明具体合同子集；未逐项正常/边界/失败/重开验证，不自动升为passed。"
     }
+  },
+  {
+    "capabilityId": "classic.audio",
+    "featureId": "classic.audio.controls",
+    "explanation": "passed",
+    "read": "passed",
+    "operation": "pending",
+    "automatedCheck": "pending",
+    "uiCheck": "pending",
+    "supplierCheck": "not_applicable",
+    "reason": "当前合同只读或本地保护，不调用供应商",
+    "evidence": "static/js/canvas-audio.js:mediaHtml",
+    "readScope": "音频知识正文可读；操作验收只覆盖明确列出的本地证据。",
+    "readEvidence": "skills/canvas-assistant/project-knowledge/nodes/classic-audio.md; tests/test_canvas_assistant_knowledge.py",
+    "localReview": {
+      "reviewDate": "2026-10-11",
+      "featureLabel": "原生上传、播放、波形、下载与素材库控件",
+      "nativeType": "audio",
+      "support": "read_only_contract",
+      "availableActions": [
+        "preview",
+        "query"
+      ],
+      "source": "backend/canvas_assistant_native.py:native_catalog",
+      "savedActionEvidence": [],
+      "scopeNote": "不开放助手音频生成；已有专项自动检查不替代所有界面、失败和重开边界。"
+    }
+  },
+  {
+    "capabilityId": "classic.audio",
+    "featureId": "classic.audio.read_state",
+    "explanation": "passed",
+    "read": "passed",
+    "operation": "partial",
+    "automatedCheck": "passed",
+    "uiCheck": "pending",
+    "supplierCheck": "not_applicable",
+    "reason": "当前合同只读或本地保护，不调用供应商",
+    "evidence": "tests/test_canvas_assistant_state.py:test_audio_material_and_paused_task_are_read_without_private_settings",
+    "readScope": "音频知识正文可读；操作验收只覆盖明确列出的本地证据。",
+    "readEvidence": "skills/canvas-assistant/project-knowledge/nodes/classic-audio.md; tests/test_canvas_assistant_knowledge.py",
+    "localReview": {
+      "reviewDate": "2026-10-11",
+      "featureLabel": "素材、识别正文和脱敏原任务状态读取",
+      "nativeType": "audio",
+      "support": "read_only_contract",
+      "availableActions": [
+        "preview",
+        "query"
+      ],
+      "source": "backend/canvas_assistant_native.py:native_catalog",
+      "savedActionEvidence": [
+        "tests/test_canvas_assistant_state.py:test_audio_material_and_paused_task_are_read_without_private_settings"
+      ],
+      "scopeNote": "不开放助手音频生成；已有专项自动检查不替代所有界面、失败和重开边界。"
+    }
+  },
+  {
+    "capabilityId": "classic.audio",
+    "featureId": "classic.audio.busy_guard",
+    "explanation": "passed",
+    "read": "passed",
+    "operation": "partial",
+    "automatedCheck": "passed",
+    "uiCheck": "pending",
+    "supplierCheck": "not_applicable",
+    "reason": "当前合同只读或本地保护，不调用供应商",
+    "evidence": "tests/test_canvas_assistant_native.py:test_paused_audio_blocks_writes_until_original_task_has_ended",
+    "readScope": "音频知识正文可读；操作验收只覆盖明确列出的本地证据。",
+    "readEvidence": "skills/canvas-assistant/project-knowledge/nodes/classic-audio.md; tests/test_canvas_assistant_knowledge.py",
+    "localReview": {
+      "reviewDate": "2026-10-11",
+      "featureLabel": "查询暂停、未知受理及未结束原任务保护",
+      "nativeType": "audio",
+      "support": "read_only_contract",
+      "availableActions": [
+        "preview",
+        "query"
+      ],
+      "source": "backend/canvas_assistant_native.py:native_catalog",
+      "savedActionEvidence": [
+        "tests/test_canvas_assistant_native.py:test_paused_audio_blocks_writes_until_original_task_has_ended"
+      ],
+      "scopeNote": "不开放助手音频生成；已有专项自动检查不替代所有界面、失败和重开边界。"
+    }
+  },
+  {
+    "capabilityId": "classic.audio",
+    "featureId": "classic.audio.readonly_contract",
+    "explanation": "passed",
+    "read": "passed",
+    "operation": "partial",
+    "automatedCheck": "passed",
+    "uiCheck": "pending",
+    "supplierCheck": "not_applicable",
+    "reason": "当前合同只读或本地保护，不调用供应商",
+    "evidence": "tests/test_canvas_assistant_native.py:test_audio_catalog_is_read_only",
+    "readScope": "音频知识正文可读；操作验收只覆盖明确列出的本地证据。",
+    "readEvidence": "skills/canvas-assistant/project-knowledge/nodes/classic-audio.md; tests/test_canvas_assistant_knowledge.py",
+    "localReview": {
+      "reviewDate": "2026-10-11",
+      "featureLabel": "只读目录与创建、修改、运行拒绝",
+      "nativeType": "audio",
+      "support": "read_only_contract",
+      "availableActions": [
+        "preview",
+        "query"
+      ],
+      "source": "backend/canvas_assistant_native.py:native_catalog",
+      "savedActionEvidence": [
+        "tests/test_canvas_assistant_native.py:test_audio_catalog_is_read_only"
+      ],
+      "scopeNote": "不开放助手音频生成；已有专项自动检查不替代所有界面、失败和重开边界。"
+    }
+  },
+  {
+    "capabilityId": "classic.audio",
+    "featureId": "classic.audio.media_preview",
+    "explanation": "passed",
+    "read": "passed",
+    "operation": "pending",
+    "automatedCheck": "pending",
+    "uiCheck": "pending",
+    "supplierCheck": "not_applicable",
+    "reason": "当前合同只读或本地保护，不调用供应商",
+    "evidence": "backend/canvas_assistant_native.py:native_catalog",
+    "readScope": "音频知识正文可读；操作验收只覆盖明确列出的本地证据。",
+    "readEvidence": "skills/canvas-assistant/project-knowledge/nodes/classic-audio.md; tests/test_canvas_assistant_knowledge.py",
+    "localReview": {
+      "reviewDate": "2026-10-11",
+      "featureLabel": "真实音频文件预览、缺失与媒体格式边界",
+      "nativeType": "audio",
+      "support": "read_only_contract",
+      "availableActions": [
+        "preview",
+        "query"
+      ],
+      "source": "backend/canvas_assistant_native.py:native_catalog",
+      "savedActionEvidence": [],
+      "scopeNote": "不开放助手音频生成；已有专项自动检查不替代所有界面、失败和重开边界。"
+    }
+  },
+  {
+    "capabilityId": "classic.audio",
+    "featureId": "classic.audio.persistence",
+    "explanation": "passed",
+    "read": "passed",
+    "operation": "pending",
+    "automatedCheck": "pending",
+    "uiCheck": "pending",
+    "supplierCheck": "not_applicable",
+    "reason": "当前合同只读或本地保护，不调用供应商",
+    "evidence": "static/js/canvas-audio.js:migrate",
+    "readScope": "音频知识正文可读；操作验收只覆盖明确列出的本地证据。",
+    "readEvidence": "skills/canvas-assistant/project-knowledge/nodes/classic-audio.md; tests/test_canvas_assistant_knowledge.py",
+    "localReview": {
+      "reviewDate": "2026-10-11",
+      "featureLabel": "保存重开、旧素材迁移与原任务编号保留",
+      "nativeType": "audio",
+      "support": "read_only_contract",
+      "availableActions": [
+        "preview",
+        "query"
+      ],
+      "source": "backend/canvas_assistant_native.py:native_catalog",
+      "savedActionEvidence": [],
+      "scopeNote": "不开放助手音频生成；已有专项自动检查不替代所有界面、失败和重开边界。"
+    }
   }
 ]

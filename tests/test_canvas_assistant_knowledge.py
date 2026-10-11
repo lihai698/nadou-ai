@@ -144,8 +144,12 @@ class ProjectKnowledgeTests(unittest.TestCase):
         snapshot = ProjectKnowledge().snapshot()
         checks = json.loads((root / "docs/创作助手项目知识/验收清单.json").read_text(encoding="utf-8"))
         check_ids = {item["featureId"] for item in checks}
+        self.assertEqual(len(check_ids), len(checks), "验收编号不能重复")
+        self.assertEqual(check_ids, {feature["id"] for entry in snapshot["entries"] for feature in entry["features"]})
         for entry in snapshot["entries"]:
             self.assertTrue(entry["sources"])
+            if entry["kind"] in {"classic", "smart"}:
+                self.assertTrue(entry["features"], f"节点缺少验收子功能：{entry['id']}")
             for feature in entry["features"]:
                 self.assertIn(feature["id"], check_ids)
 

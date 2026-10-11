@@ -15,6 +15,8 @@ from pathlib import Path
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(PROJECT_ROOT))
+from backend import local_env
 REQUIREMENTS = PROJECT_ROOT / "requirements.txt"
 IMPORT_NAMES = {"pillow": "PIL", "python-multipart": "multipart"}
 ENV_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\Z")
@@ -208,13 +210,19 @@ def check_local_path_types(root, problems):
             problems.append(f"本地路径 {name} 应为目录。")
 
 
-def check_port(port):
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
-        try:
-            listener.bind(("0.0.0.0", port))
-        except OSError:
-            return False
-    return True
+def check_port(port, host="127.0.0.1"):
+    # 检查实际监听地址，Windows 的通配地址绑定可能漏报回环地址冲突。
+    try:
+        addresses = socket.getaddrinfo(host.strip("[]"), port, type=socket.SOCK_STREAM)
+    except OSError:
+        return False
+    for family, kind, protocol, _, address in addresses:
+        with socket.socket(family, kind, protocol) as listener:
+            try:
+                listener.bind(address)
+            except OSError:
+                return False
+    return bool(addresses)
 
 
 def check_disk_space(root, minimum_bytes, problems):
@@ -252,7 +260,9 @@ def main():
         sys.stdout.reconfigure(encoding="utf-8", line_buffering=True)
         sys.stderr.reconfigure(encoding="utf-8", line_buffering=True)
     parser = argparse.ArgumentParser(description="检查本地启动环境，不读取或显示密钥内容")
-    parser.add_argument("--port", type=int, default=3000, help="准备使用的端口，默认 3000")
+    parser.add_argument("--port", type=int, help="准备使用的端口，默认读取 NADOU_PORT，未配置时为 3000")
+    parser.add_argument("--host", help="准备监听的地址，默认读取 NADOU_BIND_HOST，未配置时为 127.0.0.1")
+    parser.add_argument("--print-port", action="store_true", help="仅输出已校验的启动端口，供启动脚本使用")
     parser.add_argument("--requirements", type=Path, default=REQUIREMENTS,
                         help="依赖清单路径，默认项目根目录 requirements.txt")
     parser.add_argument("--config-root", type=Path, default=PROJECT_ROOT,
@@ -262,6 +272,18 @@ def main():
         help="要求配置根目录所在磁盘的最低可用空间（字节）；默认 0 表示不设门槛",
     )
     args = parser.parse_args()
+    environment = dict(os.environ)
+    try:
+        local_env.load_env_file(str(args.config_root / "API" / ".env"), environment)
+        configured_port = local_env.server_port(environment)
+    except (OSError, UnicodeError, ValueError) as exc:
+        print("启动配置无效：" + (str(exc) if isinstance(exc, ValueError) else type(exc).__name__), file=sys.stderr)
+        return 1
+    if args.print_port:
+        print(configured_port)
+        return 0
+    args.port = configured_port if args.port is None else args.port
+    host = args.host or environment.get("NADOU_BIND_HOST", "").strip() or "127.0.0.1"
     problems = []
     notices = []
 
@@ -296,10 +318,10 @@ def main():
 
     if not 1 <= args.port <= 65535:
         problems.append("端口必须在 1～65535 之间。")
-    elif check_port(args.port):
+    elif check_port(args.port, host):
         print(f"端口 {args.port}: 可用")
     else:
-        problems.append(f"端口 {args.port} 已被占用；请先停止已有服务，再运行 run.bat。")
+        problems.append(f"地址 {host} 的端口 {args.port} 不可用；可用 NADOU_PORT 配置其他端口。不要停止其他项目的服务；已有本项目实例时请使用其现有地址。")
 
     for name in ("ffmpeg", "ffprobe"):
         print(f"可选工具 {name}: {'已找到' if shutil.which(name) else '未在 PATH 中找到'}")

@@ -2,6 +2,7 @@
 
 import importlib.util
 import tempfile
+import socket
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -15,6 +16,12 @@ SPEC.loader.exec_module(checker)
 
 
 class EnvironmentConfigTests(unittest.TestCase):
+    def test_port_check_detects_the_actual_loopback_listener(self):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
+            listener.bind(('127.0.0.1', 0))
+            listener.listen(1)
+            self.assertFalse(checker.check_port(listener.getsockname()[1]))
+
     def test_env_validation_handles_equals_in_secret_without_echoing_value(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / ".env"

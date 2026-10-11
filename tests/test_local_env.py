@@ -13,6 +13,13 @@ from backend import local_env
 
 
 class LocalEnvTests(unittest.TestCase):
+    def test_server_port_keeps_default_and_rejects_invalid_configuration(self):
+        self.assertEqual(local_env.server_port({}),3000)
+        self.assertEqual(local_env.server_port({'NADOU_PORT':'3002'}),3002)
+        for value in ('0','65536','not-a-port','3002.5','-1'):
+            with self.subTest(value=value),self.assertRaises(ValueError):
+                local_env.server_port({'NADOU_PORT':value})
+
     def test_load_and_read_ignore_comments_and_keep_existing_environment(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "API" / ".env"

@@ -25,30 +25,30 @@
         {
           "path": "static/js/canvas.js",
           "symbol": "addImageNode",
-          "line": 2636,
+          "line": 2634,
           "evidence": "static/js/canvas.js:addImageNode",
-          "sha256": "32a5c7a3f4b7e6ae5bd0584f0816308b83860821716720bffa4d684d9e5bbde3"
+          "sha256": "ce9b68876c9a46dc124d6b53390a1f51563acca88b9d976d7fc5a51c2303f561"
         },
         {
           "path": "static/js/canvas.js",
           "symbol": "renderNode",
-          "line": 6661,
+          "line": 6659,
           "evidence": "static/js/canvas.js:renderNode",
-          "sha256": "32a5c7a3f4b7e6ae5bd0584f0816308b83860821716720bffa4d684d9e5bbde3"
+          "sha256": "ce9b68876c9a46dc124d6b53390a1f51563acca88b9d976d7fc5a51c2303f561"
         },
         {
           "path": "static/js/canvas.js",
           "symbol": "fillImageNode",
-          "line": 4481,
+          "line": 4479,
           "evidence": "static/js/canvas.js:fillImageNode",
-          "sha256": "32a5c7a3f4b7e6ae5bd0584f0816308b83860821716720bffa4d684d9e5bbde3"
+          "sha256": "ce9b68876c9a46dc124d6b53390a1f51563acca88b9d976d7fc5a51c2303f561"
         },
         {
           "path": "static/js/canvas.js",
           "symbol": "canvasAssistantExportWorkflow",
           "evidence": "static/js/canvas.js:canvasAssistantExportWorkflow",
-          "sha256": "32a5c7a3f4b7e6ae5bd0584f0816308b83860821716720bffa4d684d9e5bbde3",
-          "line": 16770
+          "sha256": "ce9b68876c9a46dc124d6b53390a1f51563acca88b9d976d7fc5a51c2303f561",
+          "line": 16768
         }
       ],
       "parameters": [
@@ -352,30 +352,30 @@
         {
           "path": "static/js/canvas.js",
           "symbol": "addPromptNode",
-          "line": 2644,
+          "line": 2642,
           "evidence": "static/js/canvas.js:addPromptNode",
-          "sha256": "32a5c7a3f4b7e6ae5bd0584f0816308b83860821716720bffa4d684d9e5bbde3"
+          "sha256": "ce9b68876c9a46dc124d6b53390a1f51563acca88b9d976d7fc5a51c2303f561"
         },
         {
           "path": "static/js/canvas.js",
           "symbol": "renderNode",
-          "line": 6661,
+          "line": 6659,
           "evidence": "static/js/canvas.js:renderNode",
-          "sha256": "32a5c7a3f4b7e6ae5bd0584f0816308b83860821716720bffa4d684d9e5bbde3"
+          "sha256": "ce9b68876c9a46dc124d6b53390a1f51563acca88b9d976d7fc5a51c2303f561"
         },
         {
           "path": "static/js/canvas.js",
           "symbol": "generatorSources",
-          "line": 11883,
+          "line": 11881,
           "evidence": "static/js/canvas.js:generatorSources",
-          "sha256": "32a5c7a3f4b7e6ae5bd0584f0816308b83860821716720bffa4d684d9e5bbde3"
+          "sha256": "ce9b68876c9a46dc124d6b53390a1f51563acca88b9d976d7fc5a51c2303f561"
         },
         {
           "path": "static/js/canvas.js",
           "symbol": "canvasAssistantExportWorkflow",
           "evidence": "static/js/canvas.js:canvasAssistantExportWorkflow",
-          "sha256": "32a5c7a3f4b7e6ae5bd0584f0816308b83860821716720bffa4d684d9e5bbde3",
-          "line": 16770
+          "sha256": "ce9b68876c9a46dc124d6b53390a1f51563acca88b9d976d7fc5a51c2303f561",
+          "line": 16768
         }
       ],
       "parameters": [],
@@ -520,30 +520,30 @@
         {
           "path": "static/js/canvas.js",
           "symbol": "generatorSources",
-          "line": 11883,
+          "line": 11881,
           "evidence": "static/js/canvas.js:generatorSources",
-          "sha256": "32a5c7a3f4b7e6ae5bd0584f0816308b83860821716720bffa4d684d9e5bbde3"
+          "sha256": "ce9b68876c9a46dc124d6b53390a1f51563acca88b9d976d7fc5a51c2303f561"
         },
         {
           "path": "static/js/canvas.js",
           "symbol": "renderNode",
-          "line": 6661,
+          "line": 6659,
           "evidence": "static/js/canvas.js:renderNode",
-          "sha256": "32a5c7a3f4b7e6ae5bd0584f0816308b83860821716720bffa4d684d9e5bbde3"
+          "sha256": "ce9b68876c9a46dc124d6b53390a1f51563acca88b9d976d7fc5a51c2303f561"
         },
         {
           "path": "static/js/canvas.js",
           "symbol": "loopInputPromptItems",
-          "line": 7141,
+          "line": 7139,
           "evidence": "static/js/canvas.js:loopInputPromptItems",
-          "sha256": "32a5c7a3f4b7e6ae5bd0584f0816308b83860821716720bffa4d684d9e5bbde3"
+          "sha256": "ce9b68876c9a46dc124d6b53390a1f51563acca88b9d976d7fc5a51c2303f561"
         },
         {
           "path": "static/js/canvas.js",
           "symbol": "canvasAssistantExportWorkflow",
           "evidence": "static/js/canvas.js:canvasAssistantExportWorkflow",
-          "sha256": "32a5c7a3f4b7e6ae5bd0584f0816308b83860821716720bffa4d684d9e5bbde3",
-          "line": 16770
+          "sha256": "ce9b68876c9a46dc124d6b53390a1f51563acca88b9d976d7fc5a51c2303f561",
+          "line": 16768
         }
       ],
       "parameters": [],
@@ -688,30 +688,30 @@
         {
           "path": "static/js/canvas.js",
           "symbol": "addLoopNode",
-          "line": 2648,
+          "line": 2646,
           "evidence": "static/js/canvas.js:addLoopNode",
-          "sha256": "32a5c7a3f4b7e6ae5bd0584f0816308b83860821716720bffa4d684d9e5bbde3"
+          "sha256": "ce9b68876c9a46dc124d6b53390a1f51563acca88b9d976d7fc5a51c2303f561"
         },
         {
           "path": "static/js/canvas.js",
           "symbol": "renderLoopBody",
-          "line": 8382,
+          "line": 8380,
           "evidence": "static/js/canvas.js:renderLoopBody",
-          "sha256": "32a5c7a3f4b7e6ae5bd0584f0816308b83860821716720bffa4d684d9e5bbde3"
+          "sha256": "ce9b68876c9a46dc124d6b53390a1f51563acca88b9d976d7fc5a51c2303f561"
         },
         {
           "path": "static/js/canvas.js",
           "symbol": "renderLoopPrompt",
-          "line": 7180,
+          "line": 7178,
           "evidence": "static/js/canvas.js:renderLoopPrompt",
-          "sha256": "32a5c7a3f4b7e6ae5bd0584f0816308b83860821716720bffa4d684d9e5bbde3"
+          "sha256": "ce9b68876c9a46dc124d6b53390a1f51563acca88b9d976d7fc5a51c2303f561"
         },
         {
           "path": "static/js/canvas.js",
           "symbol": "canvasAssistantExportWorkflow",
           "evidence": "static/js/canvas.js:canvasAssistantExportWorkflow",
-          "sha256": "32a5c7a3f4b7e6ae5bd0584f0816308b83860821716720bffa4d684d9e5bbde3",
-          "line": 16770
+          "sha256": "ce9b68876c9a46dc124d6b53390a1f51563acca88b9d976d7fc5a51c2303f561",
+          "line": 16768
         }
       ],
       "parameters": [
@@ -1153,30 +1153,30 @@
         {
           "path": "static/js/canvas.js",
           "symbol": "addGroupNode",
-          "line": 2667,
+          "line": 2665,
           "evidence": "static/js/canvas.js:addGroupNode",
-          "sha256": "32a5c7a3f4b7e6ae5bd0584f0816308b83860821716720bffa4d684d9e5bbde3"
+          "sha256": "ce9b68876c9a46dc124d6b53390a1f51563acca88b9d976d7fc5a51c2303f561"
         },
         {
           "path": "static/js/canvas.js",
           "symbol": "renderNode",
-          "line": 6661,
+          "line": 6659,
           "evidence": "static/js/canvas.js:renderNode",
-          "sha256": "32a5c7a3f4b7e6ae5bd0584f0816308b83860821716720bffa4d684d9e5bbde3"
+          "sha256": "ce9b68876c9a46dc124d6b53390a1f51563acca88b9d976d7fc5a51c2303f561"
         },
         {
           "path": "static/js/canvas.js",
           "symbol": "generatorSources",
-          "line": 11883,
+          "line": 11881,
           "evidence": "static/js/canvas.js:generatorSources",
-          "sha256": "32a5c7a3f4b7e6ae5bd0584f0816308b83860821716720bffa4d684d9e5bbde3"
+          "sha256": "ce9b68876c9a46dc124d6b53390a1f51563acca88b9d976d7fc5a51c2303f561"
         },
         {
           "path": "static/js/canvas.js",
           "symbol": "canvasAssistantExportWorkflow",
           "evidence": "static/js/canvas.js:canvasAssistantExportWorkflow",
-          "sha256": "32a5c7a3f4b7e6ae5bd0584f0816308b83860821716720bffa4d684d9e5bbde3",
-          "line": 16770
+          "sha256": "ce9b68876c9a46dc124d6b53390a1f51563acca88b9d976d7fc5a51c2303f561",
+          "line": 16768
         }
       ],
       "parameters": [
@@ -1351,30 +1351,30 @@
         {
           "path": "static/js/canvas.js",
           "symbol": "addLLMNode",
-          "line": 2681,
+          "line": 2679,
           "evidence": "static/js/canvas.js:addLLMNode",
-          "sha256": "32a5c7a3f4b7e6ae5bd0584f0816308b83860821716720bffa4d684d9e5bbde3"
+          "sha256": "ce9b68876c9a46dc124d6b53390a1f51563acca88b9d976d7fc5a51c2303f561"
         },
         {
           "path": "static/js/canvas.js",
           "symbol": "renderLLMBody",
-          "line": 8617,
+          "line": 8615,
           "evidence": "static/js/canvas.js:renderLLMBody",
-          "sha256": "32a5c7a3f4b7e6ae5bd0584f0816308b83860821716720bffa4d684d9e5bbde3"
+          "sha256": "ce9b68876c9a46dc124d6b53390a1f51563acca88b9d976d7fc5a51c2303f561"
         },
         {
           "path": "static/js/canvas.js",
           "symbol": "runLLMNode",
-          "line": 13896,
+          "line": 13894,
           "evidence": "static/js/canvas.js:runLLMNode",
-          "sha256": "32a5c7a3f4b7e6ae5bd0584f0816308b83860821716720bffa4d684d9e5bbde3"
+          "sha256": "ce9b68876c9a46dc124d6b53390a1f51563acca88b9d976d7fc5a51c2303f561"
         },
         {
           "path": "static/js/canvas.js",
           "symbol": "canvasAssistantExportWorkflow",
           "evidence": "static/js/canvas.js:canvasAssistantExportWorkflow",
-          "sha256": "32a5c7a3f4b7e6ae5bd0584f0816308b83860821716720bffa4d684d9e5bbde3",
-          "line": 16770
+          "sha256": "ce9b68876c9a46dc124d6b53390a1f51563acca88b9d976d7fc5a51c2303f561",
+          "line": 16768
         }
       ],
       "parameters": [
@@ -1700,30 +1700,30 @@
         {
           "path": "static/js/canvas.js",
           "symbol": "addGeneratorNode",
-          "line": 2701,
+          "line": 2699,
           "evidence": "static/js/canvas.js:addGeneratorNode",
-          "sha256": "32a5c7a3f4b7e6ae5bd0584f0816308b83860821716720bffa4d684d9e5bbde3"
+          "sha256": "ce9b68876c9a46dc124d6b53390a1f51563acca88b9d976d7fc5a51c2303f561"
         },
         {
           "path": "static/js/canvas.js",
           "symbol": "renderGeneratorBody",
-          "line": 8924,
+          "line": 8922,
           "evidence": "static/js/canvas.js:renderGeneratorBody",
-          "sha256": "32a5c7a3f4b7e6ae5bd0584f0816308b83860821716720bffa4d684d9e5bbde3"
+          "sha256": "ce9b68876c9a46dc124d6b53390a1f51563acca88b9d976d7fc5a51c2303f561"
         },
         {
           "path": "static/js/canvas.js",
           "symbol": "runGenerator",
-          "line": 12041,
+          "line": 12039,
           "evidence": "static/js/canvas.js:runGenerator",
-          "sha256": "32a5c7a3f4b7e6ae5bd0584f0816308b83860821716720bffa4d684d9e5bbde3"
+          "sha256": "ce9b68876c9a46dc124d6b53390a1f51563acca88b9d976d7fc5a51c2303f561"
         },
         {
           "path": "static/js/canvas.js",
           "symbol": "canvasAssistantExportWorkflow",
           "evidence": "static/js/canvas.js:canvasAssistantExportWorkflow",
-          "sha256": "32a5c7a3f4b7e6ae5bd0584f0816308b83860821716720bffa4d684d9e5bbde3",
-          "line": 16770
+          "sha256": "ce9b68876c9a46dc124d6b53390a1f51563acca88b9d976d7fc5a51c2303f561",
+          "line": 16768
         }
       ],
       "parameters": [
@@ -2278,30 +2278,30 @@
         {
           "path": "static/js/canvas.js",
           "symbol": "addMidjourneyNode",
-          "line": 2707,
+          "line": 2705,
           "evidence": "static/js/canvas.js:addMidjourneyNode",
-          "sha256": "32a5c7a3f4b7e6ae5bd0584f0816308b83860821716720bffa4d684d9e5bbde3"
+          "sha256": "ce9b68876c9a46dc124d6b53390a1f51563acca88b9d976d7fc5a51c2303f561"
         },
         {
           "path": "static/js/canvas.js",
           "symbol": "renderMidjourneyBody",
-          "line": 9285,
+          "line": 9283,
           "evidence": "static/js/canvas.js:renderMidjourneyBody",
-          "sha256": "32a5c7a3f4b7e6ae5bd0584f0816308b83860821716720bffa4d684d9e5bbde3"
+          "sha256": "ce9b68876c9a46dc124d6b53390a1f51563acca88b9d976d7fc5a51c2303f561"
         },
         {
           "path": "static/js/canvas.js",
           "symbol": "runMidjourneyNode",
-          "line": 12198,
+          "line": 12196,
           "evidence": "static/js/canvas.js:runMidjourneyNode",
-          "sha256": "32a5c7a3f4b7e6ae5bd0584f0816308b83860821716720bffa4d684d9e5bbde3"
+          "sha256": "ce9b68876c9a46dc124d6b53390a1f51563acca88b9d976d7fc5a51c2303f561"
         },
         {
           "path": "static/js/canvas.js",
           "symbol": "canvasAssistantExportWorkflow",
           "evidence": "static/js/canvas.js:canvasAssistantExportWorkflow",
-          "sha256": "32a5c7a3f4b7e6ae5bd0584f0816308b83860821716720bffa4d684d9e5bbde3",
-          "line": 16770
+          "sha256": "ce9b68876c9a46dc124d6b53390a1f51563acca88b9d976d7fc5a51c2303f561",
+          "line": 16768
         },
         {
           "path": "backend/canvas_assistant_msgen.py",
@@ -2324,10 +2324,10 @@
         },
         {
           "path": "main.py",
-          "sha256": "90882f8dcf9b1c1305fdd6dbb95bc22fc4c5a97370cb704366f5e0a9c6a065ae",
+          "sha256": "e8a9ee60177c1bea4c8169bb80b0f4f2ff301a826f298d60f2ff567ae01fb1dc",
           "evidence": "main.py:",
           "symbol": "",
-          "line": 186
+          "line": 206
         }
       ],
       "parameters": [
@@ -2958,30 +2958,30 @@
         {
           "path": "static/js/canvas.js",
           "symbol": "addMsGenNode",
-          "line": 2715,
+          "line": 2713,
           "evidence": "static/js/canvas.js:addMsGenNode",
-          "sha256": "32a5c7a3f4b7e6ae5bd0584f0816308b83860821716720bffa4d684d9e5bbde3"
+          "sha256": "ce9b68876c9a46dc124d6b53390a1f51563acca88b9d976d7fc5a51c2303f561"
         },
         {
           "path": "static/js/canvas.js",
           "symbol": "renderMsGenBody",
-          "line": 2873,
+          "line": 2871,
           "evidence": "static/js/canvas.js:renderMsGenBody",
-          "sha256": "32a5c7a3f4b7e6ae5bd0584f0816308b83860821716720bffa4d684d9e5bbde3"
+          "sha256": "ce9b68876c9a46dc124d6b53390a1f51563acca88b9d976d7fc5a51c2303f561"
         },
         {
           "path": "static/js/canvas.js",
           "symbol": "runMsGenNode",
-          "line": 3246,
+          "line": 3244,
           "evidence": "static/js/canvas.js:runMsGenNode",
-          "sha256": "32a5c7a3f4b7e6ae5bd0584f0816308b83860821716720bffa4d684d9e5bbde3"
+          "sha256": "ce9b68876c9a46dc124d6b53390a1f51563acca88b9d976d7fc5a51c2303f561"
         },
         {
           "path": "static/js/canvas.js",
           "symbol": "canvasAssistantExportWorkflow",
           "evidence": "static/js/canvas.js:canvasAssistantExportWorkflow",
-          "sha256": "32a5c7a3f4b7e6ae5bd0584f0816308b83860821716720bffa4d684d9e5bbde3",
-          "line": 16770
+          "sha256": "ce9b68876c9a46dc124d6b53390a1f51563acca88b9d976d7fc5a51c2303f561",
+          "line": 16768
         },
         {
           "path": "backend/canvas_assistant_msgen.py",
@@ -3004,10 +3004,10 @@
         },
         {
           "path": "main.py",
-          "sha256": "90882f8dcf9b1c1305fdd6dbb95bc22fc4c5a97370cb704366f5e0a9c6a065ae",
+          "sha256": "e8a9ee60177c1bea4c8169bb80b0f4f2ff301a826f298d60f2ff567ae01fb1dc",
           "evidence": "main.py:",
           "symbol": "",
-          "line": 186
+          "line": 206
         }
       ],
       "parameters": [
@@ -3771,30 +3771,30 @@
         {
           "path": "static/js/canvas.js",
           "symbol": "addVideoNode",
-          "line": 2740,
+          "line": 2738,
           "evidence": "static/js/canvas.js:addVideoNode",
-          "sha256": "32a5c7a3f4b7e6ae5bd0584f0816308b83860821716720bffa4d684d9e5bbde3"
+          "sha256": "ce9b68876c9a46dc124d6b53390a1f51563acca88b9d976d7fc5a51c2303f561"
         },
         {
           "path": "static/js/canvas.js",
           "symbol": "renderVideoBody",
-          "line": 9362,
+          "line": 9360,
           "evidence": "static/js/canvas.js:renderVideoBody",
-          "sha256": "32a5c7a3f4b7e6ae5bd0584f0816308b83860821716720bffa4d684d9e5bbde3"
+          "sha256": "ce9b68876c9a46dc124d6b53390a1f51563acca88b9d976d7fc5a51c2303f561"
         },
         {
           "path": "static/js/canvas.js",
           "symbol": "runVideoNode",
-          "line": 12633,
+          "line": 12631,
           "evidence": "static/js/canvas.js:runVideoNode",
-          "sha256": "32a5c7a3f4b7e6ae5bd0584f0816308b83860821716720bffa4d684d9e5bbde3"
+          "sha256": "ce9b68876c9a46dc124d6b53390a1f51563acca88b9d976d7fc5a51c2303f561"
         },
         {
           "path": "static/js/canvas.js",
           "symbol": "canvasAssistantExportWorkflow",
           "evidence": "static/js/canvas.js:canvasAssistantExportWorkflow",
-          "sha256": "32a5c7a3f4b7e6ae5bd0584f0816308b83860821716720bffa4d684d9e5bbde3",
-          "line": 16770
+          "sha256": "ce9b68876c9a46dc124d6b53390a1f51563acca88b9d976d7fc5a51c2303f561",
+          "line": 16768
         }
       ],
       "parameters": [
@@ -4461,30 +4461,30 @@
         {
           "path": "static/js/canvas.js",
           "symbol": "addRhNode",
-          "line": 2790,
+          "line": 2788,
           "evidence": "static/js/canvas.js:addRhNode",
-          "sha256": "32a5c7a3f4b7e6ae5bd0584f0816308b83860821716720bffa4d684d9e5bbde3"
+          "sha256": "ce9b68876c9a46dc124d6b53390a1f51563acca88b9d976d7fc5a51c2303f561"
         },
         {
           "path": "static/js/canvas.js",
           "symbol": "renderRhBody",
-          "line": 10900,
+          "line": 10898,
           "evidence": "static/js/canvas.js:renderRhBody",
-          "sha256": "32a5c7a3f4b7e6ae5bd0584f0816308b83860821716720bffa4d684d9e5bbde3"
+          "sha256": "ce9b68876c9a46dc124d6b53390a1f51563acca88b9d976d7fc5a51c2303f561"
         },
         {
           "path": "static/js/canvas.js",
           "symbol": "runRhNode",
-          "line": 11355,
+          "line": 11353,
           "evidence": "static/js/canvas.js:runRhNode",
-          "sha256": "32a5c7a3f4b7e6ae5bd0584f0816308b83860821716720bffa4d684d9e5bbde3"
+          "sha256": "ce9b68876c9a46dc124d6b53390a1f51563acca88b9d976d7fc5a51c2303f561"
         },
         {
           "path": "static/js/canvas.js",
           "symbol": "canvasAssistantExportWorkflow",
           "evidence": "static/js/canvas.js:canvasAssistantExportWorkflow",
-          "sha256": "32a5c7a3f4b7e6ae5bd0584f0816308b83860821716720bffa4d684d9e5bbde3",
-          "line": 16770
+          "sha256": "ce9b68876c9a46dc124d6b53390a1f51563acca88b9d976d7fc5a51c2303f561",
+          "line": 16768
         }
       ],
       "parameters": [
@@ -5229,30 +5229,30 @@
         {
           "path": "static/js/canvas.js",
           "symbol": "addComfyNode",
-          "line": 3348,
+          "line": 3346,
           "evidence": "static/js/canvas.js:addComfyNode",
-          "sha256": "32a5c7a3f4b7e6ae5bd0584f0816308b83860821716720bffa4d684d9e5bbde3"
+          "sha256": "ce9b68876c9a46dc124d6b53390a1f51563acca88b9d976d7fc5a51c2303f561"
         },
         {
           "path": "static/js/canvas.js",
           "symbol": "renderComfyBody",
-          "line": 10253,
+          "line": 10251,
           "evidence": "static/js/canvas.js:renderComfyBody",
-          "sha256": "32a5c7a3f4b7e6ae5bd0584f0816308b83860821716720bffa4d684d9e5bbde3"
+          "sha256": "ce9b68876c9a46dc124d6b53390a1f51563acca88b9d976d7fc5a51c2303f561"
         },
         {
           "path": "static/js/canvas.js",
           "symbol": "runComfyNode",
-          "line": 13661,
+          "line": 13659,
           "evidence": "static/js/canvas.js:runComfyNode",
-          "sha256": "32a5c7a3f4b7e6ae5bd0584f0816308b83860821716720bffa4d684d9e5bbde3"
+          "sha256": "ce9b68876c9a46dc124d6b53390a1f51563acca88b9d976d7fc5a51c2303f561"
         },
         {
           "path": "static/js/canvas.js",
           "symbol": "canvasAssistantExportWorkflow",
           "evidence": "static/js/canvas.js:canvasAssistantExportWorkflow",
-          "sha256": "32a5c7a3f4b7e6ae5bd0584f0816308b83860821716720bffa4d684d9e5bbde3",
-          "line": 16770
+          "sha256": "ce9b68876c9a46dc124d6b53390a1f51563acca88b9d976d7fc5a51c2303f561",
+          "line": 16768
         }
       ],
       "parameters": [
@@ -6148,23 +6148,23 @@
         {
           "path": "static/js/canvas.js",
           "symbol": "addClipNode",
-          "line": 2640,
+          "line": 2638,
           "evidence": "static/js/canvas.js:addClipNode",
-          "sha256": "32a5c7a3f4b7e6ae5bd0584f0816308b83860821716720bffa4d684d9e5bbde3"
+          "sha256": "ce9b68876c9a46dc124d6b53390a1f51563acca88b9d976d7fc5a51c2303f561"
         },
         {
           "path": "static/js/canvas.js",
           "symbol": "renderNode",
-          "line": 6661,
+          "line": 6659,
           "evidence": "static/js/canvas.js:renderNode",
-          "sha256": "32a5c7a3f4b7e6ae5bd0584f0816308b83860821716720bffa4d684d9e5bbde3"
+          "sha256": "ce9b68876c9a46dc124d6b53390a1f51563acca88b9d976d7fc5a51c2303f561"
         },
         {
           "path": "static/js/canvas.js",
           "symbol": "runCanvasGenerate",
-          "line": 14117,
+          "line": 14115,
           "evidence": "static/js/canvas.js:runCanvasGenerate",
-          "sha256": "32a5c7a3f4b7e6ae5bd0584f0816308b83860821716720bffa4d684d9e5bbde3"
+          "sha256": "ce9b68876c9a46dc124d6b53390a1f51563acca88b9d976d7fc5a51c2303f561"
         },
         {
           "path": "static/js/canvas-clip-model.js",
@@ -6184,8 +6184,8 @@
           "path": "static/js/canvas.js",
           "symbol": "canvasAssistantExportWorkflow",
           "evidence": "static/js/canvas.js:canvasAssistantExportWorkflow",
-          "sha256": "32a5c7a3f4b7e6ae5bd0584f0816308b83860821716720bffa4d684d9e5bbde3",
-          "line": 16770
+          "sha256": "ce9b68876c9a46dc124d6b53390a1f51563acca88b9d976d7fc5a51c2303f561",
+          "line": 16768
         }
       ],
       "parameters": [],
@@ -6426,30 +6426,30 @@
         {
           "path": "static/js/canvas.js",
           "symbol": "addOutputNode",
-          "line": 3380,
+          "line": 3378,
           "evidence": "static/js/canvas.js:addOutputNode",
-          "sha256": "32a5c7a3f4b7e6ae5bd0584f0816308b83860821716720bffa4d684d9e5bbde3"
+          "sha256": "ce9b68876c9a46dc124d6b53390a1f51563acca88b9d976d7fc5a51c2303f561"
         },
         {
           "path": "static/js/canvas.js",
           "symbol": "renderNode",
-          "line": 6661,
+          "line": 6659,
           "evidence": "static/js/canvas.js:renderNode",
-          "sha256": "32a5c7a3f4b7e6ae5bd0584f0816308b83860821716720bffa4d684d9e5bbde3"
+          "sha256": "ce9b68876c9a46dc124d6b53390a1f51563acca88b9d976d7fc5a51c2303f561"
         },
         {
           "path": "static/js/canvas.js",
           "symbol": "generatorSources",
-          "line": 11883,
+          "line": 11881,
           "evidence": "static/js/canvas.js:generatorSources",
-          "sha256": "32a5c7a3f4b7e6ae5bd0584f0816308b83860821716720bffa4d684d9e5bbde3"
+          "sha256": "ce9b68876c9a46dc124d6b53390a1f51563acca88b9d976d7fc5a51c2303f561"
         },
         {
           "path": "static/js/canvas.js",
           "symbol": "canvasAssistantExportWorkflow",
           "evidence": "static/js/canvas.js:canvasAssistantExportWorkflow",
-          "sha256": "32a5c7a3f4b7e6ae5bd0584f0816308b83860821716720bffa4d684d9e5bbde3",
-          "line": 16770
+          "sha256": "ce9b68876c9a46dc124d6b53390a1f51563acca88b9d976d7fc5a51c2303f561",
+          "line": 16768
         }
       ],
       "parameters": [],
@@ -8579,8 +8579,8 @@
           "path": "static/js/canvas.js",
           "symbol": "canvasAssistantExportWorkflow",
           "evidence": "static/js/canvas.js:canvasAssistantExportWorkflow",
-          "sha256": "32a5c7a3f4b7e6ae5bd0584f0816308b83860821716720bffa4d684d9e5bbde3",
-          "line": 16770
+          "sha256": "ce9b68876c9a46dc124d6b53390a1f51563acca88b9d976d7fc5a51c2303f561",
+          "line": 16768
         }
       ],
       "parameters": [],
@@ -8625,8 +8625,8 @@
           "path": "static/js/canvas.js",
           "symbol": "canvasAssistantExportWorkflow",
           "evidence": "static/js/canvas.js:canvasAssistantExportWorkflow",
-          "sha256": "32a5c7a3f4b7e6ae5bd0584f0816308b83860821716720bffa4d684d9e5bbde3",
-          "line": 16770
+          "sha256": "ce9b68876c9a46dc124d6b53390a1f51563acca88b9d976d7fc5a51c2303f561",
+          "line": 16768
         }
       ],
       "parameters": [],
@@ -8699,8 +8699,8 @@
           "path": "static/js/canvas.js",
           "symbol": "canvasAssistantExportWorkflow",
           "evidence": "static/js/canvas.js:canvasAssistantExportWorkflow",
-          "sha256": "32a5c7a3f4b7e6ae5bd0584f0816308b83860821716720bffa4d684d9e5bbde3",
-          "line": 16770
+          "sha256": "ce9b68876c9a46dc124d6b53390a1f51563acca88b9d976d7fc5a51c2303f561",
+          "line": 16768
         }
       ],
       "parameters": [],
@@ -9894,7 +9894,104 @@
       "outputs": [
         "音频文件与识别正文"
       ],
-      "features": [],
+      "features": [
+        {
+          "id": "classic.audio.controls",
+          "label": "原生上传、播放、波形、下载与素材库控件",
+          "effect": "display",
+          "preconditions": [
+            "当前画布与原音频任务已核对；助手只读，不提交音频供应商"
+          ],
+          "source": {
+            "path": "static/js/canvas-audio.js",
+            "symbol": "mediaHtml",
+            "line": 66,
+            "evidence": "static/js/canvas-audio.js:mediaHtml",
+            "sha256": "9f31a994836bf3902e6c1690ad8dccbbfc3c2ea9b10d9762a5fd26936b40102e"
+          },
+          "verification": "pending"
+        },
+        {
+          "id": "classic.audio.read_state",
+          "label": "素材、识别正文和脱敏原任务状态读取",
+          "effect": "read",
+          "preconditions": [
+            "当前画布与原音频任务已核对；助手只读，不提交音频供应商"
+          ],
+          "source": {
+            "path": "backend/canvas_assistant_state.py",
+            "symbol": "read_node_state",
+            "line": 97,
+            "evidence": "backend/canvas_assistant_state.py:read_node_state",
+            "sha256": "514c5d0886968cede61a799fcf95e51083178d3178292b62378f555c540a6cf1"
+          },
+          "verification": "partial"
+        },
+        {
+          "id": "classic.audio.busy_guard",
+          "label": "查询暂停、未知受理及未结束原任务保护",
+          "effect": "guard",
+          "preconditions": [
+            "当前画布与原音频任务已核对；助手只读，不提交音频供应商"
+          ],
+          "source": {
+            "path": "backend/canvas_assistant_operations.py",
+            "symbol": "audio_task_active",
+            "line": 152,
+            "evidence": "backend/canvas_assistant_operations.py:audio_task_active",
+            "sha256": "0a1220bd0e1b939a9657670b5d447ce4adc4ca411f15a129314478656bed6e0f"
+          },
+          "verification": "partial"
+        },
+        {
+          "id": "classic.audio.readonly_contract",
+          "label": "只读目录与创建、修改、运行拒绝",
+          "effect": "guard",
+          "preconditions": [
+            "当前画布与原音频任务已核对；助手只读，不提交音频供应商"
+          ],
+          "source": {
+            "path": "backend/canvas_assistant_native.py",
+            "symbol": "native_catalog",
+            "line": 284,
+            "evidence": "backend/canvas_assistant_native.py:native_catalog",
+            "sha256": "471a21e339cfcb3c4aa2fcd3c673da20068cb2988764036cd2dd50f5ee8e1dc1"
+          },
+          "verification": "partial"
+        },
+        {
+          "id": "classic.audio.media_preview",
+          "label": "真实音频文件预览、缺失与媒体格式边界",
+          "effect": "display",
+          "preconditions": [
+            "当前画布与原音频任务已核对；助手只读，不提交音频供应商"
+          ],
+          "source": {
+            "path": "backend/canvas_assistant_native.py",
+            "symbol": "native_catalog",
+            "line": 284,
+            "evidence": "backend/canvas_assistant_native.py:native_catalog",
+            "sha256": "471a21e339cfcb3c4aa2fcd3c673da20068cb2988764036cd2dd50f5ee8e1dc1"
+          },
+          "verification": "pending"
+        },
+        {
+          "id": "classic.audio.persistence",
+          "label": "保存重开、旧素材迁移与原任务编号保留",
+          "effect": "display",
+          "preconditions": [
+            "当前画布与原音频任务已核对；助手只读，不提交音频供应商"
+          ],
+          "source": {
+            "path": "static/js/canvas-audio.js",
+            "symbol": "migrate",
+            "line": 25,
+            "evidence": "static/js/canvas-audio.js:migrate",
+            "sha256": "9f31a994836bf3902e6c1690ad8dccbbfc3c2ea9b10d9762a5fd26936b40102e"
+          },
+          "verification": "pending"
+        }
+      ],
       "coverage": {
         "documented": "passed",
         "readable": "passed",

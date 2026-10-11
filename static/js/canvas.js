@@ -395,9 +395,23 @@ let canvasSortMode = (() => { try { return localStorage.getItem('canvasSortMode'
 const CANVAS_LIST_PROJECT_KEY = 'canvasListCurrentProjectId';
 const CANVAS_COLOR_OPTIONS = ['red','orange','amber','green','teal','blue','violet','pink','slate'];
 // 先绑定返回，避免编辑器后续初始化较慢时丢失来源项目。
-backToManagerBtn?.addEventListener('click', () => {
-    window.location.href = canvasListUrlForProject(canvas?.project || requestedCanvasListProject() || rememberedCanvasListProject());
-});
+backToManagerBtn?.addEventListener('click', returnToCanvasManager);
+async function returnToCanvasManager(){
+    if(backToManagerBtn?.disabled) return;
+    if(backToManagerBtn) backToManagerBtn.disabled = true;
+    try {
+        if(canvas && (localCanvasDirty || savingCanvasNow || saveTimer)){
+            const saved = await saveCanvas();
+            if(!saved || localCanvasDirty || saveCanvasAgain){
+                showErrorModal('画布尚未保存成功，请稍后重试。');
+                return;
+            }
+        }
+        window.location.href = canvasListUrlForProject(canvas?.project || requestedCanvasListProject() || rememberedCanvasListProject());
+    } finally {
+        if(backToManagerBtn) backToManagerBtn.disabled = false;
+    }
+}
 clearCurrentCanvasBtn?.addEventListener('click', clearCurrentCanvas);
 let localCanvasDirty = false;
 let savingCanvasNow = false;
@@ -1604,7 +1618,7 @@ async function saveCanvas(){
         setStatus('Saved');
         clearUnsavedCanvasAcceptedTasks(savingCanvasId, data.canvas.nodes);
         clearUnsavedCanvasUnknownWarnings(savingCanvasId, data.canvas.nodes);
-        loadCanvasList(false);
+        if(gateCanvasList) loadCanvasList(false);
         return true;
     } catch(e) {
         setStatus('Save failed');
@@ -2319,22 +2333,6 @@ function handleCanvasUpdatedMessage(data){
     clearTimeout(remoteSyncTimer);
     remoteSyncTimer = setTimeout(syncRemoteCanvasNow, savingCanvasNow ? 700 : 120);
     setStatus('Syncing...');
-}
-async function returnToCanvasManager(){
-    clearTimeout(saveTimer);
-    if(canvas && localCanvasDirty) await saveCanvas();
-    stopCanvasRemotePolling();
-    canvas = null;
-    nodes = [];
-    connections = [];
-    selected.clear();
-    viewport = {x: -1800, y: -1000, scale: 1};
-    setCanvasMode(false);
-    trashMode = false;
-    pendingPurgeCanvasId = null;
-    refreshGateViewControls();
-    await loadCanvasList(false);
-    setCreateMode(false);
 }
 
 async function clearCurrentCanvas(){

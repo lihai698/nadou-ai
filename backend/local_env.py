@@ -17,6 +17,15 @@ from typing import MutableMapping, Mapping
 _UPDATE_LOCK = RLock()
 
 
+def server_port(environ: Mapping[str, str] | None = None) -> int:
+    """启动、预检和浏览器使用同一端口；环境映射由调用方加载。"""
+    source = os.environ if environ is None else environ
+    value = str(source.get("NADOU_PORT", "") or "").strip() or "3000"
+    if not re.fullmatch(r"[0-9]{1,5}", value) or not 1 <= int(value) <= 65535:
+        raise ValueError("NADOU_PORT 必须是 1～65535 的整数。")
+    return int(value)
+
+
 def ensure_runtime_files(env_path: str, data_dir: str) -> None:
     """创建配置目录、数据目录和空配置文件（如果尚不存在）。"""
 

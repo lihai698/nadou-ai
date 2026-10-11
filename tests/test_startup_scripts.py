@@ -21,7 +21,8 @@ class StartupScriptTests(unittest.TestCase):
         self.assertIn('dependency_marker.py --check', script)
         self.assertIn('BIND_HOST="${NADOU_BIND_HOST:-}"', script)
         self.assertIn('APP_HOST="127.0.0.1"', script)
-        self.assertIn('APP_URL="http://${APP_HOST}:3000/"', script)
+        self.assertIn('check-environment.py --print-port', script)
+        self.assertIn('APP_URL="http://${APP_HOST}:${APP_PORT}/"', script)
         self.assertNotIn('APP_URL="http://${LAN_IP}:3000/"', script)
 
     def test_macos_dependency_installer_has_noninteractive_mode(self):
@@ -38,6 +39,8 @@ class StartupScriptTests(unittest.TestCase):
         self.assertIn("main.py", script)
         self.assertIn("安装依赖.bat\" --no-pause", script)
         self.assertIn("dependency_marker.py --check", script)
+        self.assertIn('check-environment.py --print-port', script)
+        self.assertIn('http://127.0.0.1:%NADOU_LAUNCH_PORT%/', script)
         self.assertNotIn("启动服务.bat", script)
 
     def test_dependency_installer_can_run_without_interactive_pause(self):

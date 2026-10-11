@@ -37,11 +37,14 @@ if errorlevel 1 (
 )
 
 echo Starting nadou ai...
-echo Visit: http://127.0.0.1:3000/
+set "NADOU_LAUNCH_PORT="
+for /f "delims=" %%P in ('call "%PYEXE%" tools\check-environment.py --print-port') do set "NADOU_LAUNCH_PORT=%%P"
+if not defined NADOU_LAUNCH_PORT exit /b 1
+echo Visit: http://127.0.0.1:%NADOU_LAUNCH_PORT%/
 echo Press Ctrl+C to stop.
 echo.
 
-if /i not "%~1"=="--no-browser" start /b cmd /c "timeout /t 3 /nobreak >nul && start http://127.0.0.1:3000/"
+if /i not "%~1"=="--no-browser" start /b cmd /c "timeout /t 3 /nobreak >nul && start http://127.0.0.1:%NADOU_LAUNCH_PORT%/"
 "%PYEXE%" main.py
 
 echo.

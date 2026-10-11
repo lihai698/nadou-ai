@@ -21,7 +21,7 @@ CHECK = textwrap.dedent("""
 
     def capture_run(app, **settings):
         print('BIND_HOST=' + settings['host'])
-        assert settings['port'] == 3000
+        print('BIND_PORT=' + str(settings['port']))
 
     uvicorn.run = capture_run
     runpy.run_path('main.py', run_name='__main__')
@@ -39,11 +39,14 @@ class ServerBindHostTests(unittest.TestCase):
             (isolated / "workflows").mkdir()
             environment = os.environ.copy()
             environment.pop("NADOU_BIND_HOST", None)
+            environment.pop("NADOU_PORT", None)
             environment["PYTHONPATH"] = str(isolated)
             environment.pop("PYTHONHOME", None)
-            for configured, expected in ((None, "127.0.0.1"), ("0.0.0.0", "0.0.0.0")):
+            for configured, expected, port in ((None, "127.0.0.1",3000), ("0.0.0.0", "0.0.0.0",3000), ("127.0.0.1","127.0.0.1",3002)):
                 with self.subTest(configured=configured):
                     current = environment.copy()
+                    if port != 3000:
+                        current['NADOU_PORT']=str(port)
                     if configured is not None:
                         current["NADOU_BIND_HOST"] = configured
                         current["NADOU_ACCESS_TOKEN"] = "test-token"
@@ -56,6 +59,7 @@ class ServerBindHostTests(unittest.TestCase):
                     )
                     self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
                     self.assertIn(f"BIND_HOST={expected}", result.stdout)
+                    self.assertIn(f"BIND_PORT={port}",result.stdout)
 
 
 if __name__ == "__main__":

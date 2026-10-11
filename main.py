@@ -23602,7 +23602,7 @@ def run_application_server():
     }
     settings = {
         "host": bind_host,
-        "port": 3000,
+        "port": local_env.server_port(),
         "ws_ping_interval": None,
         "ws_ping_timeout": None,
     }
