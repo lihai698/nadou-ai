@@ -885,7 +885,7 @@ function serializableSmartNode(node){
 }
 function selectedSmartWorkflowPayload(){
     const ids = selectedNodeIds();
-    const idSet = new Set(ids);
+    const idSet = new Set(smartNodesWithGroupMembers(ids).map(node => node.id));
     const selectedNodes = nodes.filter(node => idSet.has(node.id)).map(serializableSmartNode);
     const selectedSet = new Set(selectedNodes.map(node => node.id));
     const selectedConnections = (canvas?.connections || [])
@@ -6548,10 +6548,23 @@ function cloneSmartNode(node, dx=0, dy=0){
     if(copy.type === 'smart-group') copy.title = copy.title || '智能分组';
     return copy;
 }
+function smartNodesWithGroupMembers(ids){
+    const seen = new Set(ids);
+    ids.forEach(id => {
+        const group = nodes.find(node => node.id === id);
+        if(isSmartGroupNode(group)){
+            (group.items || []).forEach(memberId => {
+                const member = nodes.find(node => node.id === memberId);
+                if(member && !isSmartGroupNode(member)) seen.add(memberId);
+            });
+        }
+    });
+    return nodes.filter(node => seen.has(node.id));
+}
 function copySelectedNodes(){
     if(!canvas || isEditableTarget(document.activeElement)) return;
     const ids = selectedNodeIds();
-    const copiedNodes = ids.map(id => nodes.find(n => n.id === id)).filter(Boolean);
+    const copiedNodes = smartNodesWithGroupMembers(ids);
     if(!copiedNodes.length) return;
     const idSet = new Set(copiedNodes.map(n => n.id));
     const copiedConnections = (canvas.connections || []).filter(c => idSet.has(c.from) && idSet.has(c.to));
@@ -6581,7 +6594,7 @@ function pasteNodes(){
     });
     copies.forEach(copy => {
         if(copy.type === 'smart-group' && Array.isArray(copy.items)){
-            copy.items = copy.items.map(id => idMap.get(id) || id);
+            copy.items = copy.items.map(id => idMap.get(id)).filter(Boolean);
         }
         if(Array.isArray(copy.inputNodeIds)){
             copy.inputNodeIds = copy.inputNodeIds.map(id => idMap.get(id)).filter(Boolean);
@@ -6644,7 +6657,7 @@ function pasteAssetsFromInbox(){
 }
 function duplicateForAltDrag(node, preserveConnections=false){
     const ids = (isNodeSelected(node.id) ? selectedNodeIds() : [node.id]);
-    const sourceNodes = ids.map(id => nodes.find(n => n.id === id)).filter(Boolean);
+    const sourceNodes = smartNodesWithGroupMembers(ids);
     if(!sourceNodes.length) return node;
     pushUndo();
     const idMap = new Map();
@@ -6654,6 +6667,7 @@ function duplicateForAltDrag(node, preserveConnections=false){
         return copy;
     });
     copies.forEach(copy => {
+        if(isSmartGroupNode(copy) && Array.isArray(copy.items)) copy.items = copy.items.map(id => idMap.get(id)).filter(Boolean);
         if(Array.isArray(copy.inputNodeIds)){
             copy.inputNodeIds = preserveConnections
                 ? copy.inputNodeIds.map(id => idMap.get(id) || id).filter(Boolean)
@@ -6682,8 +6696,8 @@ function duplicateForAltDrag(node, preserveConnections=false){
         canvas.connections = nextConnections;
     }
     nodes.push(...copies);
-    selectedId = '';
-    selectedIds = [];
+    selectedId = ids.length === 1 ? idMap.get(ids[0]) : '';
+    selectedIds = ids.length > 1 ? ids.map(id => idMap.get(id)).filter(Boolean) : [];
     selectedImage = {nodeId:'', index:-1};
     const dragCopy = copies.find(c => c.id === idMap.get(node.id)) || copies[0];
     render();

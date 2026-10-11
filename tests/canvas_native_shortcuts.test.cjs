@@ -151,7 +151,8 @@ function loadSmartEditor(initialNodes, initialConnections, selectedIds) {
     });
     vm.runInContext(readFileSync(path.join(__dirname, '../static/js/canvas-audio.js'), 'utf8'), context);
     vm.runInContext(
-        source.slice(fnStart, fnEnd)
+        source.slice(source.indexOf('function isSmartGroupNode('), source.indexOf('function isSmartRunnableNode('))
+        + source.slice(fnStart, fnEnd)
         + source.slice(viewAdjustStart, viewAdjustEnd)
         + source.slice(keyStart, keyEnd),
         context,

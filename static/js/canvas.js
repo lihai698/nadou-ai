@@ -14385,6 +14385,9 @@ function deleteNode(id, event){
     pushUndo();
     destroyLTXEditor(nodes.find(n => n.id === id));
     nodes = nodes.filter(n => n.id !== id);
+    nodes.forEach(n => {
+        if((n.type === 'group' || n.type === 'promptGroup') && Array.isArray(n.items)) n.items = n.items.filter(itemId => itemId !== id);
+    });
     connections = connections.filter(c => c.from !== id && c.to !== id);
     selected.delete(id);
     render();
@@ -16647,17 +16650,21 @@ function cloneNode(n, dx, dy){
     copy.running = false;
     return copy;
 }
+function canvasNodesWithGroupMembers(ids){
+    const byId = new Map(nodes.map(node => [node.id, node]));
+    const seen = new Set();
+    const queue = [...ids];
+    for(let i = 0; i < queue.length; i++){
+        const node = byId.get(queue[i]);
+        if(!node || seen.has(node.id)) continue;
+        seen.add(node.id);
+        if(node.type === 'group' || node.type === 'promptGroup') queue.push(...(node.items || []));
+    }
+    return nodes.filter(node => seen.has(node.id));
+}
 function duplicateNodesForAltDrag(node, preserveConnections=false){
     const selectedSourceIds = selected.has(node.id) ? [...selected] : [node.id];
-    const sourceIds = new Set(selectedSourceIds);
-    selectedSourceIds.forEach(id => {
-        const source = nodes.find(n => n.id === id);
-        if(source?.type === 'group' || source?.type === 'promptGroup'){
-            (source.items || []).forEach(childId => {
-                if(nodes.some(n => n.id === childId)) sourceIds.add(childId);
-            });
-        }
-    });
+    const sourceIds = new Set(canvasNodesWithGroupMembers(selectedSourceIds).map(source => source.id));
     const sourceNodes = nodes.filter(n => sourceIds.has(n.id));
     const idMap = new Map();
     const copies = sourceNodes.map(source => {
@@ -16667,7 +16674,7 @@ function duplicateNodesForAltDrag(node, preserveConnections=false){
     });
     copies.forEach(copy => {
         if((copy.type === 'group' || copy.type === 'promptGroup') && Array.isArray(copy.items)){
-            copy.items = copy.items.map(id => idMap.get(id) || id);
+            copy.items = copy.items.map(id => idMap.get(id)).filter(Boolean);
         }
     });
     remapCanvasDepthCopies(copies, idMap, preserveConnections);
@@ -16699,7 +16706,7 @@ function copySelectedNodes(){
     if(!canvas || !selected.size) return;
     const el = document.activeElement;
     if(el && (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT')) return;
-    const toCopy = [...selected].map(id => nodes.find(n => n.id === id)).filter(Boolean);
+    const toCopy = canvasNodesWithGroupMembers([...selected]);
     if(!toCopy.length) return;
     const ids = new Set(toCopy.map(n => n.id));
     const pickedConnections = (connections || []).filter(c => ids.has(c.from) && ids.has(c.to)).map(c => ({...c}));
@@ -16728,7 +16735,7 @@ function pasteNodes(){
     const copies = clipNodes.map(n => { const c = cloneNode(n, dx, dy); idMap.set(n.id, c.id); return c; });
     copies.forEach(c => {
         if((c.type === 'group' || c.type === 'promptGroup') && c.items)
-            c.items = c.items.map(id => idMap.get(id) || id);
+            c.items = c.items.map(id => idMap.get(id)).filter(Boolean);
     });
     remapCanvasDepthCopies(copies, idMap);
     window.CanvasClipHost?.remapCopies(copies,idMap);
@@ -16746,7 +16753,7 @@ function pasteNodes(){
     scheduleSave();
 }
 function selectedWorkflowPayload(){
-    const ids = new Set([...selected].filter(id => nodes.some(n => n.id === id)));
+    const ids = new Set(canvasNodesWithGroupMembers([...selected]).map(node => node.id));
     const pickedNodes = [...ids].map(id => nodes.find(n => n.id === id)).filter(Boolean);
     const pickedConnections = connections.filter(c => ids.has(c.from) && ids.has(c.to)).map(c => ({...c}));
     return {
@@ -16972,7 +16979,7 @@ function insertWorkflowIntoCanvas(imported){
     });
     newNodes.forEach(node => {
         if((node.type === 'group' || node.type === 'promptGroup') && Array.isArray(node.items)){
-            node.items = node.items.map(id => idMap.get(id) || id).filter(id => newNodes.some(n => n.id === id) || nodes.some(n => n.id === id));
+            node.items = node.items.map(id => idMap.get(id)).filter(Boolean);
         }
     });
     remapCanvasDepthCopies(newNodes, idMap);
@@ -17986,6 +17993,9 @@ function deleteSelectedNodes(){
     selected.forEach(collect);
     toDelete.forEach(id => destroyLTXEditor(nodes.find(n => n.id === id)));
     nodes = nodes.filter(n => !toDelete.has(n.id));
+    nodes.forEach(n => {
+        if((n.type === 'group' || n.type === 'promptGroup') && Array.isArray(n.items)) n.items = n.items.filter(id => !toDelete.has(id));
+    });
     connections = connections.filter(c => !toDelete.has(c.from) && !toDelete.has(c.to));
     selected.clear();
     render();

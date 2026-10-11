@@ -20,6 +20,7 @@ function editor(smart){
         mediaItemForStorage:n=>n,stripImageGenerationMeta:n=>n,settingsForStorage:n=>n});
     vm.runInContext(readFileSync(path.join(__dirname,'../static/js/canvas-audio.js'),'utf8'),context);
     if(smart){
+        vm.runInContext(section('smart-canvas.js','function isSmartGroupNode(','function isSmartRunnableNode('),context);
         vm.runInContext(section('smart-canvas.js','function serializableSmartNode(','function selectedSmartWorkflowPayload('),context);
         vm.runInContext(section('smart-canvas.js','function cloneSmartNode(','// 跨页"素材库'),context);
         vm.runInContext(section('smart-canvas.js','function insertSmartWorkflowIntoCanvas(','async function importSmartWorkflowFile('),context);
