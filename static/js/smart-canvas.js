@@ -14322,17 +14322,18 @@ function appendImagesToSmartNode(uploaded, targetId='', opts={}){
         node = createImageNodeAt(center, []);
         undoSuppressed = false;
     }
-    const previousCount = (node.images || []).length;
+    // 上传只替换节点里的素材，保留上传前的显示尺寸和缩放比例。
+    // 空节点没有显式 w/h，也要先记住它的默认尺寸，避免上传后按素材重新排版。
+    const originalRect = nodeRect(node);
+    const originalScale = nodeScale(node);
     node.images = [...(node.images || []), ...images.map(file => ({...file, kind:file.kind || mediaKindForItem(file)}))];
+    if(Number.isFinite(Number(originalRect.width)) && originalRect.width > 24) node.w = Math.round(originalRect.width);
+    if(Number.isFinite(Number(originalRect.height)) && originalRect.height > 24) node.h = Math.round(originalRect.height);
+    if(!Number.isFinite(Number(node.scale)) || Number(node.scale) <= 0) node.scale = originalScale;
     if(node.images.length > 1){
         node.title = uploadTitleForItems(node.images, 'Group');
-        if(previousCount <= 1 && (!Number.isFinite(Number(node.scale)) || Number(node.scale) === MEDIA_NODE_DEFAULT_SCALE || Number(node.scale) === MEDIA_GROUP_PREVIOUS_DEFAULT_SCALE)){
-            node.scale = MEDIA_GROUP_DEFAULT_SCALE;
-        }
-        delete node.w;
-        delete node.h;
     }
-    if(node.images.length === 1){ node.title = uploadTitleForItems(node.images, node.title || 'Image'); delete node.w; delete node.h; }
+    if(node.images.length === 1) node.title = uploadTitleForItems(node.images, node.title || 'Image');
     if(targetGroup) addNodeToSmartGroup(targetGroup, node);
     selectedId = node.id;
     render();
