@@ -41,6 +41,22 @@ set "NADOU_LAUNCH_PORT="
 for /f "delims=" %%P in ('call "%PYEXE%" tools\check-environment.py --print-port') do set "NADOU_LAUNCH_PORT=%%P"
 if not defined NADOU_LAUNCH_PORT exit /b 1
 echo Visit: http://127.0.0.1:%NADOU_LAUNCH_PORT%/
+set "NADOU_PORT_STATE="
+for /f "delims=" %%S in ('call "%PYEXE%" tools\check-environment.py --print-port-state') do set "NADOU_PORT_STATE=%%S"
+set "NADOU_URL=http://127.0.0.1:%NADOU_LAUNCH_PORT%/"
+if /i "%NADOU_PORT_STATE%"=="existing" (
+    echo Existing nadou ai instance detected. Reusing http://127.0.0.1:%NADOU_LAUNCH_PORT%/
+    if /i not "%~1"=="--no-browser" (
+        if exist "%ProgramFiles(x86)%\Microsoft\Edge\Application\msedge.exe" (
+            start "" "%ProgramFiles(x86)%\Microsoft\Edge\Application\msedge.exe" --new-window "%NADOU_URL%"
+        ) else if exist "%ProgramFiles%\Microsoft\Edge\Application\msedge.exe" (
+            start "" "%ProgramFiles%\Microsoft\Edge\Application\msedge.exe" --new-window "%NADOU_URL%"
+        ) else (
+            start "" "%NADOU_URL%"
+        )
+    )
+    exit /b 0
+)
 echo Press Ctrl+C to stop.
 echo.
 

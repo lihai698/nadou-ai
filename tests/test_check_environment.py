@@ -4,6 +4,7 @@ import importlib.util
 import tempfile
 import socket
 import unittest
+import json
 from pathlib import Path
 from unittest.mock import patch
 
@@ -21,6 +22,27 @@ class EnvironmentConfigTests(unittest.TestCase):
             listener.bind(('127.0.0.1', 0))
             listener.listen(1)
             self.assertFalse(checker.check_port(listener.getsockname()[1]))
+
+    def test_existing_project_instance_is_detected_from_canvas_api(self):
+        response = type("Response", (), {
+            "status": 200,
+            "read": lambda self: json.dumps({"canvases": []}).encode("utf-8"),
+            "__enter__": lambda self: self,
+            "__exit__": lambda self, *args: None,
+        })()
+        with patch.object(checker.urllib.request, "urlopen", return_value=response) as urlopen:
+            self.assertTrue(checker.existing_project_instance(3002))
+        self.assertEqual(urlopen.call_args.args[0].full_url, "http://127.0.0.1:3002/api/canvases")
+
+    def test_existing_project_instance_rejects_other_http_response(self):
+        response = type("Response", (), {
+            "status": 200,
+            "read": lambda self: b'{"status":"ok"}',
+            "__enter__": lambda self: self,
+            "__exit__": lambda self, *args: None,
+        })()
+        with patch.object(checker.urllib.request, "urlopen", return_value=response):
+            self.assertFalse(checker.existing_project_instance(3002))
 
     def test_env_validation_handles_equals_in_secret_without_echoing_value(self):
         with tempfile.TemporaryDirectory() as directory:

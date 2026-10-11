@@ -11,6 +11,8 @@ import re
 import shutil
 import socket
 import sys
+import urllib.error
+import urllib.request
 from pathlib import Path
 
 
@@ -225,6 +227,23 @@ def check_port(port, host="127.0.0.1"):
     return bool(addresses)
 
 
+def existing_project_instance(port, host="127.0.0.1"):
+    """识别端口上是否已经运行本项目，避免重复启动自己的服务。"""
+    probe_host = host.strip("[]")
+    if probe_host in {"0.0.0.0", "::", ""}:
+        probe_host = "127.0.0.1"
+    url = f"http://{probe_host}:{int(port)}/api/canvases"
+    request = urllib.request.Request(url, headers={"Accept": "application/json"})
+    try:
+        with urllib.request.urlopen(request, timeout=0.8) as response:
+            if getattr(response, "status", 200) != 200:
+                return False
+            payload = json.loads(response.read().decode("utf-8"))
+    except (OSError, ValueError, UnicodeError, urllib.error.URLError):
+        return False
+    return isinstance(payload, dict) and isinstance(payload.get("canvases"), list)
+
+
 def check_disk_space(root, minimum_bytes, problems):
     """检查配置根目录所在磁盘的可用空间，不读取目录中的文件。"""
 
@@ -263,6 +282,7 @@ def main():
     parser.add_argument("--port", type=int, help="准备使用的端口，默认读取 NADOU_PORT，未配置时为 3000")
     parser.add_argument("--host", help="准备监听的地址，默认读取 NADOU_BIND_HOST，未配置时为 127.0.0.1")
     parser.add_argument("--print-port", action="store_true", help="仅输出已校验的启动端口，供启动脚本使用")
+    parser.add_argument("--print-port-state", action="store_true", help="仅输出端口状态：existing、available 或 occupied")
     parser.add_argument("--requirements", type=Path, default=REQUIREMENTS,
                         help="依赖清单路径，默认项目根目录 requirements.txt")
     parser.add_argument("--config-root", type=Path, default=PROJECT_ROOT,
@@ -284,6 +304,11 @@ def main():
         return 0
     args.port = configured_port if args.port is None else args.port
     host = args.host or environment.get("NADOU_BIND_HOST", "").strip() or "127.0.0.1"
+    port_available = 1 <= args.port <= 65535 and check_port(args.port, host)
+    port_has_project = not port_available and existing_project_instance(args.port, host)
+    if args.print_port_state:
+        print("existing" if port_has_project else "available" if port_available else "occupied")
+        return 0
     problems = []
     notices = []
 
@@ -318,7 +343,9 @@ def main():
 
     if not 1 <= args.port <= 65535:
         problems.append("端口必须在 1～65535 之间。")
-    elif check_port(args.port, host):
+    elif port_has_project:
+        print(f"端口 {args.port}: 已有本项目实例，继续使用现有地址")
+    elif port_available:
         print(f"端口 {args.port}: 可用")
     else:
         problems.append(f"地址 {host} 的端口 {args.port} 不可用；可用 NADOU_PORT 配置其他端口。不要停止其他项目的服务；已有本项目实例时请使用其现有地址。")
