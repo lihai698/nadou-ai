@@ -20192,6 +20192,7 @@ app.include_router(create_assistant_router(
     providers=canvas_assistant_providers,
     user_id=safe_user_id,
     call_model=call_canvas_assistant_model,
+    public_error=public_error_detail,
     apply_operations=apply_canvas_assistant_operations,
     notify_changed=notify_canvas_assistant_changed,
     load_reference_assets=canvas_assistant_reference_assets,

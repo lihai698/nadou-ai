@@ -709,7 +709,7 @@ video.node-img { object-fit:cover; background:#0f172a; }
 .image-node:not(.empty-node) .node-hint { display:none; }
 .node-running::after { content:none; display:none; }
 @keyframes shine { from { transform:translateX(-100%); } to { transform:translateX(100%); } }
-.connection-layer { position:absolute; left:0; top:0; width:6000px; height:4000px; pointer-events:none; z-index:0; overflow:visible; }
+.connection-layer { position:absolute; left:0; top:0; pointer-events:none; z-index:0; overflow:visible; }
 .connection-layer path { transition:stroke-opacity .14s ease; }
 .connection-layer .conn-selected { stroke:var(--strong); opacity:1; }
 .connection-layer .conn-hit { pointer-events:stroke; cursor:pointer; }

@@ -3,6 +3,8 @@
 ## overview
 原生类型 smart-shot-table，是从视频拆解入口产生的镜头分析与生成编排表，不是直接调用视频生成器。数据保存在 shotTableData。原视频 source 与分析 task、手工编辑 rows、generationMap 分开；知道已保存内容不等于分析/生成已经成功。
 
+文本创作现也可通过 create_story_workflow 创建同一原生表：source.kind=text、nodeId指向真实故事文本、fingerprint绑定原文；productionData保存剧情/资产/声音/分镜引用，generationMap关联每镜配图链。文本表可编辑和生成所选镜头，视频重分析及语音转写不适用于它。声音字段为设计稿，未合成音频。
+
 ## controls
 视频入口创建/打开镜头表，重复打开相同 nodeId/resultId/sourceUrl 复用原表。节点展开编辑；桌面表格/手机单镜编辑、上一镜/下一镜、选择本镜、全选/全不选、保存编辑。六内置列为景别 shotSize、运镜 motion、画面 visual、对白 dialogue、屏幕文字 onScreenText、情绪 mood。自定义列新增、改名、删除需确认；内置列不能改名/删除。重分析本镜、重试对白/改用云端、重新拆解、取消本批、生成所选镜头；画布只读时禁用写入。缩放>=0.8完整、>=0.4紧凑、其余摘要卡；展示缩放不改变请求。
 
@@ -38,7 +40,7 @@ task.taskId/status/phase/progress/progressDetail/error/failureKind/coverage/quot
 读取项目规则→读取镜头表末页及cells分页→核对来源与选中镜头→整理每镜imagePrompt/motionPrompt→预览生成原生节点计划→手选图片模型并确认→保存后查询原任务→回读实际输出。分析对白失败时保留原内容并选择重试方式、核对本次批次报价，不重复整段视频分析。
 
 ## limitations
-当前助手已登记知识与白名单读取，不代表镜头表全部操作已开放；可执行动作以工具注册表和原生处理器为准。真实视觉、音频、图片效果及作品质量尚未经收费供应商验收。分页cells为[{columnId,value}]，按pagination.arrays与fields补读完整正文，不能把首屏当全表。任意配置、凭据、本机路径、内部rowSnapshots不发送给模型。镜头表不是通用创建菜单项，创建需要真实视频来源。
+当前助手已登记知识与白名单读取，不代表镜头表全部操作已开放；可执行动作以工具注册表和原生处理器为准。真实视觉、音频、图片效果及作品质量尚未经收费供应商验收。分页cells为[{columnId,value}]，按pagination.arrays与fields补读完整正文，不能把首屏当全表。任意配置、凭据、本机路径、内部rowSnapshots不发送给模型。视频拆解表需要真实视频来源；文本创作表通过助手工具绑定已保存故事节点。
 
 阶段B专门编辑通过 shot_edit/shot_column/shot_select 使用现有 host.editTable、model.editCell/editColumn；运镜正文同步 motionPrompt，改名保留原 hint，自定义列删除还删除各行同列正文，选择递增 revision。新增列编号由动作绑定，不让模型覆盖已有列。回执读取真实保存表并核验 revision 与关联字段。生成转换/分析调用仍按各自实际能力目录，不从编辑成功推断供应商已执行。
 智能抽帧落到原生 smart-group.images，按来源 frameIndex 去重，保留原媒体；生成链由 smart-prompt→smart-image 承载，执行使用 shotTableRun 读取该节点草稿，避免批量读取其它选中节点草稿。共享处理器新增行为已复读，生成服务效果尚未验证。

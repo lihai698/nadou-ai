@@ -6838,7 +6838,13 @@ function renderConnections(){
         const width = kind === 'input' ? '1.9' : '1.6';
         return `<path class="${cls} conn-line" data-conn-index="${dataIndex}" d="${curve}" stroke="${color}" stroke-width="${width}" fill="none" opacity="${opacity}"></path><path class="conn-hit" data-conn-index="${dataIndex}" d="${curve}" stroke="transparent" stroke-width="14" fill="none"></path><circle class="conn-end" data-conn-index="${dataIndex}" cx="${tx}" cy="${ty}" r="3.5" fill="${color}" opacity=".66"></circle><g class="conn-cut" data-conn-index="${dataIndex}" transform="translate(${mx} ${my})"><circle r="8" fill="var(--card)" stroke="${color}" stroke-width="1.4"></circle><path d="M-3 -3 L3 3 M3 -3 L-3 3" stroke="${color}" stroke-width="1.5" stroke-linecap="round"></path></g>`;
     }).join('');
-    return `<svg class="connection-layer ${reduceMotion ? 'conn-reduce-motion' : ''}" width="6000" height="4000" viewBox="0 0 6000 4000" xmlns="http://www.w3.org/2000/svg">${paths}</svg>`;
+    let connectionWidth = 6000, connectionHeight = 4000;
+    nodeById.forEach(node => {
+        const rect = nodeRect(node);
+        connectionWidth = Math.max(connectionWidth, Math.ceil(rect.x + rect.width + 100));
+        connectionHeight = Math.max(connectionHeight, Math.ceil(rect.y + rect.height + 100));
+    });
+    return `<svg class="connection-layer ${reduceMotion ? 'conn-reduce-motion' : ''}" width="${connectionWidth}" height="${connectionHeight}" viewBox="0 0 ${connectionWidth} ${connectionHeight}" xmlns="http://www.w3.org/2000/svg">${paths}</svg>`;
 }
 function refreshConnectionLayer(){
     connectionLayerRaf = 0;

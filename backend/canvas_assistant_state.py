@@ -146,7 +146,7 @@ def read_node_state(canvas: dict, node_id: str, *, text_offset: int = 0, text_li
             content[field], text_pages[field] = _page(_scalar(node[field]), text_offset, text_limit)
     if known and isinstance(node.get("audioOutputText"), str):
         content['audioOutputText'] = bounded_text(node['audioOutputText'], 'audioOutputText')
-    parameters = _project(node, PARAMETERS.get(node_type, set()))
+    parameters = _project(node, PARAMETERS.get(node_type, set()) | {'x', 'y', 'w', 'h'})
     for field in ("settings", "runSettings") if node_type == "smart-image" else ():
         if isinstance(node.get(field), dict):
             parameters[field] = _project(node[field], SMART_SETTINGS)
@@ -220,7 +220,13 @@ def read_node_state(canvas: dict, node_id: str, *, text_offset: int = 0, text_li
     shot_task = {}
     if isinstance(shot_table, dict):
         parameters["shotTableData"] = _project(shot_table, {"version", "revision"})
-        parameters["shotTableData"]["source"] = _project(shot_table.get("source"), set("nodeId resultId sourceUrl title fingerprint durationSeconds".split()))
+        parameters["shotTableData"]["source"] = _project(shot_table.get("source"), set("kind nodeId resultId sourceUrl title fingerprint durationSeconds".split()))
+        production = shot_table.get('productionData')
+        if isinstance(production, dict):
+            parameters['shotTableData']['production'] = _project(production, {'title','style','sourceNodeId','sourceFingerprint'})
+            membership['shotTableData.documentNodes'] = bounded_array(
+                [{'category':k,'nodeId':v} for k,v in (production.get('documentNodeIds') or {}).items()],
+                'shotTableData.documentNodes', lambda v,p: _project(v, {'category','nodeId'}))
         selection = shot_table.get("analysisSettings") or {}
         parameters["shotTableData"]["analysisSettings"] = _project(selection, {"providerId", "model"})
         if isinstance(selection, dict) and isinstance(selection.get("speech"), dict):

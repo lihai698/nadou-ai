@@ -19,11 +19,54 @@ from backend.canvas_assistant import reference_kind
 from backend.canvas_assistant_tools import tool_catalog
 
 
+def execution_records(fields):
+    return json.loads(fields['messages'][-1]['content'].split('\n', 1)[1])
+
+
 def decision(tool=None, arguments=None, reply="已完成"):
     return {"reply": reply, "tool": tool, "arguments": arguments or {}}
 
 
 class AgentRouteTests(unittest.IsolatedAsyncioTestCase):
+    async def test_long_tool_records_keep_all_pages_outside_user_message(self):
+        import main
+        self.canvas['nodes'] = [{'id': 'p', 'type': 'prompt', 'text': '甲' * 12000 + '乙' * 12000 + '终页证据'}]
+        self.responses = [
+            decision('read_node_state', {'nodeId': 'p', 'textOffset': 0, 'textLimit': 12000}),
+            decision('read_node_state', {'nodeId': 'p', 'textOffset': 12000, 'textLimit': 12000}),
+            decision('read_node_state', {'nodeId': 'p', 'textOffset': 24000, 'textLimit': 12000}),
+            decision(reply='已完整读取，未修改或生成'),
+        ]
+        events = await self.send(message='完整读取这个长文本，保留所有分页')
+        self.assertEqual(events[-1]['state'], 'completed', events)
+        fields = self.seen[-1]
+        validated = main.CanvasLLMRequest(**fields)
+        self.assertLess(len(validated.message), 20000)
+        transcript = execution_records(fields)
+        encoded = json.dumps(transcript, ensure_ascii=False)
+        self.assertIn('甲' * 12000, encoded)
+        self.assertIn('乙' * 12000, encoded)
+        self.assertIn('终页证据', encoded)
+        self.assertGreater(len(encoded), 24000)
+        self.assertEqual(fields['provider'], self.seen[0]['provider'])
+        self.assertEqual(fields['model'], self.seen[0]['model'])
+        self.assertEqual(self.tasks, {})
+
+    async def test_story_workflow_real_route_readback_and_no_generation(self):
+        from tests.test_canvas_assistant_story import story_fixture
+        self.canvas.update(kind='smart',nodes=[{'id':'story','type':'smart-prompt','text':'女孩走进书店。她读着旧信。'}])
+        self.responses=[decision('create_story_workflow',story_fixture()), *[decision('read_canvas') for _ in range(9)],decision(reply='完整工作流已保存')]
+        events=await self.send(creationSettings={'provider_id':'mock','model':'image'},imageModelConfirmed=True)
+        self.assertEqual(events[-1]['state'],'completed',events)
+        self.assertEqual(len(self.seen),11)
+        self.assertEqual(len(self.canvas['nodes']),12)
+        self.assertEqual(len(self.canvas['connections']),15)
+        turn=await self.history()
+        receipt=turn['writeReceipts']['turn-a_s1']
+        self.assertEqual(receipt['storyWorkflows'][0]['shotCount'],2)
+        self.assertEqual(self.tasks,{})
+        self.assertEqual(turn['agent']['toolCalls'],10)
+
     async def test_loop_resume_remaining_copy_after_last_generation_has_no_new_budget(self):
         from tests.test_canvas_assistant_loop import LoopContractTests
         from backend.canvas_assistant_loop import loop_slots
@@ -126,7 +169,7 @@ class AgentRouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(repeated.json().get('canExecute',False))
         continued=await self.client.post('/api/canvas-assistant/continue',json={'canvasId':'canvas-a','sessionId':self.session,'requestId':'turn-a'})
         self.assertIn('"state": "completed"',continued.text)
-        self.assertIn('/output/one.png',self.seen[-1]['message'])
+        self.assertIn('/output/one.png',json.dumps(self.seen[-1], ensure_ascii=False))
 
     async def test_export_confirm_finish_saved_receipt_reload_and_continue(self):
         node={'id':'p','type':'prompt','text':'导出正文'}
@@ -146,7 +189,7 @@ class AgentRouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(repeated.json().get('canExecute',False))
         self.assertEqual((await self.history())['nativeActions'][0]['receipt']['exportReceipt']['filename'],'workflow.json')
         continued=await self.client.post('/api/canvas-assistant/continue',json={'canvasId':'canvas-a','sessionId':self.session,'requestId':'turn-a'})
-        self.assertIn('"state": "completed"',continued.text);self.assertIn('workflow.json',self.seen[-1]['message'])
+        self.assertIn('"state": "completed"',continued.text);self.assertIn('workflow.json',json.dumps(self.seen[-1], ensure_ascii=False))
 
     async def test_rh_app_finish_uses_bound_saved_result_without_local_task_query(self):
         node={'id':'rh','type':'rh','rhMode':'app','rhConfigKey':'app:user-app','webappId':'user-app','apiProvider':'runninghub','count':1,'outputEnabled':True,'rhParams':{'12::steps':{'value':'20'}},'rhAppInfo':{'nodeInfoList':[{'nodeId':'12','fieldName':'steps','fieldType':'INT'}]}}
@@ -169,7 +212,7 @@ class AgentRouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(repeated.status_code,200,repeated.text)
         continued=await self.client.post('/api/canvas-assistant/continue',json={'canvasId':'canvas-a','sessionId':self.session,'requestId':'turn-a'})
         self.assertIn('"state": "completed"',continued.text)
-        self.assertIn('/output/current.png',self.seen[-1]['message'])
+        self.assertIn('/output/current.png',json.dumps(self.seen[-1], ensure_ascii=False))
         self.assertEqual(self.native_queries,[])
 
 
@@ -248,6 +291,7 @@ class AgentRouteTests(unittest.IsolatedAsyncioTestCase):
         app = FastAPI()
         app.include_router(create_assistant_router(root=lambda: self.temp.name, load_canvas=lambda cid: self.canvas,
             providers=lambda: self.providers, user_id=lambda header, request: header, call_model=model,
+            public_error=getattr(self, 'public_error', None),
             apply_operations=apply, submit_image=submit, query_image=query, query_native_task=query_native, load_reference_assets=lambda: self.assets,
             workflow_fields=lambda node:self.workflow_fields.get(node['id']),control_native_task=control_native,
             resolve_result_file=lambda url:Path(self.temp.name)/Path(url).name, result_roots=lambda:[self.temp.name]))
@@ -355,7 +399,7 @@ class AgentRouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(review['coverage']['fullVideoSemantics'],'unknown')
         self.assertTrue(review['limitations'])
         self.assertNotIn('data:image/',json.dumps(turn['steps']))
-        self.assertNotIn('data:image/',self.seen[1]['message'])
+        self.assertNotIn('data:image/',json.dumps(execution_records(self.seen[1]), ensure_ascii=False))
         self.assertNotIn('data:image/',json.dumps(turn['agent']['lastModelInputImages']))
 
     async def test_native_video_inspection_uses_confirmed_request_original_task_and_keeps_full_quality_unknown(self):
@@ -517,6 +561,59 @@ class AgentRouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(turn["agent"]["modelCalls"], 3)
         self.assertEqual([s["state"] for s in turn["steps"]], ["succeeded", "succeeded"])
 
+    async def test_deepseek_dsml_creates_story_and_shots_then_waits_for_image_confirmation(self):
+        from tests.test_canvas_assistant_protocol import dsml
+        self.canvas['kind'] = 'smart'
+        operations = [{'op': 'create', 'operationId': key, 'ref': key, 'type': 'prompt',
+                       'title': title, 'content': content} for key, title, content in
+                      [('story', '故事正文', '雨夜她找到父亲的信。'), ('shot1', '分镜1', '雨夜书店暖光。'),
+                       ('shot2', '分镜2', '女孩展开旧信。'), ('shot3', '分镜3', '雨停后她走出书店。')]]
+        self.responses = ['我先读取创作方法规则，再一次性落地文案与分镜节点。\n\n' + json.dumps(
+                              decision('read_project_knowledge', {'capabilityId':'project.creation','section':'overview'}), ensure_ascii=False),
+                          dsml('apply_canvas_operations', {'arguments': {'operations': operations}, 'tool': 'apply_canvas_operations'}),
+                          dsml('read_canvas', {'limit': 50}),
+                          dsml('propose_image', {'title': '分镜2配图', 'prompt': '女孩在暖光书店展开旧信。'})]
+        events = await self.send(message='自己写故事拆分镜并创建节点和配图')
+        self.assertEqual(events[-1]['state'], 'waiting_confirmation')
+        turn = await self.history()
+        self.assertEqual([s['state'] for s in turn['steps']], ['succeeded'] * 4)
+        self.assertEqual(len(self.canvas['nodes']), 6)
+        self.assertEqual(len(self.canvas['connections']), 1)
+        self.assertTrue(all(any(n.get('text') == op['content'] for n in self.canvas['nodes']) for op in operations))
+        self.assertEqual(turn['proposals'][0]['model'], 'image')
+        self.assertEqual(self.tasks, {}, '必须等待确认，不提前提交图片')
+
+    async def test_failed_canvas_write_is_not_completed_even_after_successful_read(self):
+        self.responses = [decision('apply_canvas_operations', {'operations': [
+            {'op': 'create', 'operationId': 'p', 'ref': 'p', 'type': 'prompt', 'content': '不能写入'}]}),
+                          decision('read_canvas'), decision(reply='已完成')]
+        with patch('backend.canvas_assistant.ProjectKnowledge.changed', return_value=['smart.prompt']):
+            events = await self.send()
+        self.assertEqual(events[-1]['state'], 'failed')
+        self.assertIn('知识来源已变化', events[-1]['error'])
+        self.assertEqual(self.canvas['nodes'], [])
+
+    async def test_provider_failure_reason_is_visible_and_redacted_in_chat_and_continue(self):
+        from main import public_error_detail
+        self.public_error = public_error_detail
+        await self.client.aclose()
+        self.client = httpx.AsyncClient(transport=httpx.ASGITransport(app=self.app()), base_url='http://test', headers={'X-User-Id': 'owner'})
+        secret = 'assistant-error-private-token'
+        self.model_error = HTTPException(402, f'上游接口错误（402）：Insufficient Balance token={secret} C:\\Users\\PrivateUser\\secret.json')
+        events = await self.send()
+        self.assertEqual(events[-1]['state'], 'failed')
+        self.assertIn('Insufficient Balance', events[-1]['error'])
+        continued = await self.client.post('/api/canvas-assistant/continue', json={'canvasId':'canvas-a','sessionId':self.session,'requestId':'turn-a'})
+        final = json.loads(continued.text.splitlines()[-1])
+        self.assertEqual(final['state'], 'interrupted')
+        self.assertIn('402', final['error'])
+        for value in [events, final, await self.history()]:
+            rendered = json.dumps(value, ensure_ascii=False)
+            self.assertNotIn(secret, rendered)
+            self.assertNotIn('PrivateUser', rendered)
+        self.assertEqual(self.canvas['nodes'], [])
+        self.assertEqual(self.tasks, {})
+
     async def test_create_plan_is_persisted_in_agent_state_with_trusted_budget(self):
         self.responses = [
             decision("create_plan", {
@@ -536,7 +633,7 @@ class AgentRouteTests(unittest.IsolatedAsyncioTestCase):
         plan = turn["agent"]["plan"]
         self.assertEqual(plan["goal"], "完成海报并核对结果")
         self.assertEqual([step["id"] for step in plan["steps"]], ["read", "create"])
-        self.assertEqual(plan["budget"]["limit"], {"modelCalls": 6, "toolCalls": 8, "serviceCalls": 0, "activeSeconds": 900})
+        self.assertEqual(plan["budget"]["limit"], {"modelCalls": None, "toolCalls": None, "serviceCalls": 0, "activeSeconds": None})
         self.assertEqual(turn["steps"][0]["state"], "succeeded")
 
     async def test_plan_steps_follow_dependencies_and_actual_receipts(self):
@@ -805,7 +902,7 @@ class AgentRouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.native_controls,[('task_refresh','image','old')]);self.assertEqual(self.tasks,{})
         self.assertNotIn('hidden',first.text)
         continued=await self.client.post('/api/canvas-assistant/continue',json={'canvasId':'canvas-a','sessionId':self.session,'requestId':'turn-a'})
-        self.assertIn('"state": "completed"',continued.text);self.assertIn('/output/result.png',self.seen[-1]['message'])
+        self.assertIn('"state": "completed"',continued.text);self.assertIn('/output/result.png',json.dumps(self.seen[-1], ensure_ascii=False))
 
     async def test_native_control_two_confirmers_do_not_repeat_remote_action(self):
         self.canvas['nodes']=[{'id':'depth','type':'image','depthCapture':{'taskId':'old','status':'running','sourceUrl':'/output/source.mp4','operationId':'op'}}]
@@ -863,7 +960,7 @@ class AgentRouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.native_queries,[('image','original')]*3)
         self.assertEqual(self.native_controls,[]);self.assertEqual(self.tasks,{})
         continued=await self.client.post('/api/canvas-assistant/continue',json={'canvasId':'canvas-a','sessionId':self.session,'requestId':'turn-a'})
-        self.assertIn('"state": "completed"',continued.text);self.assertIn('/output/real.png',self.seen[-1]['message'])
+        self.assertIn('"state": "completed"',continued.text);self.assertIn('/output/real.png',json.dumps(self.seen[-1], ensure_ascii=False))
 
     async def test_smart_prompt_run_route_confirm_finish_restore_and_continue(self):
         self.canvas['kind']='smart'
@@ -888,7 +985,7 @@ class AgentRouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(restored['runSettings']['model'],'chat')
         continued=await self.client.post('/api/canvas-assistant/continue',json={'canvasId':'canvas-a','sessionId':self.session,'requestId':'turn-a'})
         self.assertIn('"state": "completed"',continued.text)
-        self.assertIn('已保存的智能 LLM 正文',self.seen[-1]['message'])
+        self.assertIn('已保存的智能 LLM 正文',json.dumps(self.seen[-1], ensure_ascii=False))
         self.assertEqual(self.native_queries,[])
 
     async def test_smart_image_run_route_confirm_finish_restore_and_continue_keeps_model(self):
@@ -915,7 +1012,7 @@ class AgentRouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(restored['runSettings']['provider'],'mock')
         continued=await self.client.post('/api/canvas-assistant/continue',json={'canvasId':'canvas-a','sessionId':self.session,'requestId':'turn-a'})
         self.assertIn('"state": "completed"',continued.text)
-        self.assertIn('/output/smart-original.png',self.seen[-1]['message'])
+        self.assertIn('/output/smart-original.png',json.dumps(self.seen[-1], ensure_ascii=False))
         self.assertEqual(node['runSettings']['model'],'image')
         self.assertEqual(self.native_queries,[('image','smart-original')]);self.assertEqual(self.tasks,{})
 
@@ -991,7 +1088,7 @@ class AgentRouteTests(unittest.IsolatedAsyncioTestCase):
         self.workflow_fields['other']=[{'id':'other','type':'number'}]
         self.responses=[decision('read_native_capabilities',{'nodeId':'wf','offset':100,'limit':30}),decision()]
         await self.send()
-        transcript=json.loads(self.seen[-1]['message'].split('\n',1)[1])
+        transcript=execution_records(self.seen[-1])
         result=next(item['result'] for item in transcript if item.get('kind')=='tool_result')['workflowParameters']
         self.assertEqual(len(result),1);self.assertEqual(result[0]['total'],120);self.assertEqual(result[0]['offset'],100)
         self.assertEqual(result[0]['fields'][-1]['key'],'119');self.assertIsNone(result[0]['nextOffset'])
@@ -1211,11 +1308,11 @@ class AgentRouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertLessEqual(len(self.seen), 2)
         self.assertNotIn('"path": "private"', events[-1].get("error", ""))
 
-    async def test_model_request_limit_finishes_with_real_read_receipts(self):
-        self.responses = [decision("read_canvas")]
+    async def test_more_than_old_limit_finishes_with_real_read_receipts(self):
+        self.responses = [decision("read_canvas") for _ in range(12)] + [decision(reply="完成")]
         events = await self.send()
-        self.assertEqual(events[-1]["state"], "paused")
-        self.assertEqual((await self.history())["agent"]["modelCalls"], 6)
+        self.assertEqual(events[-1]["state"], "completed")
+        self.assertEqual((await self.history())["agent"]["modelCalls"], 13)
         self.assertEqual(self.canvas["nodes"], [])
 
     async def propose(self, **changes):
@@ -1387,7 +1484,7 @@ class AgentRouteTests(unittest.IsolatedAsyncioTestCase):
         self.responses = [decision("read_canvas", {"offset": 100, "limit": 30}), decision(reply="读到最后30个节点")]
         await self.send()
         self.assertEqual(self.seen[0]["system_prompt"].count('"counts"'), 1)
-        fields = json.loads(self.seen[1]["message"].split("\n", 1)[1])
+        fields = execution_records(self.seen[1])
         canvas = fields[-1]["result"]["canvas"]
         self.assertEqual(canvas["nodes"][0]["id"], "100")
         self.assertEqual(canvas["counts"]["nodes"], 130)

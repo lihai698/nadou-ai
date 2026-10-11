@@ -13,7 +13,7 @@ import re
 from fastapi import HTTPException
 
 
-DEFAULT_LIMITS = {'modelCalls': 6, 'toolCalls': 8, 'serviceCalls': 0, 'activeSeconds': 900}
+DEFAULT_LIMITS = {'modelCalls': None, 'toolCalls': None, 'serviceCalls': 0, 'activeSeconds': None}
 MAX_STEPS = 40
 STOP_REASONS = {'interrupted', 'cancelled', 'paused'}
 
@@ -50,6 +50,9 @@ def _amounts(values, *, defaults=False):
         _error('预算字段无效')
     result = dict(DEFAULT_LIMITS) if defaults else {key: 0 for key in DEFAULT_LIMITS}
     for key, value in values.items():
+        if defaults and value is None and key != 'serviceCalls':
+            result[key] = None
+            continue
         if isinstance(value, bool) or not isinstance(value, (int, float)) or not 0 <= value <= 2 ** 53 - 1 or not math.isfinite(value):
             _error('预算必须是有限的非负数')
         if key != 'activeSeconds' and not isinstance(value, int):
@@ -113,8 +116,8 @@ def _copy(plan):
             raise ValueError('budget fields')
         if set(budget['limit']) != set(DEFAULT_LIMITS) or set(budget['used']) != set(DEFAULT_LIMITS):
             raise ValueError('budget keys')
-        limit, used = _amounts(budget['limit']), _amounts(budget['used'])
-        if not isinstance(budget['events'], dict) or len(budget['events']) > 1000:
+        limit, used = _amounts(budget['limit'], defaults=True), _amounts(budget['used'])
+        if not isinstance(budget['events'], dict):
             raise ValueError('events')
         total = _amounts({})
         for event_id, event in budget['events'].items():
@@ -123,7 +126,7 @@ def _copy(plan):
                 raise ValueError('event keys')
             amounts = _amounts(event)
             total = {key: total[key] + amounts[key] for key in DEFAULT_LIMITS}
-        if total != used or any(used[key] > limit[key] for key in DEFAULT_LIMITS):
+        if total != used or any(limit[key] is not None and used[key] > limit[key] for key in DEFAULT_LIMITS):
             raise ValueError('budget accounting')
         done = {step['id'] for step in plan['steps'] if step['state'] == 'completed'}
         receipt_ids = set()
@@ -240,10 +243,8 @@ def charge_budget(plan, event_id, amounts, *, execution_id):
         if budget['events'][event_id] != amounts:
             _error('相同预算事件的调用范围已改变', 409)
         return result
-    if len(budget['events']) >= 1000:
-        _error('预算记录已达上限，请保留进度', 409)
     used = {key: budget['used'][key] + amounts[key] for key in DEFAULT_LIMITS}
-    if any(used[key] > budget['limit'][key] for key in DEFAULT_LIMITS):
+    if any(budget['limit'][key] is not None and used[key] > budget['limit'][key] for key in DEFAULT_LIMITS):
         raise BudgetExhausted()
     budget['used'] = used
     budget['events'][event_id] = amounts

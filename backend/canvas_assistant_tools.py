@@ -2,12 +2,14 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import Literal
 
 from fastapi import HTTPException
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from backend.canvas_assistant_operations import AssistantPlan, parse_plan
+from backend.canvas_assistant_story import StoryWorkflow
 
 
 class StrictArgs(BaseModel):
@@ -127,15 +129,16 @@ class ExecutePlanStep(StrictArgs):
     stepId: str = Field(min_length=1, max_length=80)
     tool: Literal['read_canvas', 'read_project_knowledge', 'read_node_state', 'read_skill',
                   'read_native_capabilities', 'read_native_task', 'apply_canvas_operations',
-                  'propose_native_action', 'inspect_result', 'record_result_review']
+                  'propose_native_action', 'inspect_result', 'record_result_review', 'create_story_workflow']
     arguments: dict = Field(default_factory=dict)
 
 
 TOOLS = {
+    'create_story_workflow': ('创建文本分镜工作流', '将已保存故事拆解成剧情、角色、场景、道具、声音、原生分镜表与逐镜配图链；不提交生成，模型沿用手选设置', StoryWorkflow),
     'execute_plan_step': ('执行计划步骤', '按依赖领取一个步骤，调用已开放工具；完成状态由真实回执决定', ExecutePlanStep),
     'create_plan': ('保存创作计划', '保存带依赖的创作计划；预算由后端提供，不能由模型扩大', CreatePlan),
     'read_native_task': ('查询节点原任务','只查询当前节点持久保存的深度/图片/视频/ComfyUI任务，不提交或重试',ReadNativeTask),
-    'read_native_capabilities': ('读取原生动作', '核对当前画布原生编辑合同和尚未开放的动作', ReadNativeCapabilities),
+    'read_native_capabilities': ('读取原生动作', '核对当前画布原生编辑合同和尚未开放的动作；节点坐标移动另由apply_canvas_operations的update.x/y支持', ReadNativeCapabilities),
     'propose_native_action': ('原生动作方案', '保存待确认原生动作，不调用服务、不更换模型、不修改历史结果', ProposeNativeAction),
     "read_canvas": ("读取画布", "读取当前画布或指定原生节点，回读操作结果", ReadCanvas),
     "read_project_knowledge": ("读取项目规则", "读取当前版本已登记的节点使用规则和验收状态", ReadProjectKnowledge),
@@ -175,6 +178,42 @@ class Decision(StrictArgs):
     legacy: bool = Field(default=False, exclude=True)
 
 
+def _parse_dsml(text):
+    """兼容 DeepSeek 文本中的单次工具调用；仍走原有白名单与参数校验。"""
+    marker = r'[｜|]{1,2}DSML[｜|]{1,2}\s*'
+    tag = lambda body: r'<' + marker + body + r'>'
+    close = lambda name: r'</' + marker + name + r'\s*>'
+    try:
+        call = re.fullmatch(tag(r'calls') + r'\s*' +
+                            tag(r'invoke\s+name="([A-Za-z_][A-Za-z0-9_]*)"') +
+                            r'(.*?)' + close('invoke') + r'\s*' + close('calls'), text, re.S)
+        if not call:
+            raise ValueError('single complete call required')
+        name, body = call.groups()
+        parameter = re.compile(tag(r'parameter\s+name="([A-Za-z_][A-Za-z0-9_]*)"\s+string="(true|false)"') +
+                               r'(.*?)' + close('parameter'), re.S)
+        values, end = {}, 0
+        for match in parameter.finditer(body):
+            key, is_string, raw = match.groups()
+            if body[end:match.start()].strip() or key in values or re.search(marker, raw):
+                raise ValueError('ambiguous parameters')
+            values[key] = raw if is_string == 'true' else json.loads(raw)
+            end = match.end()
+        if body[end:].strip():
+            raise ValueError('unparsed parameters')
+        if 'arguments' in values:
+            if set(values) - {'arguments', 'tool'} or values.get('tool', name) != name:
+                raise ValueError('mismatched wrapper')
+            arguments = values['arguments']
+        else:
+            arguments = values
+        if not isinstance(arguments, dict):
+            raise ValueError('arguments must be an object')
+        return Decision(tool=name, arguments=arguments)
+    except (ValueError, ValidationError) as exc:
+        raise HTTPException(422, '模型工具调用格式无效，请返回单个 JSON 工具调用；本次未执行操作') from exc
+
+
 def parse_decision(text):
     text = str(text or "").strip()
     if len(text) > 64000:
@@ -185,7 +224,17 @@ def parse_decision(text):
     if candidate.startswith("```") and candidate.endswith("```"):
         candidate = candidate.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
     if not candidate.startswith("{"):
-        return Decision(reply=text)
+        if re.search(r'</?[｜|]{1,2}DSML', candidate):
+            return _parse_dsml(candidate)
+        # 部分模型在单个 JSON 指令前加一句说明，不能误当成已完成的正文。
+        # 仅剥离说明；完整 JSON 校验仍拒绝多次调用、尾随文字和残缺结构。
+        if re.search(r'"(?:tool|arguments|operations)"\s*:', candidate):
+            start = candidate.find('{')
+            if start < 0:
+                raise HTTPException(422, '模型工具调用缺少完整 JSON，本次未执行操作')
+            candidate = candidate[start:]
+        else:
+            return Decision(reply=text)
     try:
         value = json.loads(candidate)
         if isinstance(value, dict) and "operations" in value:
@@ -202,3 +251,23 @@ def parse_decision(text):
         return result
     except (ValueError, ValidationError) as exc:
         raise HTTPException(422, '模型协议无效，请返回 {"reply":"说明","tool":null,"arguments":{}} 或列出的工具调用') from exc
+
+
+def decision_diagnostic(text):
+    """只记录协议形状和解析位置，不记录模型正文、参数或未知字段内容。"""
+    value = str(text or '').strip()
+    result = {'length':len(value), 'dsmlCalls':len(re.findall(r'invoke\s+name=',value))}
+    start=value.find('{')
+    if start < 0:
+        result['format']='dsml' if 'DSML' in value else 'text'
+        return result
+    try:
+        parsed,end=json.JSONDecoder().raw_decode(value[start:])
+        result.update(format='json',prefixLength=start,suffixLength=len(value[start+end:].strip()))
+        if isinstance(parsed,dict):
+            known={'reply','tool','arguments','operations','legacy'}
+            result['fields']=sorted(set(parsed)&known)
+            result['unknownFieldCount']=len(set(parsed)-known)
+    except ValueError as exc:
+        result.update(format='invalid_json',reason=getattr(exc,'msg','invalid'),position=getattr(exc,'pos',0))
+    return result

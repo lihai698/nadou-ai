@@ -25,6 +25,26 @@ def connect(a, b, operation_id="edge_1"):
 
 
 class OperationTests(unittest.TestCase):
+    def test_layout_update_preserves_content_models_edges_and_reports_position(self):
+        from backend.canvas_assistant_state import read_node_state
+        self.canvas['nodes'] = [dict(id='p', type='smart-prompt', title='剧情拆解', text='原文', x=10, y=20,
+                                     runSettings={'model': 'user-model'}, storyWorkflowOrigin={'tableId': 'table'})]
+        self.canvas['connections'] = [dict(id='edge', **{'from': 'source', 'to': 'p'}, kind='story')]
+        before = copy.deepcopy(self.canvas)
+        self.plan = plan(dict(op='update', operationId='move', nodeId='p', x=580, y=975))
+        candidate, receipt = self.apply()
+        expected = copy.deepcopy(before['nodes'][0]); expected.update(x=580.0, y=975.0)
+        self.assertEqual(candidate['nodes'][0], expected)
+        self.assertEqual(candidate['connections'], before['connections'])
+        self.assertEqual(self.canvas, before)
+        self.assertEqual(receipt['updatedNodeIds'], ['p'])
+        self.assertEqual(set(receipt['nodePatches'][0]['fields']), {'x', 'y'})
+        state = read_node_state(candidate, 'p')
+        self.assertEqual((state['parameters']['x'], state['parameters']['y']), (580, 975))
+        for value in (float('nan'), float('inf'), True, '580'):
+            with self.assertRaises(ValueError):
+                plan(dict(op='update', operationId='badmove', nodeId='p', x=value))
+
     def setUp(self):
         self.canvas = {"id": "canvas-a", "kind": "classic", "updated_at": 20, "nodes": [], "connections": [], "settings": {}, "logs": [{"text": "原日志"}]}
         self.providers = [{"id": "mock", "enabled": True, "image_models": ["image-user"], "video_models": ["video-user"]}]

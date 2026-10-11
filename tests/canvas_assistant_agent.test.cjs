@@ -14,7 +14,7 @@ test('待确认与停止状态不能误显示成失败',()=>{
     assert.equal(context.window.CanvasAssistant.turnPresentation('waiting_confirmation').failed,false);
     assert.equal(context.window.CanvasAssistant.turnPresentation('waiting_confirmation').label,'等待操作确认');
     assert.equal(context.window.CanvasAssistant.turnPresentation('interrupted').canContinue,true);
-    assert.equal(context.window.CanvasAssistant.turnPresentation('paused').canContinue,false);
+    assert.equal(context.window.CanvasAssistant.turnPresentation('paused').canContinue,true);
     assert.equal(context.window.CanvasAssistant.turnPresentation('cancelled').canContinue,false);
 });
 test('等待图片确认或结果时锁定新的创作输入',()=>{

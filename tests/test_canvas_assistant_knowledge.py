@@ -9,6 +9,11 @@ from backend.canvas_assistant_knowledge import ProjectKnowledge
 
 
 class ProjectKnowledgeTests(unittest.TestCase):
+    def test_current_knowledge_matches_shipped_sources_without_bypassing_write_guard(self):
+        knowledge = ProjectKnowledge()
+        self.assertEqual(knowledge.changed(knowledge.snapshot()), [],
+                         '源码修改后必须核对知识并同步索引，否则创作助手会拒绝实际写入')
+
     def test_line_endings_do_not_disable_knowledge_but_source_changes_do(self):
         with tempfile.TemporaryDirectory() as root:
             path=Path(root)/'source.py'

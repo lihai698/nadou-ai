@@ -78,7 +78,7 @@ class PersistentPlanTests(unittest.TestCase):
 
     def test_default_limits_preserve_existing_round_budget_and_no_service_permission(self):
         plan = self.plan(limits=None)
-        self.assertEqual(plan['budget']['limit'], {'modelCalls': 6, 'toolCalls': 8, 'serviceCalls': 0, 'activeSeconds': 900})
+        self.assertEqual(plan['budget']['limit'], {'modelCalls': None, 'toolCalls': None, 'serviceCalls': 0, 'activeSeconds': None})
 
     def set_limit(self, plan, total, *, canvas='canvas1', session='session1'):
         return plans.set_service_limit(plan, total, canvas_id=canvas, session_id=session)

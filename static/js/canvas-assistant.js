@@ -35,8 +35,8 @@
         } finally { reader.releaseLock(); }
     }
     function turnPresentation(state){
-        const labels={completed:'创作完成',waiting_confirmation:'等待操作确认',waiting_result:'等待图片结果',running:'正在创作',interrupted:'执行已中断，可继续创作',paused:'执行上限已到，请查看画布',cancelled:'已停止本轮',failed:'本轮未完成'};
-        return {label:labels[state]||'状态未知',failed:['failed','interrupted'].includes(state),canContinue:['interrupted','waiting_result'].includes(state),accepted:['completed','waiting_confirmation','waiting_result','paused'].includes(state)};
+        const labels={completed:'创作完成',waiting_confirmation:'等待操作确认',waiting_result:'等待图片结果',running:'正在创作',interrupted:'执行已中断，可继续创作',paused:'创作暂未完成，可继续',cancelled:'已停止本轮',failed:'本轮未完成'};
+        return {label:labels[state]||'状态未知',failed:['failed','interrupted'].includes(state),canContinue:['interrupted','waiting_result','paused'].includes(state),accepted:['completed','waiting_confirmation','waiting_result','paused'].includes(state)};
     }
     function composerLocked(session){ return !!session?.turns?.some(turn=>['waiting_confirmation','waiting_result'].includes(turn.state)); }
     function progressPresentation(turn){
@@ -459,11 +459,11 @@
                 const reply=document.createElement('div');reply.className='canvas-assistant-message canvas-assistant-reply';reply.textContent=turn.reply||'';
                 if(turn.state==='running'){reply.textContent=turn.reply||'';}
                 else if(['failed','interrupted'].includes(turn.state)){reply.classList.add('canvas-assistant-error');reply.textContent=turn.error||'这一轮没有完成';if(turn.state==='interrupted'){const retry=document.createElement('button');retry.type='button';retry.textContent='重新发送';retry.onclick=()=>{input.value=turn.message;syncControls();input.focus();};reply.append(retry);}}
-                else if(turn.state==='paused'){reply.textContent=turn.reply||'本轮执行已达到上限，请查看画布后发送新的创作需求。';}
+                else if(turn.state==='paused'){reply.textContent=turn.reply||'创作进度已保存，可以继续完成剩余步骤。';}
                 else if(turn.state==='cancelled'){reply.textContent=turn.error||'已停止本轮；已保存的操作仍保留。';}
                 else if(turn.state!=='completed'){reply.textContent=turn.reply||turnPresentation(turn.state).label;}
                 if(turn.state==='completed')addReplyActions(reply,turn.reply||'',Array.isArray(turn.media)?turn.media:[]);
-                if(turn.state==='interrupted'){const button=document.createElement('button');button.type='button';button.textContent='继续创作';button.onclick=()=>continueTurn(turn.id);messages.append(button);}
+                if(['interrupted','paused'].includes(turn.state)){const button=document.createElement('button');button.type='button';button.textContent='继续创作';button.onclick=()=>continueTurn(turn.id);messages.append(button);}
                 messages.append(reply);
                 for(const proposal of turn.proposals||[])addProposalCard(turn,proposal,progress);
                 for(const proposal of turn.nativeActions||[])addNativeActionCard(turn,proposal,progress);

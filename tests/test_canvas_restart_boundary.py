@@ -27,10 +27,12 @@ async def probe_submit():
     import main
 
     started = asyncio.Event()
+    # 持有等待事件，让隔离任务在读取状态前不会被垃圾回收。
+    release = asyncio.Event()
 
     async def held_generator(_payload):
         started.set()
-        await asyncio.Event().wait()
+        await release.wait()
 
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=main.app), base_url="http://isolated"

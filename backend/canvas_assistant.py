@@ -29,6 +29,7 @@ from backend.canvas_assistant_state import canvas_overview, read_node_state
 from backend.canvas_assistant_native import native_catalog, prepare_native_action, validate_native_snapshot, native_effect, native_run_result, native_task_reference, native_task_binding, public_native_task, public_workflow_fields, native_run_input_hash, native_comfy_foreign_busy, native_smart_group_foreign_busy, validate_video_run_provider
 from backend.canvas_assistant_loop import loop_foreign_busy, loop_plan
 from backend.canvas_assistant_lora import read_lora_catalog
+from backend.diagnostics import write_diagnostic
 
 
 class SessionRequest(BaseModel):
@@ -320,15 +321,13 @@ class AssistantStore:
                 if turn["agent"].get("consumedTasks"):
                     return copy.deepcopy(turn), False
                 raise HTTPException(409, "这一轮已经完成")
-            if (turn['agent'].get('plan') or {}).get('state') != 'completed' and (turn["agent"]["modelCalls"] >= 6 or turn["agent"]["toolCalls"] >= 8 or turn["agent"]["activeSeconds"] >= 900):
-                raise HTTPException(409, "本轮执行预算已用完，请发送新的需求")
             if any(t.get("state") == "running" for s in doc["sessions"].values() for t in s["turns"]):
                 raise HTTPException(409, "当前画布有正在执行的助手回合，请等待或停止")
             execution_id = uuid.uuid4().hex
             plan = turn['agent'].get('plan')
             if plan and plan['state'] != 'completed':
                 remaining=plan['budget']['limit'];used=plan['budget']['used']
-                if any(used[key]>=remaining[key] for key in ('modelCalls','toolCalls','activeSeconds')):
+                if any(remaining[key] is not None and used[key]>=remaining[key] for key in ('modelCalls','toolCalls','activeSeconds')):
                     raise HTTPException(409, '累计执行预算已用完，进度已保留；不能通过继续重置额度')
                 if plan['state'] == 'running':
                     plan = persistent_plan.stop_plan(plan,execution_id=plan['executionId'])
@@ -461,7 +460,7 @@ def assistant_output_media(result):
     return output
 
 
-def create_assistant_router(*, root, load_canvas, providers, user_id, call_model, apply_operations=None, notify_changed=None, load_reference_assets=None, submit_image=None, query_image=None, query_native_task=None, control_native_task=None, workflow_fields=None, skill_catalog=None, resolve_result_file=None, result_roots=None, media_export_prepare=None, media_export_control=None):
+def create_assistant_router(*, root, load_canvas, providers, user_id, call_model, apply_operations=None, notify_changed=None, load_reference_assets=None, submit_image=None, query_image=None, query_native_task=None, control_native_task=None, workflow_fields=None, skill_catalog=None, resolve_result_file=None, result_roots=None, media_export_prepare=None, media_export_control=None, public_error=None):
     def current_workflow_fields(canvas, node_id):
         node=next((n for n in canvas.get('nodes',[]) if n.get('id')==node_id),None)
         return workflow_fields(node) if workflow_fields and node and node.get('type') in {'rh','comfy'} else None
@@ -586,9 +585,10 @@ def create_assistant_router(*, root, load_canvas, providers, user_id, call_model
                 plan = state['plan']
                 delta = state['activeSeconds'] - plan['budget']['used']['activeSeconds']
                 if delta > 0:
-                    remaining = plan['budget']['limit']['activeSeconds'] - plan['budget']['used']['activeSeconds']
-                    state = await budget(state, {'activeSeconds':min(delta,remaining)}, f"time:{payload._execution_id}:{state['activeSeconds']}")
-                    if delta > remaining:
+                    limit = plan['budget']['limit']['activeSeconds']
+                    remaining = None if limit is None else limit - plan['budget']['used']['activeSeconds']
+                    state = await budget(state, {'activeSeconds':delta if remaining is None else min(delta,remaining)}, f"time:{payload._execution_id}:{state['activeSeconds']}")
+                    if remaining is not None and delta > remaining:
                         raise persistent_plan.BudgetExhausted()
             await asyncio.to_thread(store.checkpoint, user, payload, state, step)
 
@@ -749,11 +749,14 @@ def create_assistant_router(*, root, load_canvas, providers, user_id, call_model
             if name == "read_skill":
                 skill = SkillCatalog.read(agent["skillSnapshot"], args["skillId"], args["file"])
                 return {"skill": skill}
-            if name in {"apply_canvas_operations", "propose_image", "legacy_operations"}:
+            if name in {"apply_canvas_operations", "propose_image", "legacy_operations", "create_story_workflow"}:
                 if agent.get("knowledgeSnapshot") and ProjectKnowledge.changed(agent["knowledgeSnapshot"]):
                     raise HTTPException(409, "项目知识来源已变化，当前回合保留旧知识快照；请复核知识资料后开始新回合，未写入画布")
-                raw_ops = args.get("operations") if name != "propose_image" else [
-                    {"op": "propose_image", "operationId": "image1", "title": args["title"], "prompt": args["prompt"]}]
+                if name == 'create_story_workflow':
+                    raw_ops = [{**args, 'op':'story_workflow', 'operationId':'story-workflow'}]
+                else:
+                    raw_ops = args.get("operations") if name != "propose_image" else [
+                        {"op": "propose_image", "operationId": "image1", "title": args["title"], "prompt": args["prompt"]}]
                 plan = AssistantPlan.model_validate({"reply": reply or "保存画布操作", "operations": raw_ops})
                 # Shield只保护原子保存；停止后的checkpoint阻止下一模型/工具。
                 writer = asyncio.create_task(asyncio.to_thread(store.apply_step, user, payload, plan.operations, apply_operations, step_id, reply, legacy))
@@ -1238,9 +1241,10 @@ def create_assistant_router(*, root, load_canvas, providers, user_id, call_model
             except persistent_plan.BudgetExhausted as exc:
                 final = await asyncio.to_thread(store.finish, user, saved.canvasId, saved.sessionId, saved.requestId, 'paused', '累计预算已用完，创作进度和原任务已保留。', str(exc.detail), execution_id=saved._execution_id)
             except HTTPException as exc:
-                message = str(exc.detail) if exc.status_code in {409, 422, 404} else "读取原任务或模型失败，请稍后继续"
+                message = public_error(exc) if public_error else (str(exc.detail) if exc.status_code in {409, 422, 404} else "读取原任务或模型失败，请稍后继续")
                 final = await asyncio.to_thread(store.finish, user, saved.canvasId, saved.sessionId, saved.requestId, "interrupted", "", message, execution_id=saved._execution_id)
-            except Exception:
+            except Exception as exc:
+                write_diagnostic(f"canvas assistant continue failed error={type(exc).__name__}")
                 final = await asyncio.to_thread(store.finish, user, saved.canvasId, saved.sessionId, saved.requestId, "failed", "", "续行未完成，原任务与已保存操作已保留", execution_id=saved._execution_id)
             finally:
                 if final:
@@ -1402,9 +1406,10 @@ def create_assistant_router(*, root, load_canvas, providers, user_id, call_model
             except persistent_plan.BudgetExhausted as exc:
                 final = await asyncio.to_thread(store.finish, user, payload.canvasId, payload.sessionId, payload.requestId, 'paused', '累计预算已用完，创作进度和原任务已保留。', str(exc.detail), execution_id=payload._execution_id)
             except HTTPException as exc:
-                message = exc.detail if apply_operations and exc.status_code in {409, 422} and isinstance(exc.detail, str) else "这一轮没有完成，请检查所选平台配置与连接后重试"
+                message = public_error(exc) if public_error else (exc.detail if apply_operations and exc.status_code in {409, 422} and isinstance(exc.detail, str) else "这一轮没有完成，请检查所选平台配置与连接后重试")
                 final = await asyncio.to_thread(store.finish, user, payload.canvasId, payload.sessionId, payload.requestId, "failed", "", message, execution_id=payload._execution_id)
-            except Exception:
+            except Exception as exc:
+                write_diagnostic(f"canvas assistant chat failed error={type(exc).__name__}")
                 final = await asyncio.to_thread(store.finish, user, payload.canvasId, payload.sessionId, payload.requestId, "failed", "", "这一轮没有完成，请检查所选平台配置与连接后重试", execution_id=payload._execution_id)
             finally:
                 if final:

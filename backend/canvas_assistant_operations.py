@@ -11,6 +11,7 @@ from typing import Annotated, Literal, Union
 
 from fastapi import HTTPException
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from backend.canvas_assistant_story import StoryWorkflow, create_story_nodes
 
 
 class StrictOperation(BaseModel):
@@ -31,6 +32,8 @@ class UpdateNode(StrictOperation):
     nodeId: str = Field(pattern=r"^[a-zA-Z0-9_-]{1,100}$")
     title: str | None = Field(default=None, max_length=80)
     content: str | None = Field(default=None, max_length=12000)
+    x: float | None = Field(default=None, allow_inf_nan=False, description='画布横坐标；只改变布局')
+    y: float | None = Field(default=None, allow_inf_nan=False, description='画布纵坐标；只改变布局')
 
 
 class ConnectNodes(StrictOperation):
@@ -45,10 +48,14 @@ class ProposeImage(StrictOperation):
     prompt: str = Field(min_length=1, max_length=12000)
 
 
+class CreateStoryWorkflow(StrictOperation, StoryWorkflow):
+    op: Literal['story_workflow']
+
+
 class AssistantPlan(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
     reply: str = Field(min_length=1, max_length=24000)
-    operations: list[Annotated[Union[CreateNode, UpdateNode, ConnectNodes, ProposeImage], Field(discriminator="op")]] = Field(default_factory=list, max_length=20)
+    operations: list[Annotated[Union[CreateNode, UpdateNode, ConnectNodes, ProposeImage, CreateStoryWorkflow], Field(discriminator="op")]] = Field(default_factory=list, max_length=20)
 
 
 OPERATION_GUIDE = """你是当前画布的创作助手，使用简体中文。
@@ -66,7 +73,7 @@ type 只可为 prompt、text、image_generator、video_generator；新节点位�
 普通画布新建 image_generator、video_generator 时 content 必须为空字符串，正文放在上游 prompt 节点。
 视频节点只创建原生 API 视频工作节点，不运行生成。生成模型由用户原有选择决定。
 修改：{"op":"update","operationId":"u1","nodeId":"已有节点ID","title":"新标题","content":"新正文"}。
-title、content 可只提供一项。普通生成节点的提示词应通过其上游 prompt 节点修改，不向生成节点写未知字段。
+title、content、x、y 可只提供一项；x/y仅改变节点布局，不重写内容或提交任务。普通生成节点的提示词应通过其上游 prompt 节点修改，不向生成节点写未知字段。
 智能图片/循环节点的 content 是下一次生成草稿，不是已生成结果或已提交任务提示词。
 连线：{"op":"connect","operationId":"e1","from":"已有ID或本轮ref","to":"已有ID或本轮ref"}。
 同轮新节点用 ref 引用，不能猜测已有节点ID，不能连自己或制造环路。最多20个操作。
@@ -220,6 +227,7 @@ def prepare_operations(canvas, operations, *, request_id, user, expected_updated
     created, updated, edges, affected = [], [], [], []
     generation = None
     proposals = []
+    workflows = []
     # 新节点置于现有节点下方，不覆盖正在编辑的节点。
     base_y = max([float(n.get("y", 0)) + max(float(n.get("h", 300)), 300) for n in nodes] or [0]) + 90
     base_x = min([float(n.get("x", 100)) for n in nodes] or [100])
@@ -227,7 +235,15 @@ def prepare_operations(canvas, operations, *, request_id, user, expected_updated
         if op.operationId in operation_ids:
             raise HTTPException(422, "同一轮操作编号重复，本轮未执行")
         operation_ids.add(op.operationId)
-        if isinstance(op, ProposeImage):
+        if isinstance(op, CreateStoryWorkflow):
+            if not image_model_confirmed:
+                raise HTTPException(409, '请先手动选择并勾选图片模型，工作流只创建节点、不生成')
+            generation = generation_settings(canvas, creation_settings, providers)
+            data = StoryWorkflow.model_validate(op.model_dump(exclude={'op', 'operationId'}))
+            added, linked, workflow = create_story_nodes(candidate, data, key=key+':'+op.operationId, settings=generation, x=base_x, y=base_y)
+            created.extend(added); edges.extend(linked); affected.extend([op.sourceNodeId,*added]);workflows.append(workflow)
+            by_id.update({n['id']:n for n in nodes})
+        elif isinstance(op, ProposeImage):
             if proposals:
                 raise HTTPException(422, "一轮只提出一个图片方案，请分开创作")
             if not image_model_confirmed:
@@ -264,14 +280,23 @@ def prepare_operations(canvas, operations, *, request_id, user, expected_updated
                 raise HTTPException(409, "要修改的节点已不存在，本轮未执行")
             if is_busy(node):
                 raise HTTPException(409, "目标节点正在运行，本轮未修改，请等待任务结束")
-            if op.title is None and op.content is None:
+            if all(value is None for value in (op.title, op.content, op.x, op.y)):
                 raise HTTPException(422, "节点修改没有提供内容，本轮未执行")
             before = copy.deepcopy(node)
+            for field in ('x', 'y'):
+                value = getattr(op, field)
+                if value is not None:
+                    node[field] = value
             if op.title is not None:
                 node["title"] = op.title
             if op.content is not None:
                 if node.get("type") in {"prompt", "text", "smart-prompt"}:
                     node["text"] = op.content
+                    if node.get('type') == 'smart-prompt' and node.get('storyWorkflowOrigin'):
+                        from backend.canvas_assistant_story import sync_story_prompt
+                        synced = sync_story_prompt(candidate, node, op.content)
+                        updated.extend(nid for nid in synced if nid not in updated)
+                        affected.extend(synced)
                 elif kind == "smart" and node.get("type") in {"smart-loop", "smart-image"}:
                     node.update(promptDraftText=op.content, promptDraftHtml=html.escape(op.content), promptDraftTouched=True)
                 else:
@@ -314,7 +339,7 @@ def prepare_operations(canvas, operations, *, request_id, user, expected_updated
         if original is None:
             continue
         changes = {name: {"before": original.get(name), "after": node.get(name)}
-                   for name in ("title", "text", "promptDraftText", "promptDraftHtml", "promptDraftTouched", "inputNodeIds", "showPrompt", "imageInput")
+                   for name in ("title", "text", "promptDraftText", "promptDraftHtml", "promptDraftTouched", "inputNodeIds", "showPrompt", "imageInput", "shotTableData", "x", "y")
                    if original.get(name) != node.get(name)}
         if changes:
             patches.append({"nodeId": node["id"], "fields": changes})
@@ -323,6 +348,8 @@ def prepare_operations(canvas, operations, *, request_id, user, expected_updated
     summary = {"createdNodeIds": created, "updatedNodeIds": updated, "createdEdgeIds": edges, "affectedNodeIds": list(dict.fromkeys(affected)), "nodePatches": patches,
                "operationIds": [op.operationId for op in operations], "operationHash": digest,
                "updatedAtBefore": expected_updated_at, "contentHashBefore": content_hash(canvas), "contentHashAfter": content_hash(candidate)}
+    if workflows:
+        summary['storyWorkflows'] = workflows
     if proposals:
         from backend.canvas_assistant_generation import bind_snapshot
         for proposal in proposals:
