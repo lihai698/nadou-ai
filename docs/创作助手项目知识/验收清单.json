@@ -14831,13 +14831,13 @@
     "featureId": "classic.audio.controls",
     "explanation": "passed",
     "read": "passed",
-    "operation": "pending",
-    "automatedCheck": "pending",
-    "uiCheck": "pending",
+    "operation": "passed",
+    "automatedCheck": "passed",
+    "uiCheck": "passed",
     "supplierCheck": "not_applicable",
     "reason": "当前合同只读或本地保护，不调用供应商",
-    "evidence": "static/js/canvas-audio.js:mediaHtml",
-    "readScope": "音频知识正文可读；操作验收只覆盖明确列出的本地证据。",
+    "evidence": "docs/普通画布音频本地验收-20261011.md; output/audio-acceptance-20261011/evidence.json; tests/canvas_audio_node.test.cjs; tests/test_canvas_assistant_native.py; tests/test_canvas_assistant_state.py",
+    "readScope": "说明与节点状态可读；passed仅覆盖本行登记的本地合同范围，真实模型效果另行验收。",
     "readEvidence": "skills/canvas-assistant/project-knowledge/nodes/classic-audio.md; tests/test_canvas_assistant_knowledge.py",
     "localReview": {
       "reviewDate": "2026-10-11",
@@ -14850,7 +14850,16 @@
       ],
       "source": "backend/canvas_assistant_native.py:native_catalog",
       "savedActionEvidence": [],
-      "scopeNote": "不开放助手音频生成；已有专项自动检查不替代所有界面、失败和重开边界。"
+      "scopeNote": "上传、播放、波形、下载、存入素材库、错误下载和非音频上传拒绝；WAV文件内容校验一致。 仅本地合同与模拟模型证据，不代表真实供应商或模型音质。",
+      "uiEvidence": [
+        "output/audio-acceptance-20261011/upload-after.png",
+        "output/audio-acceptance-20261011/upload-reopened.png",
+        "output/audio-acceptance-20261011/controls-playing.png",
+        "output/audio-acceptance-20261011/library.png",
+        "output/audio-acceptance-20261011/download-error.png",
+        "output/audio-acceptance-20261011/upload-type-rejected.png"
+      ],
+      "acceptanceEnvironment": "独立3048公开源码副本/自制数据，真实供应商0"
     }
   },
   {
@@ -14858,13 +14867,13 @@
     "featureId": "classic.audio.read_state",
     "explanation": "passed",
     "read": "passed",
-    "operation": "partial",
+    "operation": "passed",
     "automatedCheck": "passed",
-    "uiCheck": "pending",
+    "uiCheck": "passed",
     "supplierCheck": "not_applicable",
     "reason": "当前合同只读或本地保护，不调用供应商",
-    "evidence": "tests/test_canvas_assistant_state.py:test_audio_material_and_paused_task_are_read_without_private_settings",
-    "readScope": "音频知识正文可读；操作验收只覆盖明确列出的本地证据。",
+    "evidence": "docs/普通画布音频本地验收-20261011.md; output/audio-acceptance-20261011/evidence.json; tests/canvas_audio_node.test.cjs; tests/test_canvas_assistant_native.py; tests/test_canvas_assistant_state.py",
+    "readScope": "说明与节点状态可读；passed仅覆盖本行登记的本地合同范围，真实模型效果另行验收。",
     "readEvidence": "skills/canvas-assistant/project-knowledge/nodes/classic-audio.md; tests/test_canvas_assistant_knowledge.py",
     "localReview": {
       "reviewDate": "2026-10-11",
@@ -14879,7 +14888,12 @@
       "savedActionEvidence": [
         "tests/test_canvas_assistant_state.py:test_audio_material_and_paused_task_are_read_without_private_settings"
       ],
-      "scopeNote": "不开放助手音频生成；已有专项自动检查不替代所有界面、失败和重开边界。"
+      "scopeNote": "真实助手工具读取素材和模拟识别正文，原编号保留，内部请求快照未进入助手状态。 仅本地合同与模拟模型证据，不代表真实供应商或模型音质。",
+      "uiEvidence": [
+        "output/audio-acceptance-20261011/read-material.png",
+        "output/audio-acceptance-20261011/read-recognition.png"
+      ],
+      "acceptanceEnvironment": "独立3048公开源码副本/自制数据，真实供应商0"
     }
   },
   {
@@ -14887,13 +14901,13 @@
     "featureId": "classic.audio.busy_guard",
     "explanation": "passed",
     "read": "passed",
-    "operation": "partial",
+    "operation": "passed",
     "automatedCheck": "passed",
-    "uiCheck": "pending",
+    "uiCheck": "passed",
     "supplierCheck": "not_applicable",
     "reason": "当前合同只读或本地保护，不调用供应商",
-    "evidence": "tests/test_canvas_assistant_native.py:test_paused_audio_blocks_writes_until_original_task_has_ended",
-    "readScope": "音频知识正文可读；操作验收只覆盖明确列出的本地证据。",
+    "evidence": "docs/普通画布音频本地验收-20261011.md; output/audio-acceptance-20261011/evidence.json; tests/canvas_audio_node.test.cjs; tests/test_canvas_assistant_native.py; tests/test_canvas_assistant_state.py",
+    "readScope": "说明与节点状态可读；passed仅覆盖本行登记的本地合同范围，真实模型效果另行验收。",
     "readEvidence": "skills/canvas-assistant/project-knowledge/nodes/classic-audio.md; tests/test_canvas_assistant_knowledge.py",
     "localReview": {
       "reviewDate": "2026-10-11",
@@ -14908,7 +14922,11 @@
       "savedActionEvidence": [
         "tests/test_canvas_assistant_native.py:test_paused_audio_blocks_writes_until_original_task_has_ended"
       ],
-      "scopeNote": "不开放助手音频生成；已有专项自动检查不替代所有界面、失败和重开边界。"
+      "scopeNote": "界面实测query-paused恢复为unknown后只查询原编号、拒绝写入；queued/running等其它状态由专项回归覆盖。 仅本地合同与模拟模型证据，不代表真实供应商或模型音质。",
+      "uiEvidence": [
+        "output/audio-acceptance-20261011/busy-rejected.png"
+      ],
+      "acceptanceEnvironment": "独立3048公开源码副本/自制数据，真实供应商0"
     }
   },
   {
@@ -14916,13 +14934,13 @@
     "featureId": "classic.audio.readonly_contract",
     "explanation": "passed",
     "read": "passed",
-    "operation": "partial",
+    "operation": "passed",
     "automatedCheck": "passed",
-    "uiCheck": "pending",
+    "uiCheck": "passed",
     "supplierCheck": "not_applicable",
     "reason": "当前合同只读或本地保护，不调用供应商",
-    "evidence": "tests/test_canvas_assistant_native.py:test_audio_catalog_is_read_only",
-    "readScope": "音频知识正文可读；操作验收只覆盖明确列出的本地证据。",
+    "evidence": "docs/普通画布音频本地验收-20261011.md; output/audio-acceptance-20261011/evidence.json; tests/canvas_audio_node.test.cjs; tests/test_canvas_assistant_native.py; tests/test_canvas_assistant_state.py",
+    "readScope": "说明与节点状态可读；passed仅覆盖本行登记的本地合同范围，真实模型效果另行验收。",
     "readEvidence": "skills/canvas-assistant/project-knowledge/nodes/classic-audio.md; tests/test_canvas_assistant_knowledge.py",
     "localReview": {
       "reviewDate": "2026-10-11",
@@ -14937,7 +14955,12 @@
       "savedActionEvidence": [
         "tests/test_canvas_assistant_native.py:test_audio_catalog_is_read_only"
       ],
-      "scopeNote": "不开放助手音频生成；已有专项自动检查不替代所有界面、失败和重开边界。"
+      "scopeNote": "真实助手创建、修改、运行音频素材均返回拒绝，预览确认和续行完成；没有生成任务。 仅本地合同与模拟模型证据，不代表真实供应商或模型音质。",
+      "uiEvidence": [
+        "output/audio-acceptance-20261011/readonly-rejected.png",
+        "output/audio-acceptance-20261011/native-preview-completed.png"
+      ],
+      "acceptanceEnvironment": "独立3048公开源码副本/自制数据，真实供应商0"
     }
   },
   {
@@ -14945,13 +14968,13 @@
     "featureId": "classic.audio.media_preview",
     "explanation": "passed",
     "read": "passed",
-    "operation": "pending",
-    "automatedCheck": "pending",
-    "uiCheck": "pending",
+    "operation": "partial",
+    "automatedCheck": "partial",
+    "uiCheck": "partial",
     "supplierCheck": "not_applicable",
     "reason": "当前合同只读或本地保护，不调用供应商",
-    "evidence": "backend/canvas_assistant_native.py:native_catalog",
-    "readScope": "音频知识正文可读；操作验收只覆盖明确列出的本地证据。",
+    "evidence": "docs/普通画布音频本地验收-20261011.md; output/audio-acceptance-20261011/evidence.json; tests/canvas_audio_node.test.cjs; tests/test_canvas_assistant_native.py; tests/test_canvas_assistant_state.py",
+    "readScope": "说明与节点状态可读；passed仅覆盖本行登记的本地合同范围，真实模型效果另行验收。",
     "readEvidence": "skills/canvas-assistant/project-knowledge/nodes/classic-audio.md; tests/test_canvas_assistant_knowledge.py",
     "localReview": {
       "reviewDate": "2026-10-11",
@@ -14964,7 +14987,12 @@
       ],
       "source": "backend/canvas_assistant_native.py:native_catalog",
       "savedActionEvidence": [],
-      "scopeNote": "不开放助手音频生成；已有专项自动检查不替代所有界面、失败和重开边界。"
+      "scopeNote": "真实WAV播放、只读预览、缺失文件和伪WAV失败提示已验；其余容器逐格式播放仍待验。 仅本地合同与模拟模型证据，不代表真实供应商或模型音质。",
+      "uiEvidence": [
+        "output/audio-acceptance-20261011/media-errors.png",
+        "output/audio-acceptance-20261011/native-preview-completed.png"
+      ],
+      "acceptanceEnvironment": "独立3048公开源码副本/自制数据，真实供应商0"
     }
   },
   {
@@ -14972,13 +15000,13 @@
     "featureId": "classic.audio.persistence",
     "explanation": "passed",
     "read": "passed",
-    "operation": "pending",
-    "automatedCheck": "pending",
-    "uiCheck": "pending",
+    "operation": "passed",
+    "automatedCheck": "passed",
+    "uiCheck": "passed",
     "supplierCheck": "not_applicable",
     "reason": "当前合同只读或本地保护，不调用供应商",
-    "evidence": "static/js/canvas-audio.js:migrate",
-    "readScope": "音频知识正文可读；操作验收只覆盖明确列出的本地证据。",
+    "evidence": "docs/普通画布音频本地验收-20261011.md; output/audio-acceptance-20261011/evidence.json; tests/canvas_audio_node.test.cjs; tests/test_canvas_assistant_native.py; tests/test_canvas_assistant_state.py",
+    "readScope": "说明与节点状态可读；passed仅覆盖本行登记的本地合同范围，真实模型效果另行验收。",
     "readEvidence": "skills/canvas-assistant/project-knowledge/nodes/classic-audio.md; tests/test_canvas_assistant_knowledge.py",
     "localReview": {
       "reviewDate": "2026-10-11",
@@ -14991,7 +15019,13 @@
       ],
       "source": "backend/canvas_assistant_native.py:native_catalog",
       "savedActionEvidence": [],
-      "scopeNote": "不开放助手音频生成；已有专项自动检查不替代所有界面、失败和重开边界。"
+      "scopeNote": "上传返回重开、旧image+mediaKind音频迁移、节点和连线编号、语言参数、识别正文及原任务编号保留。 仅本地合同与模拟模型证据，不代表真实供应商或模型音质。",
+      "uiEvidence": [
+        "output/audio-acceptance-20261011/upload-reopened.png",
+        "output/audio-acceptance-20261011/legacy-reopened.png",
+        "output/audio-acceptance-20261011/recognition-restored.png"
+      ],
+      "acceptanceEnvironment": "独立3048公开源码副本/自制数据，真实供应商0"
     }
   }
 ]

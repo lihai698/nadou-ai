@@ -12,13 +12,20 @@ function canvasAudioProviderOptions(selectedId){
         .map(p=>`<option value="${escapeAttr(p.id)}" ${selectedId===p.id?'selected':''}>${escapeHtml(p.name || p.id)}</option>`).join('');
 }
 function canvasAudioMaterialHost(){
-    return {save:scheduleSave, download:item=>downloadUrl(item.url,item.name || outputImageName(item.url)),
+    return {save:scheduleSave, download:async item=>{
+        const name=item.name || outputImageName(item.url);
+        const response=await fetch(`/api/download-output?url=${encodeURIComponent(item.url)}&name=${encodeURIComponent(name)}`);
+        if(!response.ok)throw new Error(await responseErrorMessage(response,'音频下载失败'));
+        const blob=await response.blob();
+        if(!blob.size)throw new Error('音频文件为空，无法下载');
+        downloadBlob(blob,name);
+    },
         library:async item=>{if(!canvasAssetLibrary?.libraries?.length)await loadCanvasAssetLibrary({renderPanel:false});return addUrlToCanvasAssetLibrary(item.url,item.name);},error:message=>showErrorModal(message,'音频素材')};
 }
 function renderCanvasAudioMaterial(node){
     const wrap=document.createElement('div');
     wrap.innerHTML=window.CanvasAudio.mediaHtml(node);
-    window.CanvasAudio.bindMedia(wrap,node,node,canvasAudioMaterialHost());
+    window.CanvasAudio.bindMedia(wrap,node,node,{...canvasAudioMaterialHost(),upload:()=>pickMediaForNode(node.id)});
     wrap.ondragover=e=>allowImageNodeDropEvent(e,wrap);
     wrap.ondrop=e=>handleImageNodeDropEvent(e,node.id,wrap);
     return wrap;

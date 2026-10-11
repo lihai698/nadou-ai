@@ -2667,12 +2667,15 @@ function addGroupNode(point){
     return addNode({id:uid('grp'), type:'group', x:p.x, y:p.y, w:300, h:220, items:[]});
 }
 function pickMediaForNode(nodeId){
+    const audioOnly = nodes.find(node => node.id === nodeId)?.type === 'audio';
     const input = document.createElement('input');
     input.type = 'file';
-    input.accept = 'image/*,video/*,audio/*';
-    input.multiple = true;
-    input.onchange = () => {
-        if(input.files?.length) fillImageNode(nodeId, input.files, {group:input.files.length > 1});
+    input.accept = audioOnly ? 'audio/*' : 'image/*,video/*,audio/*';
+    input.multiple = !audioOnly;
+    input.onchange = async () => {
+        if(!input.files?.length) return;
+        try { await fillImageNode(nodeId, input.files, {group:input.files.length > 1}); }
+        catch(error) { showErrorModal(error.message || '上传失败', audioOnly ? '音频素材' : '素材上传'); }
     };
     input.click();
 }
@@ -4478,6 +4481,9 @@ async function handleImageNodeDropEvent(e, nodeId, highlightEl){
 }
 async function fillImageNode(nodeId, files, opts={}){
     if(!ensureCanvas()) return;
+    if(nodes.find(node => node.id === nodeId)?.type === 'audio' && [...files].some(file => mediaKindForUpload(file) !== 'audio')){
+        throw new Error('音频素材节点只能替换为音频文件');
+    }
     const imgs = [...files].filter(file => ['image','video','audio'].includes(mediaKindForUpload(file))).slice(0, CANVAS_UPLOAD_MAX);
     if(!imgs.length) return;
     if(opts.group && imgs.length > 1){

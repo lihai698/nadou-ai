@@ -8,6 +8,43 @@ function productionFunction(file,start,end){
     assert.ok(from>=0&&to>from);return source.slice(from,to);
 }
 const providers=[{id:'p',name:'P',enabled:true,audio_models:['asr'],audio_generation_models:['tts']}];
+test('blank classic audio material opens the existing upload picker',()=>{
+    let host, picked;
+    const context=vm.createContext({document:{createElement:()=>({})},window:{CanvasAudio:{mediaHtml:()=>'',bindMedia:(_wrap,_item,_state,value)=>{host=value;}}},
+        canvasAudioMaterialHost:()=>({}),pickMediaForNode:id=>{picked=id;},node:{id:'audio',type:'audio'},allowImageNodeDropEvent(){},handleImageNodeDropEvent(){}});
+    vm.runInContext(productionFunction('canvas-audio-host.js','function renderCanvasAudioMaterial(','function renderCanvasApiAudio('),context);
+    vm.runInContext('renderCanvasAudioMaterial(node)',context);
+    assert.equal(typeof host.upload,'function');host.upload();assert.equal(picked,'audio');
+});
+test('classic audio download rejects a missing file instead of claiming success',async()=>{
+    const downloaded=[];
+    const context=vm.createContext({scheduleSave(){},downloadUrl:async()=>true,outputImageName:()=> 'missing.wav',
+        fetch:async()=>({ok:false,status:400}),responseErrorMessage:async()=> '音频文件不存在',
+        downloadBlob:(blob,name)=>downloaded.push({blob,name})});
+    vm.runInContext(productionFunction('canvas-audio-host.js','function canvasAudioMaterialHost(','function renderCanvasAudioMaterial('),context);
+    const host=vm.runInContext('canvasAudioMaterialHost()',context);
+    await assert.rejects(host.download({url:'/assets/missing.wav',name:'missing.wav'}),/不存在/);
+    assert.equal(downloaded.length,0);
+});
+test('classic audio picker accepts one audio file and surfaces upload errors',async()=>{
+    const input={},errors=[],calls=[];
+    const context=vm.createContext({nodes:[{id:'audio',type:'audio'}],document:{createElement:()=>input},
+        fillImageNode:async(id,files)=>{calls.push([id,files]);throw new Error('上传失败验收');},showErrorModal:message=>errors.push(message)});
+    input.click=()=>{};
+    vm.runInContext(productionFunction('canvas.js','function pickMediaForNode(','function addLLMNode('),context);
+    vm.runInContext("pickMediaForNode('audio')",context);
+    assert.equal(input.accept,'audio/*');assert.equal(input.multiple,false);
+    input.files=[{type:'audio/wav',name:'audio.wav'}];await input.onchange();
+    assert.equal(calls.length,1);assert.equal(calls[0][0],'audio');assert.deepEqual(errors,['上传失败验收']);
+});
+test('classic audio replacement rejects non-audio before uploading or changing saved material',async()=>{
+    let uploads=0;const node={id:'audio',type:'audio',url:'/assets/original.wav'};
+    const context=vm.createContext({nodes:[node],ensureCanvas:()=>true,mediaKindForUpload:file=>file.type.startsWith('audio/')?'audio':'image',
+        fetch:async()=>{uploads++;},CANVAS_UPLOAD_MAX:50});
+    vm.runInContext(productionFunction('canvas.js','async function fillImageNode(','function setImageNodeFromOutput('),context);
+    await assert.rejects(vm.runInContext("fillImageNode('audio',[{name:'wrong.png',type:'image/png'}])",context),/只能.*音频/);
+    assert.equal(uploads,0);assert.equal(node.url,'/assets/original.wav');assert.equal(node.type,'audio');
+});
 test('audio connections keep the downstream node generic until an audio model is chosen',()=>{
     const node={apiProvider:'image-p',model:'image-model',resolution:'2k'};
     assert.equal(Audio.mode(node,[{refs:[{kind:'audio',url:'/assets/a.wav'}]}]),false);
