@@ -1599,7 +1599,8 @@ function restoreClassicDraft(){
     connections = canvas.connections;
     localCanvasDirty = true;
     backupClassicDraft();
-    setClassicSaveWarning('已恢复本页尚未保存的草稿，请检查后重试保存。');
+    setClassicSaveWarning.conflict = recovered.conflicts > 0;
+    setClassicSaveWarning(recovered.conflicts ? '已恢复本机草稿，并保留冲突副本。请检查后重试保存。' : '已恢复未保存的本机草稿，请检查后重试保存。');
     return true;
 }
 async function saveCanvas(){
@@ -2213,7 +2214,9 @@ async function openCanvas(id){
         resetTransientRunState(nodes);
         sanitizeConnections();
         rememberClassicSaveBase(canvas);
-        restoreClassicDraft();
+        const draftRecoveryReady = await window.CanvasSaveRecovery?.prepareRecovery?.('classic',canvas.id,classicSaveBase,classicConflictCopy);
+        const draftRecovered = restoreClassicDraft();
+        if(draftRecoveryReady === false && !draftRecovered) setClassicSaveWarning('暂时无法读取本机草稿，已显示最近保存的画布。请检查浏览器存储后重新打开。');
         const recoveredUnsavedTasks = restoreUnsavedCanvasAcceptedTasks();
         const recoveredUnknownSubmissions = restoreUnsavedCanvasUnknownWarnings();
         pruneMissingComfyWorkflows();

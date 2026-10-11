@@ -160,7 +160,7 @@ body.studio-theme-dark .canvas-meta-pop .emoji-option:hover { background:#263449
 .workflow-transfer-meta.busy { border-color:rgba(59,130,246,.42); background:rgba(59,130,246,.1); color:var(--text); }
 .workflow-transfer-actions { display:flex; align-items:center; flex-wrap:wrap; gap:8px; }
 .workflow-export-actions { display:grid; grid-template-columns:1fr 1fr; gap:7px; }
-.workflow-export-actions .workflow-transfer-btn:last-child { grid-column:1 / -1; }
+.workflow-export-actions .workflow-transfer-btn:last-child { grid-column:1 / -1; grid-row:auto; }
 .workflow-transfer-btn { min-height:30px; border-radius:999px; border:1px solid var(--line); display:inline-flex; align-items:center; justify-content:center; gap:6px; padding:0 10px; font-size:10.5px; font-weight:850; color:var(--text); background:var(--card-solid); white-space:nowrap; }
 .workflow-transfer-btn:hover { border-color:var(--line-2); background:var(--soft-2); }
 .workflow-transfer-btn.primary { background:var(--strong); border-color:var(--strong); color:var(--strong-text); }
@@ -625,10 +625,10 @@ body.canvas-selecting .node .llm-bubble { pointer-events:none !important; }
 .rh-prompt-field textarea { height:78px; padding-top:8px; resize:vertical; white-space:pre-wrap; overflow-wrap:break-word; line-height:1.35; background:var(--panel); border-color:var(--line-2); box-shadow:inset 0 1px 0 rgba(255,255,255,.38); }
 .rh-param-list { flex:0 0 auto; min-height:0; overflow:visible; display:grid; grid-template-columns:repeat(auto-fit, minmax(128px, 1fr)); gap:7px; align-content:start; padding-right:0; }
 .rh-param-row { margin:0; }
-.rh-param-row.wide { grid-column:1 / -1; }
+.rh-param-row.wide { grid-column:1 / -1; grid-row:auto; }
 .rh-param-row .field { min-width:0; }
 .rh-empty { padding:14px 10px; border:1px dashed var(--line-2); border-radius:14px; color:var(--faint); font-size:11px; font-weight:700; text-align:center; }
-.rh-param-list .rh-empty { grid-column:1 / -1; }
+.rh-param-list .rh-empty { grid-column:1 / -1; grid-row:auto; }
 .rh-param-input { width:100%; }
 .theme-dark .rh-prompt-field textarea,
 body.theme-dark .rh-prompt-field textarea,
@@ -1574,7 +1574,19 @@ html[data-studio-scale="off"].studio-scale-managed .toolbar.scale-expanded .tool
     }
 }
 
-.canvas-save-error { position:absolute; left:50%; top:72px; z-index:30; transform:translateX(-50%); box-sizing:border-box; width:max-content; max-width:calc(100vw - 44px); display:flex; align-items:center; gap:10px; padding:10px 12px; border:1px solid #dc2626; border-radius:12px; color:#991b1b; background:#fef2f2; box-shadow:0 12px 28px var(--shadow); font-size:12px; font-weight:750; }
+.canvas-save-error { position:absolute; left:50%; top:88px; z-index:30; transform:translateX(-50%); box-sizing:border-box; width:min(640px, calc(100vw - 44px)); display:grid; grid-template-columns:minmax(0,1fr) auto auto; gap:5px 10px; padding:10px 12px; border:1px solid #dc2626; border-radius:12px; color:#991b1b; background:#fef2f2; box-shadow:0 12px 28px var(--shadow); font-size:12px; font-weight:750; }
 .canvas-save-error[hidden] { display:none; }
 .canvas-save-error button { flex:none; padding:6px 10px; border-radius:8px; color:#fff; background:#b91c1c; font-size:12px; font-weight:800; cursor:pointer; }
 .canvas-save-error button:hover { background:#991b1b; }
+.canvas-save-error > span { grid-column:1; grid-row:1; overflow-wrap:anywhere; line-height:1.5; }
+.canvas-save-error [data-draft-status] { grid-column:1; grid-row:2; font-size:11px; font-weight:500; line-height:1.5; color:var(--muted); }
+.canvas-save-error button { grid-column:2; grid-row:1 / 3; align-self:center; min-height:32px; }
+.canvas-save-error button[hidden] { display:none; }
+.canvas-save-error [data-draft-export] { grid-column:3; border:1px solid var(--line); background:var(--panel); color:var(--text); }
+.canvas-save-error [data-draft-export]:hover { background:var(--soft); }
+.theme-dark .canvas-save-error { background:var(--panel); color:#fca5a5; border-color:rgba(248,113,113,.4); }
+@media (max-width:600px) {
+    .canvas-save-error { grid-template-columns:1fr 1fr; }
+    .canvas-save-error > span,.canvas-save-error [data-draft-status] { grid-column:1 / -1; grid-row:auto; }
+    .canvas-save-error button,.canvas-save-error [data-draft-export] { grid-column:auto; grid-row:auto; width:100%; }
+}

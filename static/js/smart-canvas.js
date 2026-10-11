@@ -6289,7 +6289,13 @@ async function loadCanvas(){
         loadRecentSmartSettings();
         if(settings.comfy_workflow && !settings.comfyWorkflow) settings.comfyWorkflow = settings.comfy_workflow;
         if(settings.comfy_params && !settings.comfyParams) settings.comfyParams = settings.comfy_params;
-        restoreSmartDraft();
+        const draftRecoveryReady = await window.CanvasSaveRecovery?.prepareRecovery?.('smart',canvasId,rememberServerCanvasNodes.snapshot,smartDraftConflictCopy);
+        const draftRecovered = restoreSmartDraft();
+        if(draftRecoveryReady === false && !draftRecovered){
+            setCanvasSaveError(true);
+            const label = document.querySelector('#canvasSaveError span');
+            if(label) label.textContent = '暂时无法读取本机草稿，已显示最近保存的画布。请检查浏览器存储后重新打开。';
+        }
         restoreSmartUnsavedAcceptedTasks();
         updateProviderModels();
         applyViewport();
@@ -6324,19 +6330,21 @@ function backupSmartDraft(){
     snapshot.connections = JSON.parse(JSON.stringify(canvas.connections || []));
     return helper.saveDraft('smart',canvasId,rememberServerCanvasNodes.snapshot || canvas,snapshot);
 }
+function smartDraftConflictCopy(node){
+    const copy = cloneSmartNode(node,340,40);
+    copy.title = `${node.title || node.type || '节点'}（本地冲突副本）`;
+    return copy;
+}
 function restoreSmartDraft(){
-    const recovered = window.CanvasSaveRecovery?.recoverDraft('smart',canvasId,rememberServerCanvasNodes.snapshot,node=>{
-        const copy = cloneSmartNode(node,340,40);
-        copy.title = `${node.title || node.type || '节点'}（本地冲突副本）`;
-        return copy;
-    });
+    const recovered = window.CanvasSaveRecovery?.recoverDraft('smart',canvasId,rememberServerCanvasNodes.snapshot,smartDraftConflictCopy);
     if(!recovered) return false;
     canvas = {...recovered.canvas,viewport};
     nodes = canvas.nodes.map(normalizeLegacySmartNode).filter(Boolean);
     canvasDefaultSmartSettings = cloneSmartSettings(canvas.settings || canvasDefaultSmartSettings);
+    setCanvasSaveError.conflict = recovered.conflicts > 0;
     setCanvasSaveError(true);
     const label = document.querySelector('#canvasSaveError span');
-    if(label) label.textContent = '已恢复本页尚未保存的草稿，请检查后重试保存。';
+    if(label) label.textContent = recovered.conflicts ? '已恢复本机草稿，并保留冲突副本。请检查后重试保存。' : '已恢复未保存的本机草稿，请检查后重试保存。';
     backupSmartDraft();
     return true;
 }
