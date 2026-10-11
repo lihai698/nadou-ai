@@ -16972,7 +16972,7 @@ function insertWorkflowIntoCanvas(imported){
     });
     newNodes.forEach(node => {
         if((node.type === 'group' || node.type === 'promptGroup') && Array.isArray(node.items)){
-            node.items = node.items.map(id => idMap.get(id) || id).filter(id => idMap.has(id) || nodes.some(n => n.id === id));
+            node.items = node.items.map(id => idMap.get(id) || id).filter(id => newNodes.some(n => n.id === id) || nodes.some(n => n.id === id));
         }
     });
     remapCanvasDepthCopies(newNodes, idMap);
@@ -17214,6 +17214,8 @@ function canConnect(fromId, toId){
     if(to.type==='clip') return ['image','group','output',...CANVAS_MEDIA_OUTPUT_TYPES].includes(from.type)&&!wouldCreateGeneratorCycle(fromId,toId);
     if(to.depthCapture?.sourceId === fromId && from.type !== 'image' && from.type !== 'output') return false;
     if(to.depthCapture?.sourceId === fromId) return true;
+    if(from.type==='generator' && to.type==='llm' && (from.audioOutputText || canvasApiAudioMode(from)))return !wouldCreateGeneratorCycle(fromId,toId);
+    if(from.type==='audio')return ['generator','video','rh','comfy','minimax','ltxDirector'].includes(to.type)&&!wouldCreateGeneratorCycle(fromId,toId);
     if(CANVAS_GENERATOR_TYPES.includes(from.type)){
         if(to.type === 'output') return true;
         if(CANVAS_MEDIA_OUTPUT_TYPES.includes(from.type) && CANVAS_GENERATOR_TYPES.includes(to.type)){
@@ -17284,8 +17286,6 @@ function connectedClusterIds(seedId){
         });
     }
     return [...seen];
-    if(from.type==='generator' && to.type==='llm' && (from.audioOutputText || canvasApiAudioMode(from)))return !wouldCreateGeneratorCycle(fromId,toId);
-    if(from.type==='audio')return ['generator','video','rh','comfy','minimax','ltxDirector'].includes(to.type)&&!wouldCreateGeneratorCycle(fromId,toId);
 }
 function canvasArrangeAtomicIds(ids){
     const out = new Set((ids || []).filter(id => nodes.some(n => n.id === id)));

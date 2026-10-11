@@ -324,9 +324,9 @@ test('an edit during saving waits and sends the newest content after the first r
     const first = e.run('saveCanvas()');
     e.run("nodes[0].text='保存期间的新编辑'; scheduleSave(); saveCanvas();");
     assert.equal(e.run('sent.length'), 1);
+    e.run('fetch = (_url, options) => {sent.push(JSON.parse(options.body)); return Promise.resolve({ok:true,json:async () => ({})})}');
     e.run('completeFirst({ok:true,json:async () => ({canvas:{updated_at:123}})})');
     await first;
-    e.run('fetch = (_url, options) => {sent.push(JSON.parse(options.body)); return Promise.resolve({ok:true,json:async () => ({})})}');
     await e.run('saveCanvas()');
     assert.equal(e.run('sent[1].nodes[0].text'), '保存期间的新编辑');
     assert.equal(e.run('sent[1].base_updated_at'), 123);

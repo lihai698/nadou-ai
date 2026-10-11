@@ -998,7 +998,12 @@ function insertSmartWorkflowIntoCanvas(imported){
         idMap.set(oldId, copy.id);
         return normalizeLegacySmartNode(copy);
     }).filter(Boolean);
-    newNodes.forEach(copy => remapSmartViewAdjustRefs(copy, idMap));
+    newNodes.forEach(copy => {
+        if(copy.type === 'smart-group' && Array.isArray(copy.items)){
+            copy.items = copy.items.map(id => idMap.get(id)).filter(Boolean);
+        }
+        remapSmartViewAdjustRefs(copy, idMap);
+    });
     remapSmartDepthCopies(newNodes, idMap);
     const newConnections = srcConnections
         .map(conn => ({...JSON.parse(JSON.stringify(conn)), from:idMap.get(conn.from), to:idMap.get(conn.to)}))
@@ -1287,9 +1292,24 @@ function canvasListUrlForProject(projectId){
     const pid = rememberCanvasListProject(projectId);
     return `/static/canvas-list.html?project=${encodeURIComponent(pid)}`;
 }
-function backToCanvasList(){
-    savePromptDraftForCurrent();
-    window.location.href = canvasListUrlForProject(canvas?.project || sourceProjectId || 'default');
+let returningToCanvasList = false;
+async function backToCanvasList(){
+    if(returningToCanvasList) return;
+    returningToCanvasList = true;
+    const button = document.querySelector('.smart-back');
+    if(button) button.disabled = true;
+    try {
+        savePromptDraftForCurrent();
+        if(!await saveCanvas()){
+            setCanvasSaveError(true);
+            toast('保存失败，当前修改仍在画布中，请重试保存后再返回');
+            return;
+        }
+        window.location.href = canvasListUrlForProject(canvas?.project || sourceProjectId || 'default');
+    } finally {
+        returningToCanvasList = false;
+        if(button) button.disabled = false;
+    }
 }
 clearCurrentCanvasBtn?.addEventListener('click', clearCurrentSmartCanvas);
 
@@ -6302,7 +6322,12 @@ async function saveCanvas(){
     saveTimer = null;
     if(canvasSyncInFlight){
         canvasSaveQueued = true;
-        return false;
+        const inFlight = saveCanvas.inFlight;
+        if(!inFlight) return false;
+        const waitingCanvasId = canvasId;
+        await inFlight;
+        if(!canvas || canvasId !== waitingCanvasId) return false;
+        return saveCanvas();
     }
     const preserveRedo = redoStack.length && historyContentSignature() === redoBaseContent;
     savePromptDraftForCurrent();
@@ -6317,6 +6342,8 @@ async function saveCanvas(){
     // Storage normalization is not a new edit. Do not mask changes made before saving.
     if(preserveRedo) redoBaseContent = historyContentSignature();
     canvasSyncInFlight = true;
+    let finishSave;
+    saveCanvas.inFlight = new Promise(resolve => { finishSave = resolve; });
     try {
         const res = await fetch(`/api/canvases/${encodeURIComponent(canvasId)}`, {
             method:'PUT',
@@ -6385,6 +6412,8 @@ async function saveCanvas(){
         return false;
     } finally {
         canvasSyncInFlight = false;
+        saveCanvas.inFlight = null;
+        finishSave();
         if(canvasSaveQueued){
             canvasSaveQueued = false;
             clearTimeout(saveTimer);
@@ -6551,6 +6580,9 @@ function pasteNodes(){
         return copy;
     });
     copies.forEach(copy => {
+        if(copy.type === 'smart-group' && Array.isArray(copy.items)){
+            copy.items = copy.items.map(id => idMap.get(id) || id);
+        }
         if(Array.isArray(copy.inputNodeIds)){
             copy.inputNodeIds = copy.inputNodeIds.map(id => idMap.get(id)).filter(Boolean);
         }
@@ -13593,11 +13625,14 @@ function loadPromptDraft(subject){
 function positionComposerForNode(node){
     if(!node) return;
     const rect = nodeRect(node);
+    const nodeEl = world.querySelector(`.image-node[data-id="${CSS.escape(node.id)}"]`);
+    const height = nodeEl?.querySelector('.audio-smart-node')
+        ? Math.max(rect.height, nodeEl.offsetHeight) : rect.height;
     const gap = 14;
     const cardW = 540;
     composer.style.width = `${cardW}px`;
     composer.style.left = `${rect.x + rect.width / 2 - cardW / 2}px`;
-    composer.style.top = `${rect.y + rect.height + gap}px`;
+    composer.style.top = `${rect.y + height + gap}px`;
 }
 let composerUpdateTimer = 0;
 let composerUpdateSeq = 0;
