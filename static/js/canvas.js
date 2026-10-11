@@ -1491,6 +1491,7 @@ function refreshGeometryAfterLayout(){
 function scheduleSave(){
     if(!canvas || applyingRemoteCanvas) return;
     localCanvasDirty = true;
+    backupClassicDraft();
     setStatus('Saving...');
     clearTimeout(saveTimer);
     if(savingCanvasNow){
@@ -1540,6 +1541,67 @@ function serializableCanvasNode(node){
 function serializableCanvasNodes(list=nodes){
     return (list || []).map(serializableCanvasNode);
 }
+let classicSaveBase = null;
+function classicDraftSnapshot(){
+    return {...canvas, nodes:serializableCanvasNodes(), connections:JSON.parse(JSON.stringify(connections || []))};
+}
+function classicConflictCopy(node){
+    const copy = cloneNode(node, 340, 40);
+    copy.title = `${node.title || node.type || '节点'}（本地冲突副本）`;
+    delete copy._pending;
+    delete copy._directPending;
+    return copy;
+}
+function rememberClassicSaveBase(remote){
+    classicSaveBase = JSON.parse(JSON.stringify(remote));
+}
+function backupClassicDraft(){
+    if(typeof window === 'undefined' || !window.CanvasSaveRecovery || !canvas) return;
+    return window.CanvasSaveRecovery.saveDraft('classic',canvas.id,classicSaveBase || canvas,classicDraftSnapshot());
+}
+function setClassicSaveWarning(message=''){
+    const warning = document.getElementById('canvasSaveError');
+    if(!warning) return;
+    warning.hidden = !message;
+    const text = warning.querySelector('span');
+    if(text) text.textContent = message;
+}
+function retryCanvasSave(){ setClassicSaveWarning.conflict = false; saveCanvas(); }
+function mergeRemoteCanvasEdits(remote){
+    if(!canvas || remote?.id !== canvas.id || !window.CanvasSaveRecovery) return false;
+    mergeCanvasAssistantChanges(remote);
+    const merged = window.CanvasSaveRecovery.mergeDocument(classicSaveBase,classicDraftSnapshot(),remote,classicConflictCopy);
+    const localViewport = {...viewport};
+    canvas = merged.canvas;
+    nodes = canvas.nodes;
+    connections = canvas.connections;
+    viewport = localViewport;
+    canvas.viewport = localViewport;
+    rememberClassicSaveBase(remote);
+    lastCanvasUpdatedAt = Number(remote.updated_at || 0);
+    localCanvasDirty = true;
+    sanitizeConnections();
+    backupClassicDraft();
+    render();
+    if(currentCanvasTitle) currentCanvasTitle.textContent = canvas.title || tr('canvas.untitled');
+    if(merged.conflicts){
+        setClassicSaveWarning.conflict = true;
+        setClassicSaveWarning('检测到同时修改同一节点，已保留本地冲突副本。请检查后重试保存。');
+    }
+    return true;
+}
+function restoreClassicDraft(){
+    const helper = window.CanvasSaveRecovery;
+    const recovered = helper?.recoverDraft('classic',canvas.id,classicSaveBase,classicConflictCopy);
+    if(!recovered) return false;
+    canvas = {...recovered.canvas, viewport};
+    nodes = canvas.nodes;
+    connections = canvas.connections;
+    localCanvasDirty = true;
+    backupClassicDraft();
+    setClassicSaveWarning('已恢复本页尚未保存的草稿，请检查后重试保存。');
+    return true;
+}
 async function saveCanvas(){
     if(!canvas || applyingRemoteCanvas) return false;
     if(savingCanvasNow){
@@ -1556,6 +1618,7 @@ async function saveCanvas(){
     sanitizeConnections();
     const savingCanvasId = canvas.id;
     const sentNodes = serializableCanvasNodes();
+    backupClassicDraft();
     savingCanvasNow = true;
     saveCanvasAgain = false;
     let finishSave;
@@ -1579,29 +1642,12 @@ async function saveCanvas(){
         if(res.status === 409){
             const data = await res.json().catch(() => ({}));
             const remote = data.detail?.canvas || data.canvas;
-            if(remote && mergeCanvasAssistantChanges(remote)){
-                saveCanvasAgain = true;
-                return false;
+            if(!remote || !Array.isArray(remote.nodes) || Number(remote.updated_at || 0) <= Number(lastCanvasUpdatedAt || 0)
+                && Number(remote.meta_revision || 0) === Number(canvas.meta_revision || 0)){
+                throw new Error('冲突版本不可用，已保留本地草稿。');
             }
-            if(data.detail?.reason === 'meta_conflict'){
-                if(!remote || !Array.isArray(remote.nodes)) throw new Error('meta conflict response missing canvas');
-                canvas.title = remote.title;
-                canvas.icon = remote.icon || 'layers';
-                canvas.meta_revision = Number(remote.meta_revision || 0);
-                lastCanvasUpdatedAt = Number(remote.updated_at || lastCanvasUpdatedAt || 0);
-                if(currentCanvasTitle) currentCanvasTitle.textContent = canvas.title || tr('canvas.untitled');
-                saveCanvasAgain = true;
-                setStatus('Saving...');
-                return false;
-            }
-            if(localCanvasDirty || saveCanvasAgain){
-                lastCanvasUpdatedAt = Number(data.detail?.updated_at || data.updated_at || remote?.updated_at || lastCanvasUpdatedAt || 0);
-                saveCanvasAgain = true;
-                setStatus('Saving...');
-                return false;
-            }
-            if(remote) applyRemoteCanvasData(remote);
-            setStatus('Synced');
+            if(!mergeRemoteCanvasEdits(remote)) throw new Error('画布合并不可用，已保留本地草稿。');
+            saveCanvasAgain = true;
             return false;
         }
         if(!res.ok) throw new Error('save failed');
@@ -1614,6 +1660,10 @@ async function saveCanvas(){
         lastCanvasUpdatedAt = canvas.updated_at;
         if(currentCanvasTitle) currentCanvasTitle.textContent = canvas.title || tr('canvas.untitled');
         localCanvasDirty = Boolean(saveCanvasAgain);
+        rememberClassicSaveBase(data.canvas);
+        if(localCanvasDirty) backupClassicDraft();
+        else if(typeof window !== 'undefined') window.CanvasSaveRecovery?.clearDraft('classic',savingCanvasId);
+        if(typeof window !== 'undefined' && window.CanvasSaveRecovery && !setClassicSaveWarning.conflict) setClassicSaveWarning('');
         if(currentCanvasTime) currentCanvasTime.textContent = formatCanvasTime(canvas.updated_at);
         setStatus('Saved');
         clearUnsavedCanvasAcceptedTasks(savingCanvasId, data.canvas.nodes);
@@ -1621,6 +1671,9 @@ async function saveCanvas(){
         if(gateCanvasList) loadCanvasList(false);
         return true;
     } catch(e) {
+        localCanvasDirty = true;
+        backupClassicDraft();
+        if(typeof window !== 'undefined' && window.CanvasSaveRecovery) setClassicSaveWarning('保存失败，当前修改尚未保存。请检查连接后重试。');
         setStatus('Save failed');
         console.error(e);
         return false;
@@ -2159,6 +2212,8 @@ async function openCanvas(id){
         localCanvasDirty = false;
         resetTransientRunState(nodes);
         sanitizeConnections();
+        rememberClassicSaveBase(canvas);
+        restoreClassicDraft();
         const recoveredUnsavedTasks = restoreUnsavedCanvasAcceptedTasks();
         const recoveredUnknownSubmissions = restoreUnsavedCanvasUnknownWarnings();
         pruneMissingComfyWorkflows();
@@ -2192,6 +2247,7 @@ function applyRemoteCanvasData(remote){
         const localViewport = localViewportForCanvas(canvas.id, viewport || remote.viewport || {x:0, y:0, scale:1});
         const localSelectedIds = new Set(selected);
         canvas = remote;
+        rememberClassicSaveBase(remote);
         canvas.logs = canvas.logs || [];
         nodes = (canvas.nodes || []).map(n=>window.CanvasAudio.migrate(n));
         connections = canvas.connections || [];
@@ -2274,8 +2330,13 @@ async function syncRemoteCanvasNow(){
         if(!res.ok) throw new Error(tr('canvas.openFailed'));
         const data = await res.json();
         const remote = data.canvas;
-        if((localCanvasDirty || saveTimer || savingCanvasNow || saveCanvasAgain) && mergeCanvasAssistantChanges(remote)){
-            scheduleSave();
+        if(savingCanvasNow){
+            clearTimeout(remoteSyncTimer);
+            remoteSyncTimer = setTimeout(syncRemoteCanvasNow,700);
+            return;
+        }
+        if((localCanvasDirty || saveTimer || saveCanvasAgain) && Number(remote?.updated_at || 0) > Number(lastCanvasUpdatedAt || 0)){
+            if(mergeRemoteCanvasEdits(remote)) scheduleSave();
             return;
         }
         if(Number(remote?.updated_at || 0) >= Number(lastCanvasUpdatedAt || 0)){
@@ -2327,9 +2388,6 @@ function handleCanvasUpdatedMessage(data){
         remoteSyncTimer = setTimeout(syncRemoteCanvasNow, savingCanvasNow ? 700 : 120);
         return;
     }
-    clearTimeout(saveTimer);
-    saveTimer = null;
-    localCanvasDirty = false;
     clearTimeout(remoteSyncTimer);
     remoteSyncTimer = setTimeout(syncRemoteCanvasNow, savingCanvasNow ? 700 : 120);
     setStatus('Syncing...');

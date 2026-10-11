@@ -39,7 +39,7 @@ function editor() {
         const canvasForStorage = () => canvas;
         function rememberServerCanvasNodes() {}
         const saveError = {hidden:true};
-        const document = {getElementById:id => id === 'canvasSaveError' ? saveError : null};
+        const document = {getElementById:id => id === 'canvasSaveError' ? saveError : null,querySelector:() => null};
         let fetch = async () => ({ok:true,json:async () => ({})});
         const clearTimeout = () => {};
         const setTimeout = () => 1;
@@ -63,8 +63,11 @@ function editor() {
 }
 function mergeEditor() {
     const e = editor();
+    vm.runInContext(readFileSync(path.join(__dirname,'../static/js/canvas-save-recovery.js'),'utf8'),e.context);
     e.run(`
         let canvasBaseNodes = new Map();
+        const SMART_LOG_PREVIEW_NODE_ID = '__smart_log_preview__';
+        const serializableSmartNode = node => node;
         const smartNodeHasCompletedResult = () => false;
         const smartNodeInFlight = () => false;
         const completeSmartNodeWithImages = (node, images) => ({...node, images});
@@ -79,6 +82,7 @@ function mergeEditor() {
         const uid = prefix => prefix + '_conflict_copy';
     `);
     const context = e.context;
+    vm.runInContext(section('function isSmartGroupNode(', 'function isSmartRunnableNode('),context);
     vm.runInContext(section('function mergeSmartImageLists(', 'function smartNodeInFlight('), context);
     vm.runInContext(section('function mergeSmartNode(', 'async function mergeReloadCanvasNow()'), context);
     return e;

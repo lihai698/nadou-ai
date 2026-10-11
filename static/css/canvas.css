@@ -1573,3 +1573,8 @@ html[data-studio-scale="off"].studio-scale-managed .toolbar.scale-expanded .tool
         margin-left:0;
     }
 }
+
+.canvas-save-error { position:absolute; left:50%; top:72px; z-index:30; transform:translateX(-50%); box-sizing:border-box; width:max-content; max-width:calc(100vw - 44px); display:flex; align-items:center; gap:10px; padding:10px 12px; border:1px solid #dc2626; border-radius:12px; color:#991b1b; background:#fef2f2; box-shadow:0 12px 28px var(--shadow); font-size:12px; font-weight:750; }
+.canvas-save-error[hidden] { display:none; }
+.canvas-save-error button { flex:none; padding:6px 10px; border-radius:8px; color:#fff; background:#b91c1c; font-size:12px; font-weight:800; cursor:pointer; }
+.canvas-save-error button:hover { background:#991b1b; }

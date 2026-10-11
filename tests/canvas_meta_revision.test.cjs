@@ -22,6 +22,7 @@ test('classic canvas retries a same-time metadata conflict with the server title
         applyingRemoteCanvas:false, savingCanvasNow:false, saveCanvasAgain:false,
         localCanvasDirty:true, lastCanvasUpdatedAt:2000, saveTimer:null,
         currentCanvasTitle, currentCanvasTime:{textContent:''}, CLIENT_ID:'test',
+        window:{},document:{getElementById:()=>null},render(){},
         sanitizeConnections(){}, serializableCanvasNodes(){return nodes;},
         setStatus(){}, tr:key=>key, formatCanvasTime:()=>'',
         clearUnsavedCanvasAcceptedTasks(){}, clearUnsavedCanvasUnknownWarnings(){},
@@ -41,6 +42,9 @@ test('classic canvas retries a same-time metadata conflict with the server title
             }})};
         }
     });
+    vm.runInContext(readFileSync(path.join(__dirname,'../static/js/canvas-save-recovery.js'),'utf8'),context);
+    vm.runInContext(section('let classicSaveBase = null;', 'async function saveCanvas(){'),context);
+    vm.runInContext("rememberClassicSaveBase({id:'isolated',nodes:[{id:'original',type:'text'}],connections:[],updated_at:2000})",context);
     vm.runInContext(section('function mergeCanvasAssistantChanges(', 'function canvasAssistantCreationSettings(')
         +section('async function saveCanvas(){', 'async function loadConfig(){'), context);
     assert.equal(await vm.runInContext('saveCanvas()',context), false);

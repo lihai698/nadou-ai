@@ -28,7 +28,7 @@ test('a smart caller waits for an in-flight save and persists the newer snapshot
     const requests=[],releases=[];
     const e=vm.createContext({canvasId:'test',canvas:{id:'test',updated_at:1},nodes:[{id:'prompt',text:'first'}],
         canvasSyncInFlight:false,canvasSaveQueued:false,saveTimer:null,redoStack:[],redoBaseContent:'',smartClientId:'test',
-        canvasDefaultSmartSettings:{},initialSmartSettings:{},viewport:{},console:{error(){}},document:{title:'',getElementById:()=>null},
+        window:{},canvasDefaultSmartSettings:{},initialSmartSettings:{},viewport:{},console:{error(){}},document:{title:'',getElementById:()=>null},
         clearTimeout(){},setTimeout(){return 1;},savePromptDraftForCurrent(){},mediaItemForStorage:x=>x,stripImageGenerationMeta:x=>x,
         settingsForStorage:x=>x,canvasForStorage:()=>({id:'test',nodes:structuredClone(e.nodes),updated_at:1}),
         rememberServerCanvasNodes(){},setCanvasSaveError(){},tr:x=>x,

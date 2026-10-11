@@ -5417,10 +5417,13 @@ function mergeSmartImageLists(localImgs, remoteImgs){
     return out;
 }
 function rememberServerCanvasNodes(serverCanvas){
+    rememberServerCanvasNodes.snapshot = JSON.parse(JSON.stringify(serverCanvas || {}));
+    rememberServerCanvasNodes.connections = JSON.parse(JSON.stringify(serverCanvas?.connections || []));
     canvasBaseNodes = new Map((Array.isArray(serverCanvas?.nodes) ? serverCanvas.nodes : [])
         .map(node => normalizeLegacySmartNode(JSON.parse(JSON.stringify(node))))
         .filter(node => node?.id)
         .map(node => [node.id, node]));
+    rememberServerCanvasNodes.snapshot.nodes = Array.from(canvasBaseNodes.values());
 }
 function smartNodeInFlight(node){
     if(smartNodeHasCompletedResult(node)) return false;
@@ -5618,36 +5621,21 @@ function mergeSmartNode(local, remote, base=null, conflictCopies=null){
         copy.queued = false;
         delete copy.jimengPending;
         delete copy.pendingTasks;
+        Object.defineProperty(copy,'_conflictSourceId',{value:local.id});
         conflictCopies.push(copy);
     }
     return merged;
 }
 function mergeSmartNodeLists(localNodes, remoteNodes, baseNodes=canvasBaseNodes, conflictCopies=[]){
-    const localById = new Map((localNodes || []).map(n => [n.id, n]));
-    const remoteById = new Map((remoteNodes || []).map(n => [n.id, n]));
-    const order = [];
-    const seen = new Set();
-    (localNodes || []).forEach(n => { if(!seen.has(n.id)){ seen.add(n.id); order.push(n.id); } });
-    (remoteNodes || []).forEach(n => { if(!seen.has(n.id)){ seen.add(n.id); order.push(n.id); } });
-    return order.map(id => {
-        const local = localById.get(id);
-        const remote = remoteById.get(id);
-        if(local && !remote) return local;     // 仅本地存在：保留（我新建的节点；对方删了也宁可复活也不丢结果）
-        if(remote && !local) return remote;     // 仅对方存在：加入对方新建的节点
-        return mergeSmartNode(local, remote, baseNodes.get(id), conflictCopies);
-    }).filter(Boolean).concat(conflictCopies);
+    const merged = window.CanvasSaveRecovery.mergeNodes(localNodes,remoteNodes,baseNodes,
+        (local,remote,base)=>mergeSmartNode(local,remote,base,conflictCopies)).concat(conflictCopies);
+    window.CanvasSaveRecovery.placeConflictCopies(conflictCopies,[...(localNodes || []),...(remoteNodes || [])]);
+    return merged;
 }
 function mergeSmartConnections(localConns, remoteConns, nodeIds){
-    const out = [];
-    const seen = new Set();
-    [...(localConns || []), ...(remoteConns || [])].forEach(c => {
-        if(!c || !nodeIds.has(c.from) || !nodeIds.has(c.to)) return;
-        const key = `${c.from}->${c.to}:${c.kind || 'flow'}`;
-        if(seen.has(key)) return;
-        seen.add(key);
-        out.push(c);
-    });
-    return out;
+    const base = typeof rememberServerCanvasNodes === 'function' ? rememberServerCanvasNodes.connections || []
+        : typeof canvasBaseConnections !== 'undefined' ? canvasBaseConnections : [];
+    return window.CanvasSaveRecovery.mergeConnections(localConns,remoteConns,nodeIds,base);
 }
 function applyMergedServerCanvas(serverCanvas){
     if(!serverCanvas || !canvas) return false;
@@ -5657,7 +5645,18 @@ function applyMergedServerCanvas(serverCanvas){
     const mergedNodes = mergeSmartNodeLists(nodes, remoteNodes, canvasBaseNodes, conflictCopies);
     const nodeIds = new Set(mergedNodes.map(n => n.id));
     nodes = mergedNodes;
-    canvas.connections = mergeSmartConnections(canvas.connections, serverCanvas.connections, nodeIds);
+    const localConnections = canvas.connections || [];
+    canvas.connections = mergeSmartConnections(localConnections, serverCanvas.connections, nodeIds);
+    const copyIds = new Map(conflictCopies.map(n=>[n._conflictSourceId,n.id]));
+    localConnections.forEach(edge=>{
+        if(!copyIds.has(edge.from) && !copyIds.has(edge.to)) return;
+        const copy = {...edge,from:copyIds.get(edge.from)||edge.from,to:copyIds.get(edge.to)||edge.to};
+        if(copy.id) copy.id = `${copy.id}-${copyIds.get(edge.from)||copyIds.get(edge.to)}`;
+        if(nodeIds.has(copy.from)&&nodeIds.has(copy.to)) canvas.connections.push(copy);
+    });
+    nodes.filter(isSmartGroupNode).forEach(group=>{
+        if(Array.isArray(group.items)) group.items=group.items.filter(id=>nodeIds.has(id));
+    });
     const cleanedState = clearCompletedNodeBusyStates();
     const recoveredLoopOutputs = recoverStuckLoopOutputsFromLogs();
     canvas.updated_at = Number(serverCanvas.updated_at || canvas.updated_at || 0);
@@ -5671,7 +5670,14 @@ function applyMergedServerCanvas(serverCanvas){
         if(titleEl) titleEl.textContent = canvas.title;
     }
     render();
-    if(conflictCopies.length) toast('检测到同一节点同时修改，已保留本地冲突副本。');
+    if(window.CanvasSaveRecovery) backupSmartDraft();
+    if(conflictCopies.length){
+        setCanvasSaveError.conflict = true;
+        setCanvasSaveError(true);
+        const label = document.querySelector('#canvasSaveError span');
+        if(label) label.textContent = '检测到同时修改同一节点，已保留本地冲突副本。请检查后重试保存。';
+        toast('检测到同一节点同时修改，已保留本地冲突副本。');
+    }
     if(typeof scheduleConnectionLayerRefresh === 'function') scheduleConnectionLayerRefresh();
     if(cleanedState || recoveredLoopOutputs || conflictCopies.length) scheduleSave();
     resumeSmartPendingTasks();
@@ -6283,6 +6289,7 @@ async function loadCanvas(){
         loadRecentSmartSettings();
         if(settings.comfy_workflow && !settings.comfyWorkflow) settings.comfyWorkflow = settings.comfy_workflow;
         if(settings.comfy_params && !settings.comfyParams) settings.comfyParams = settings.comfy_params;
+        restoreSmartDraft();
         restoreSmartUnsavedAcceptedTasks();
         updateProviderModels();
         applyViewport();
@@ -6295,6 +6302,7 @@ async function loadCanvas(){
     } catch(e) { toast(tr('smart.toastCanvasFail')); }
 }
 function scheduleSave(){
+    if(window.CanvasSaveRecovery) backupSmartDraft();
     // Field edits can bypass pushUndo; viewport-only and no-op saves must keep redo.
     if(!undoSuppressed && redoStack.length && historyContentSignature() !== redoBaseContent){
         redoStack.length = 0;
@@ -6307,11 +6315,41 @@ function scheduleSave(){
     }
     saveTimer = setTimeout(saveCanvas, 450);
 }
+function backupSmartDraft(){
+    const helper = window.CanvasSaveRecovery;
+    if(!helper || !canvasId || !canvas) return;
+    savePromptDraftForCurrent();
+    const snapshot = canvasForStorage();
+    snapshot.nodes = nodes.filter(n=>n.id !== SMART_LOG_PREVIEW_NODE_ID).map(serializableSmartNode);
+    snapshot.connections = JSON.parse(JSON.stringify(canvas.connections || []));
+    return helper.saveDraft('smart',canvasId,rememberServerCanvasNodes.snapshot || canvas,snapshot);
+}
+function restoreSmartDraft(){
+    const recovered = window.CanvasSaveRecovery?.recoverDraft('smart',canvasId,rememberServerCanvasNodes.snapshot,node=>{
+        const copy = cloneSmartNode(node,340,40);
+        copy.title = `${node.title || node.type || '节点'}（本地冲突副本）`;
+        return copy;
+    });
+    if(!recovered) return false;
+    canvas = {...recovered.canvas,viewport};
+    nodes = canvas.nodes.map(normalizeLegacySmartNode).filter(Boolean);
+    canvasDefaultSmartSettings = cloneSmartSettings(canvas.settings || canvasDefaultSmartSettings);
+    setCanvasSaveError(true);
+    const label = document.querySelector('#canvasSaveError span');
+    if(label) label.textContent = '已恢复本页尚未保存的草稿，请检查后重试保存。';
+    backupSmartDraft();
+    return true;
+}
 function setCanvasSaveError(visible){
     const warning = document.getElementById('canvasSaveError');
-    if(warning) warning.hidden = !visible;
+    if(warning) warning.hidden = !(visible || setCanvasSaveError.conflict);
+    if(visible && !setCanvasSaveError.conflict){
+        const label = document.querySelector?.('#canvasSaveError span');
+        if(label) label.textContent = '保存失败，当前修改尚未保存。请检查连接后重试。';
+    }
 }
 function retryCanvasSave(){
+    setCanvasSaveError.conflict = false;
     clearTimeout(saveTimer);
     saveTimer = null;
     saveCanvas();
@@ -6339,6 +6377,7 @@ async function saveCanvas(){
     canvas.settings = settingsForStorage(canvasDefaultSmartSettings || initialSmartSettings);
     canvas.viewport = {...viewport};
     const storageCanvas = canvasForStorage();
+    if(window.CanvasSaveRecovery) backupSmartDraft();
     // Storage normalization is not a new edit. Do not mask changes made before saving.
     if(preserveRedo) redoBaseContent = historyContentSignature();
     canvasSyncInFlight = true;
@@ -6377,6 +6416,10 @@ async function saveCanvas(){
                 clearSmartUnsavedAcceptedTasks((storageCanvas.nodes || []).flatMap(node =>
                     (node.pendingTasks || []).map(task => task?.taskId).filter(Boolean)));
             }
+            if(window.CanvasSaveRecovery){
+                if(canvasSaveQueued) backupSmartDraft();
+                else window.CanvasSaveRecovery.clearDraft('smart',canvasId);
+            }
             setCanvasSaveError(false);
             return true;
         } else if(res.status === 409) {
@@ -6407,6 +6450,7 @@ async function saveCanvas(){
             throw new Error(`Canvas save failed: HTTP ${res.status}`);
         }
     } catch(e) {
+        if(window.CanvasSaveRecovery) backupSmartDraft();
         setCanvasSaveError(true);
         console.error(e);
         return false;
