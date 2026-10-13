@@ -12,6 +12,8 @@ from typing import Annotated, Literal, Union
 from fastapi import HTTPException
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from backend.canvas_assistant_story import StoryWorkflow, create_story_nodes
+from backend.canvas_assistant_story_analysis import StoryAnalysis, StoryAnalysisResult, create_analysis, import_analysis
+from backend.canvas_assistant_shot_prompts import ShotPrompts, ShotImages, create_shot_prompts, create_shot_images
 
 
 class StrictOperation(BaseModel):
@@ -22,7 +24,7 @@ class StrictOperation(BaseModel):
 class CreateNode(StrictOperation):
     op: Literal["create"]
     ref: str = Field(pattern=r"^[a-zA-Z0-9_-]{1,40}$")
-    type: Literal["prompt", "text", "image_generator", "video_generator"]
+    type: Literal["prompt", "text", "image_generator", "video_generator", "storyboard"]
     title: str = Field(default="", max_length=80)
     content: str = Field(default="", max_length=12000)
 
@@ -52,10 +54,26 @@ class CreateStoryWorkflow(StrictOperation, StoryWorkflow):
     op: Literal['story_workflow']
 
 
+class CreateStoryAnalysis(StrictOperation, StoryAnalysis):
+    op: Literal['story_analysis']
+
+
+class ImportStoryAnalysis(StrictOperation, StoryAnalysisResult):
+    op: Literal['story_analysis_result']
+
+
+class CreateShotPrompts(StrictOperation, ShotPrompts):
+    op: Literal['shot_prompts']
+
+
+class CreateShotImages(StrictOperation, ShotImages):
+    op: Literal['shot_images']
+
+
 class AssistantPlan(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
     reply: str = Field(min_length=1, max_length=24000)
-    operations: list[Annotated[Union[CreateNode, UpdateNode, ConnectNodes, ProposeImage, CreateStoryWorkflow], Field(discriminator="op")]] = Field(default_factory=list, max_length=20)
+    operations: list[Annotated[Union[CreateNode, UpdateNode, ConnectNodes, ProposeImage, CreateStoryWorkflow, CreateStoryAnalysis, ImportStoryAnalysis, CreateShotPrompts, CreateShotImages], Field(discriminator="op")]] = Field(default_factory=list, max_length=20)
 
 
 OPERATION_GUIDE = """你是当前画布的创作助手，使用简体中文。
@@ -68,8 +86,9 @@ OPERATION_GUIDE = """你是当前画布的创作助手，使用简体中文。
 每轮最多一个图片方案。仅需创建工作流、不需要生成时继续使用 create/connect。暂不提出视频生成方案。
 每个操作的 operationId 在本轮唯一，按依赖顺序排列。允许以下结构操作：
 创建：{"op":"create","operationId":"c1","ref":"p1","type":"prompt","title":"标题","content":"提示词"}。
-type 只可为 prompt、text、image_generator、video_generator；新节点位置和原生默认字段由程序补齐。
+type 只可为 prompt、text、image_generator、video_generator、storyboard；新节点位置和原生默认字段由程序补齐。
 普通画布图片创作使用 prompt + image_generator；智能画布图片创作使用 prompt + image_generator（对应 smart-loop）。
+storyboard 创建原生空白分镜表，不需要故事、视频或图片模型，content必须为空；创建不是已填完分镜。
 普通画布新建 image_generator、video_generator 时 content 必须为空字符串，正文放在上游 prompt 节点。
 视频节点只创建原生 API 视频工作节点，不运行生成。生成模型由用户原有选择决定。
 修改：{"op":"update","operationId":"u1","nodeId":"已有节点ID","title":"新标题","content":"新正文"}。
@@ -127,7 +146,17 @@ def generation_settings(canvas, incoming, providers):
 
 
 def new_node(kind, op, node_id, x, y, settings, created_at):
-    node = {"id": node_id, "x": x, "y": y, "title": op.title or {"prompt": "提示词", "text": "文本", "image_generator": "图片生成", "video_generator": "视频生成"}[op.type]}
+    node = {"id": node_id, "x": x, "y": y, "title": op.title or {"prompt": "提示词", "text": "文本", "image_generator": "图片生成", "video_generator": "视频生成", "storyboard": "分镜表"}[op.type]}
+    if op.type == "storyboard":
+        if op.content:
+            raise HTTPException(422, "空白分镜表不接受正文；创建后使用原生分镜编辑")
+        labels = [("shotSize", "景别"), ("motion", "运镜"), ("visual", "画面"), ("dialogue", "对白"), ("onScreenText", "屏幕文字"), ("mood", "情绪")]
+        extra = [("scene", "场景"), ("characters", "角色"), ("props", "道具"), ("sounds", "音效 / 配乐"), ("voice", "声音 / 旁白"), ("camera", "机位 / 构图"), ("action", "动作"), ("transition", "衔接")]
+        node.update(type="smart-shot-table" if kind == "smart" else "shot-table", name=node["title"], w=1120, h=390,
+                    shotTableData={"version": 1, "source": {"kind": "manual", "nodeId": "", "sourceUrl": "", "title": node["title"], "fingerprint": "manual-" + node_id, "durationSeconds": 0},
+                                   "columns": [{"id": k, "label": v, "kind": "builtin"} for k, v in labels] + [{"id": k, "label": v, "kind": "custom", "hint": v} for k, v in extra],
+                                   "rows": [], "selectedRowIds": [], "revision": 0, "analysisSettings": {}, "generationMap": {}, "task": {"status": "ready"}})
+        return node
     if op.type in {"prompt", "text"}:
         node.update(type="smart-prompt" if kind == "smart" else op.type, text=op.content)
         if kind == "smart":
@@ -228,6 +257,9 @@ def prepare_operations(canvas, operations, *, request_id, user, expected_updated
     generation = None
     proposals = []
     workflows = []
+    analyses = []
+    shot_prompts = []
+    shot_images = []
     # 新节点置于现有节点下方，不覆盖正在编辑的节点。
     base_y = max([float(n.get("y", 0)) + max(float(n.get("h", 300)), 300) for n in nodes] or [0]) + 90
     base_x = min([float(n.get("x", 100)) for n in nodes] or [100])
@@ -235,7 +267,26 @@ def prepare_operations(canvas, operations, *, request_id, user, expected_updated
         if op.operationId in operation_ids:
             raise HTTPException(422, "同一轮操作编号重复，本轮未执行")
         operation_ids.add(op.operationId)
-        if isinstance(op, CreateStoryWorkflow):
+        if isinstance(op, CreateShotImages):
+            if not image_model_confirmed:
+                raise HTTPException(409,'请先手动选择并确认图片模型')
+            settings=generation_settings(canvas,creation_settings,providers)
+            added,linked,receipt=create_shot_images(candidate,ShotImages.model_validate(op.model_dump(exclude={'op','operationId'})),settings,key+':'+op.operationId)
+            created.extend(added);edges.extend(linked);affected.extend([op.tableId,*added]);shot_images.append(receipt)
+            by_id.update({n['id']:n for n in nodes})
+        elif isinstance(op, CreateShotPrompts):
+            added,linked,receipt=create_shot_prompts(candidate,ShotPrompts.model_validate(op.model_dump(exclude={'op','operationId'})),creation_settings or {},providers)
+            created.extend(added);edges.extend(linked);affected.extend([op.tableId,*added]);shot_prompts.append(receipt)
+            by_id.update({n['id']:n for n in nodes})
+        elif isinstance(op, CreateStoryAnalysis):
+            added,linked,analysis=create_analysis(candidate,StoryAnalysis.model_validate(op.model_dump(exclude={'op','operationId'})),creation_settings or {},providers)
+            created.extend(added);edges.extend(linked);affected.extend([op.sourceNodeId,*added]);analyses.append(analysis)
+            by_id.update({n['id']:n for n in nodes})
+        elif isinstance(op, ImportStoryAnalysis):
+            added,linked,workflow=import_analysis(candidate,op.analysisNodeId)
+            created.extend(added);edges.extend(linked);affected.extend([op.analysisNodeId,workflow['tableId']]);workflows.append(workflow)
+            by_id.update({n['id']:n for n in nodes})
+        elif isinstance(op, CreateStoryWorkflow):
             if not image_model_confirmed:
                 raise HTTPException(409, '请先手动选择并勾选图片模型，工作流只创建节点、不生成')
             generation = generation_settings(canvas, creation_settings, providers)
@@ -292,7 +343,7 @@ def prepare_operations(canvas, operations, *, request_id, user, expected_updated
             if op.content is not None:
                 if node.get("type") in {"prompt", "text", "smart-prompt"}:
                     node["text"] = op.content
-                    if node.get('type') == 'smart-prompt' and node.get('storyWorkflowOrigin'):
+                    if node.get('storyWorkflowOrigin'):
                         from backend.canvas_assistant_story import sync_story_prompt
                         synced = sync_story_prompt(candidate, node, op.content)
                         updated.extend(nid for nid in synced if nid not in updated)
@@ -339,7 +390,7 @@ def prepare_operations(canvas, operations, *, request_id, user, expected_updated
         if original is None:
             continue
         changes = {name: {"before": original.get(name), "after": node.get(name)}
-                   for name in ("title", "text", "promptDraftText", "promptDraftHtml", "promptDraftTouched", "inputNodeIds", "showPrompt", "imageInput", "shotTableData", "x", "y")
+                   for name in ("title", "text", "promptDraftText", "promptDraftHtml", "promptDraftTouched", "inputNodeIds", "showPrompt", "imageInput", "shotTableData", "storyWorkflowOrigin", "x", "y")
                    if original.get(name) != node.get(name)}
         if changes:
             patches.append({"nodeId": node["id"], "fields": changes})
@@ -350,6 +401,12 @@ def prepare_operations(canvas, operations, *, request_id, user, expected_updated
                "updatedAtBefore": expected_updated_at, "contentHashBefore": content_hash(canvas), "contentHashAfter": content_hash(candidate)}
     if workflows:
         summary['storyWorkflows'] = workflows
+    if analyses:
+        summary['storyAnalyses'] = analyses
+    if shot_images:
+        summary['shotImages'] = shot_images
+    if shot_prompts:
+        summary['shotPrompts'] = shot_prompts
     if proposals:
         from backend.canvas_assistant_generation import bind_snapshot
         for proposal in proposals:

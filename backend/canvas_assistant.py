@@ -749,17 +749,24 @@ def create_assistant_router(*, root, load_canvas, providers, user_id, call_model
             if name == "read_skill":
                 skill = SkillCatalog.read(agent["skillSnapshot"], args["skillId"], args["file"])
                 return {"skill": skill}
-            if name in {"apply_canvas_operations", "propose_image", "legacy_operations", "create_story_workflow"}:
+            if name in {"apply_canvas_operations", "propose_image", "legacy_operations", "create_story_workflow", "create_story_analysis", "import_story_analysis", "create_shot_prompts", "create_shot_images"}:
                 if agent.get("knowledgeSnapshot") and ProjectKnowledge.changed(agent["knowledgeSnapshot"]):
                     raise HTTPException(409, "项目知识来源已变化，当前回合保留旧知识快照；请复核知识资料后开始新回合，未写入画布")
-                if name == 'create_story_workflow':
+                if name == 'create_shot_images':
+                    raw_ops=[{**args,'op':'shot_images','operationId':'shot-images'}]
+                elif name == 'create_shot_prompts':
+                    raw_ops=[{**args,'op':'shot_prompts','operationId':'shot-prompts'}]
+                elif name in {'create_story_analysis','import_story_analysis'}:
+                    raw_ops=[{**args,'op':'story_analysis' if name=='create_story_analysis' else 'story_analysis_result','operationId':'analysis'}]
+                elif name == 'create_story_workflow':
                     raw_ops = [{**args, 'op':'story_workflow', 'operationId':'story-workflow'}]
                 else:
                     raw_ops = args.get("operations") if name != "propose_image" else [
                         {"op": "propose_image", "operationId": "image1", "title": args["title"], "prompt": args["prompt"]}]
                 plan = AssistantPlan.model_validate({"reply": reply or "保存画布操作", "operations": raw_ops})
                 # Shield只保护原子保存；停止后的checkpoint阻止下一模型/工具。
-                writer = asyncio.create_task(asyncio.to_thread(store.apply_step, user, payload, plan.operations, apply_operations, step_id, reply, legacy))
+                operation_payload=payload.model_copy(update={'creationSettings':{**payload.creationSettings,'textProvider':payload.provider,'textModel':payload.model}})
+                writer = asyncio.create_task(asyncio.to_thread(store.apply_step, user, operation_payload, plan.operations, apply_operations, step_id, reply, legacy))
                 try:
                     summary = await asyncio.shield(writer)
                 except asyncio.CancelledError:

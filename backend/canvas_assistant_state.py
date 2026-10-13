@@ -249,9 +249,12 @@ def read_node_state(canvas: dict, node_id: str, *, text_offset: int = 0, text_li
         for field, project in (("rows", shot_row), ("columns", lambda v, p: _project(v, {"id", "label", "kind", "hint"})), ("selectedRowIds", scalar_item)):
             if isinstance(shot_table.get(field), list):
                 membership["shotTableData." + field] = bounded_array(shot_table[field], "shotTableData." + field, project)
+        if isinstance(shot_table.get('shotPromptMap'),dict):
+            links=[{'rowId':k,**_project(v,{'sourceNodeId','processorId'})} for k,v in shot_table['shotPromptMap'].items()]
+            membership['shotTableData.shotPromptMap']=bounded_array(links,'shotTableData.shotPromptMap',lambda v,p:_project(v,{'rowId','sourceNodeId','processorId'}))
         if isinstance(shot_table.get("generationMap"), dict):
-            links = [{"key": k, **_project(v, {"promptId", "generatorId", "outputId"})} for k, v in shot_table["generationMap"].items() if isinstance(k, str)]
-            membership["shotTableData.generationMap"] = bounded_array(links, "shotTableData.generationMap", lambda v, p: _project(v, {"key", "promptId", "generatorId", "outputId"}))
+            links = [{"key": k, **_project(v, {"promptId", "promptProcessorId", "generatorId", "outputId"})} for k, v in shot_table["generationMap"].items() if isinstance(k, str)]
+            membership["shotTableData.generationMap"] = bounded_array(links, "shotTableData.generationMap", lambda v, p: _project(v, {"key", "promptId", "promptProcessorId", "generatorId", "outputId"}))
         task = shot_table.get("task") or {}
         shot_task = _project(task, set("taskId status phase progress progressDetail error failureKind".split()))
         if isinstance(task, dict):

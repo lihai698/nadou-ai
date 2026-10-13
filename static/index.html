@@ -19,15 +19,16 @@
                     document.documentElement.classList.add('studio-theme-dark');
                     document.documentElement.classList.add('theme-dark');
                 }
+                document.documentElement.classList.toggle('studio-nav-hidden', localStorage.getItem('studio_sidebar_hidden') === '1');
                 document.documentElement.classList.add('studio-route-booting');
             } catch(e) {}
         })();
     </script>
-    <script src="/static/vendor/js/tailwindcss-cdn.js?v=2026.10.07.1790740572"></script>
-    <script src="/static/js/theme.js?v=2026.10.07.1790740572"></script>
-    <script src="/static/js/i18n.js?v=2026.10.07.1791325378"></script>
+    <script src="/static/vendor/js/tailwindcss-cdn.js?v=2026.10.08.1.1791691547"></script>
+    <script src="/static/js/theme.js?v=2026.10.08.1.1791376089"></script>
+    <script src="/static/js/i18n.js?v=2026.10.08.1.1791572786"></script>
     <style>
-        @import url('/static/vendor/css/fonts.css?v=2026.10.07.1790740572');
+        @import url('/static/vendor/css/fonts.css?v=2026.10.08.1.1791376105');
 
         /* 本地 Tailwind 工具类兜底：CDN 慢/未就绪时也能立刻给图标尺寸，避免首屏左侧栏空白 */
         .w-1\.5 { width: 0.375rem; }
@@ -202,8 +203,8 @@
             outline: none;
         }
 
-        .logo-ring:hover #logo-dot,
-        .logo-ring:focus-visible #logo-dot {
+        .logo-ring:hover #logo-mark,
+        .logo-ring:focus-visible #logo-mark {
             transform: scale(1.8);
         }
 
@@ -216,7 +217,7 @@
             transform: rotate(90deg) scale(.94);
         }
 
-        #logo-dot {
+        #logo-mark {
             transition: transform .16s ease, background-color .16s ease, box-shadow .16s ease;
         }
 
@@ -590,8 +591,7 @@
             overflow: hidden;
             transition: opacity 0.3s 0.5s, max-width 0.3s var(--fluid-ease) 0.5s, transform .22s var(--fluid-ease);
         }
-        .sidebar:hover .settings-fold-chevron,
-        .sidebar.is-pinned .settings-fold-chevron {
+        .sidebar:hover .settings-fold-chevron{
             opacity: .72;
             max-width: 16px;
             transition-delay: .15s, .15s, 0s;
@@ -1249,198 +1249,67 @@
             }
         }
 
-        .sidebar.is-pinned {
-            width: 80px;
-            transition-delay: 0s;
-        }
-        .sidebar.is-pinned .logo-ring {
-            transform: rotate(90deg);
-            border-radius: 50%;
-            transition-delay: 0s;
-            background: var(--nav-hover-bg);
-            color: var(--text);
-            box-shadow: 0 0 0 4px rgba(148, 163, 184, .10);
-        }
-        .sidebar.is-pinned #logo-dot {
-            background: var(--text) !important;
-            transform: scale(1.35);
-            box-shadow: 0 0 0 4px rgba(148, 163, 184, .16);
-        }
-        .sidebar.is-pinned .logo-ring:hover,
-        .sidebar.is-pinned .logo-ring:focus-visible {
-            box-shadow: 0 0 0 5px rgba(148, 163, 184, .14);
-        }
-        .sidebar.is-pinned .nav-item,
-        .sidebar.is-pinned .nav-fold-toggle {
-            width: 190px;
-            transition-delay: 0s;
-        }
-        .sidebar.is-pinned .nav-text {
-            opacity: 1;
-            transition-delay: 0.1s;
-        }
-        .sidebar.is-pinned .side-pill {
-            width: 170px;
-            gap: 8px;
-            transition-delay: 0s;
-        }
-        .sidebar.is-pinned .side-pill-text {
-            opacity: 1;
-            max-width: 120px;
-            transition-delay: .15s;
-        }
-        .sidebar.is-pinned .project-version-badge,
-        .sidebar.is-pinned .update-now-btn {
-            width: 170px;
-            transition-delay: 0s;
-        }
-        .sidebar.is-pinned .project-version-compact,
-        .sidebar.is-pinned .update-version-compact {
-            display: none;
-        }
-        .sidebar.is-pinned .project-version-full,
-        .sidebar.is-pinned .update-version-full,
-        .sidebar.is-pinned .update-action-prefix {
-            display: inline;
-        }
-        .sidebar.is-pinned .update-now-btn svg {
-            display: block;
-        }
-        .sidebar.is-pinned .update-now-text {
-            max-width: 130px;
-            transition-delay: .15s;
-        }
-
-        .sidebar.is-collapsing:hover {
-            width: 80px;
-        }
-        .sidebar.is-collapsing:hover .logo-ring {
-            transform: none;
-            border-radius: 12px;
-            background: transparent;
-        }
-        .sidebar.is-collapsing:hover .nav-item,
-        .sidebar.is-collapsing:hover .nav-fold-toggle {
-            width: 48px;
-        }
-        .sidebar.is-collapsing:hover .nav-text {
-            opacity: 0;
-        }
-        .sidebar.is-collapsing:hover .side-pill {
-            width: 44px;
-            gap: 0;
-        }
-        .sidebar.is-collapsing:hover .side-pill-text {
-            opacity: 0;
-            max-width: 0;
-        }
-        .sidebar.is-collapsing:hover .project-version-badge {
-            width: 44px;
-        }
-        .sidebar.is-collapsing:hover .project-version-compact,
-        .sidebar.is-collapsing:hover .update-version-compact {
-            display: inline;
-        }
-        .sidebar.is-collapsing:hover .project-version-full,
-        .sidebar.is-collapsing:hover .update-version-full,
-        .sidebar.is-collapsing:hover .update-action-prefix {
-            display: none;
-        }
-        .sidebar.is-collapsing:hover .update-now-btn {
-            width: 56px;
-        }
-        .sidebar.is-collapsing:hover .update-now-btn svg {
-            display: none;
-        }
-        .sidebar.is-collapsing:hover .update-now-text {
-            max-width: 42px;
-        }
-
         /* 侧栏固定为紧凑模式；保留原按钮和点击行为，仅取消整栏悬浮展开。 */
         .sidebar,
-        .sidebar:hover,
-        .sidebar.is-pinned {
+        .sidebar:hover{
             width: 80px;
             min-width: 80px;
         }
-        .sidebar:hover .logo-ring,
-        .sidebar.is-pinned .logo-ring {
+        .sidebar:hover .logo-ring{
             transform: none;
             border-radius: 12px;
             background: transparent;
             box-shadow: none;
         }
         .sidebar:hover .logo-ring:hover,
-        .sidebar:hover .logo-ring:focus-visible,
-        .sidebar.is-pinned .logo-ring:hover,
-        .sidebar.is-pinned .logo-ring:focus-visible {
+        .sidebar:hover .logo-ring:focus-visible{
             background: var(--nav-hover-bg);
             box-shadow: 0 0 0 4px rgba(148, 163, 184, .16), 0 10px 24px rgba(15, 23, 42, .08);
         }
-        .sidebar:hover .logo-ring:active,
-        .sidebar.is-pinned .logo-ring:active {
+        .sidebar:hover .logo-ring:active{
             transform: scale(.94);
         }
-        .sidebar.is-pinned #logo-dot {
-            transform: none;
-            box-shadow: none;
-        }
         .sidebar:hover .nav-item,
-        .sidebar:hover .nav-fold-toggle,
-        .sidebar.is-pinned .nav-item,
-        .sidebar.is-pinned .nav-fold-toggle {
+        .sidebar:hover .nav-fold-toggle{
             width: 48px;
         }
-        .sidebar:hover .nav-text,
-        .sidebar.is-pinned .nav-text {
+        .sidebar:hover .nav-text{
             opacity: 0;
             max-width: 0;
             pointer-events: none;
         }
-        .sidebar:hover .side-pill,
-        .sidebar.is-pinned .side-pill {
+        .sidebar:hover .side-pill{
             width: 44px;
             gap: 0;
         }
-        .sidebar:hover .side-pill-text,
-        .sidebar.is-pinned .side-pill-text {
+        .sidebar:hover .side-pill-text{
             opacity: 0;
             max-width: 0;
             pointer-events: none;
         }
-        .sidebar:hover .settings-fold-chevron,
-        .sidebar.is-pinned .settings-fold-chevron {
+        .sidebar:hover .settings-fold-chevron{
             opacity: 0;
             max-width: 0;
         }
-        .sidebar:hover .project-version-badge,
-        .sidebar.is-pinned .project-version-badge {
+        .sidebar:hover .project-version-badge{
             width: 44px;
         }
         .sidebar:hover .project-version-compact,
-        .sidebar.is-pinned .project-version-compact,
-        .sidebar:hover .update-version-compact,
-        .sidebar.is-pinned .update-version-compact {
+        .sidebar:hover .update-version-compact{
             display: inline;
         }
         .sidebar:hover .project-version-full,
-        .sidebar.is-pinned .project-version-full,
         .sidebar:hover .update-version-full,
-        .sidebar.is-pinned .update-version-full,
-        .sidebar:hover .update-action-prefix,
-        .sidebar.is-pinned .update-action-prefix {
+        .sidebar:hover .update-action-prefix{
             display: none;
         }
-        .sidebar:hover .update-now-btn,
-        .sidebar.is-pinned .update-now-btn {
+        .sidebar:hover .update-now-btn{
             width: 56px;
         }
-        .sidebar:hover .update-now-btn svg,
-        .sidebar.is-pinned .update-now-btn svg {
+        .sidebar:hover .update-now-btn svg{
             display: none;
         }
-        .sidebar:hover .update-now-text,
-        .sidebar.is-pinned .update-now-text {
+        .sidebar:hover .update-now-text{
             max-width: 42px;
         }
 
@@ -1480,25 +1349,60 @@
             transform: translateY(-50%) translateX(0);
         }
     </style>
+    <link rel="stylesheet" href="/static/css/studio-layout.css?v=2026.10.08.1.1791475154">
 </head>
 
 <body>
 
     <div class="app-shell">
-        <aside class="sidebar" id="studioSidebar">
-            <button class="logo-ring mb-12" id="sidebarLogoToggle" type="button" onclick="toggleSidebarPinned(event)" aria-pressed="false" title="固定导航栏">
-                <div class="w-1.5 h-1.5 rounded-full transition-colors" id="logo-dot" style="background:var(--text)"></div>
+        <aside class="sidebar studio-focused-nav" id="studioSidebar">
+            <button class="logo-ring mb-12" id="sidebarLogoToggle" type="button" onclick="toggleSidebarVisibility(event)" aria-controls="studioSidebar" aria-expanded="true" title="隐藏左侧菜单" aria-label="隐藏左侧菜单" data-i18n-title="studio.hideNavigation">
+                <span id="logo-mark" aria-hidden="true">N</span>
             </button>
 
             <nav>
-                <button class="nav-fold-toggle" id="local-nav-toggle" type="button" onclick="toggleLocalNav()" aria-expanded="true" title="折叠本地功能">
+                <div class="nav-item" onclick="switchUI(this, 'canvas')">
+                    <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="3" y="3" width="7" height="7"></rect>
+                        <rect x="14" y="3" width="7" height="7"></rect>
+                        <rect x="14" y="14" width="7" height="7"></rect>
+                        <rect x="3" y="14" width="7" height="7"></rect>
+                    </svg>
+                    <span class="nav-text" data-i18n="nav.canvas">无限画布</span>
+                </div>
+                <div class="nav-item" onclick="switchUI(this, 'asset-manager')">
+                    <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M4 19.5V6.8A2.8 2.8 0 0 1 6.8 4h10.4A2.8 2.8 0 0 1 20 6.8v12.7"></path>
+                        <path d="M7 8h10"></path>
+                        <path d="M7 12h10"></path>
+                        <path d="M7 16h6"></path>
+                    </svg>
+                    <span class="nav-text" data-i18n="nav.assetManager">素材库</span>
+                </div>
+                <div class="nav-divider"></div>
+                <div class="nav-item" onclick="switchUI(this, 'online')">
+                    <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 2a10 10 0 1 0 0 20A10 10 0 0 0 12 2z"></path>
+                        <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+                    </svg>
+                    <span class="nav-text" data-i18n="nav.online">在线生图</span>
+                </div>
+                <div class="nav-item" onclick="switchUI(this, 'gpt-chat')">
+                    <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                    </svg>
+                    <span class="nav-text" data-i18n="nav.gpt">GPT 对话</span>
+                </div>
+                <button class="nav-fold-toggle" id="local-nav-toggle" type="button" onclick="toggleLocalNav()" aria-expanded="false" title="折叠本地功能">
                     <svg class="nav-fold-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                        <polyline points="6 9 12 15 18 9"></polyline>
+                        <rect x="3" y="3" width="18" height="18" rx="3"></rect><path d="m3 17 6-6 4 4 3-3 5 5"></path>
                     </svg>
                     <span class="nav-text" data-i18n="nav.localTools">本地功能</span>
                 </button>
 
-                <div class="nav-fold-group" id="local-nav-group">
+            </nav>
+                <div class="nav-fold-group sidebar-popover is-collapsed" id="local-nav-group">
+                    <div class="sidebar-popover-title" data-i18n="nav.localTools">本地功能</div>
                     <div class="nav-item active" onclick="switchUI(this, 'zimage')">
                         <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.587-1.587a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
@@ -1527,51 +1431,7 @@
                     </div>
                 </div>
 
-                <!-- 分隔线 -->
-                <div style="width:32px;height:1px;background:var(--border);margin:8px auto;transition:background 0.3s;"></div>
-
-                <div class="nav-item" onclick="switchUI(this, 'online')">
-                    <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M12 2a10 10 0 1 0 0 20A10 10 0 0 0 12 2z"></path>
-                        <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
-                    </svg>
-                    <span class="nav-text" data-i18n="nav.online">在线生图</span>
-                </div>
-                <div class="nav-item" onclick="switchUI(this, 'gpt-chat')">
-                    <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-                    </svg>
-                    <span class="nav-text" data-i18n="nav.gpt">GPT 对话</span>
-                </div>
-                <div class="nav-item" onclick="switchUI(this, 'canvas')">
-                    <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <rect x="3" y="3" width="7" height="7"></rect>
-                        <rect x="14" y="3" width="7" height="7"></rect>
-                        <rect x="14" y="14" width="7" height="7"></rect>
-                        <rect x="3" y="14" width="7" height="7"></rect>
-                    </svg>
-                    <span class="nav-text" data-i18n="nav.canvas">无限画布</span>
-                </div>
-                <div class="nav-item" onclick="switchUI(this, 'asset-manager')">
-                    <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M4 19.5V6.8A2.8 2.8 0 0 1 6.8 4h10.4A2.8 2.8 0 0 1 20 6.8v12.7"></path>
-                        <path d="M7 8h10"></path>
-                        <path d="M7 12h10"></path>
-                        <path d="M7 16h6"></path>
-                    </svg>
-                    <span class="nav-text" data-i18n="nav.assetManager">素材库</span>
-                </div>
-            </nav>
-
             <div class="side-actions">
-                <button class="side-pill" onclick="switchUI(this, 'api-settings')" type="button" title="API 设置">
-                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M15 7h3a5 5 0 0 1 0 10h-3"></path>
-                        <path d="M9 17H6A5 5 0 0 1 6 7h3"></path>
-                        <line x1="8" y1="12" x2="16" y2="12"></line>
-                    </svg>
-                    <span class="side-pill-text" data-i18n="common.apiSettings">API 设置</span>
-                </button>
                 <button class="side-pill settings-fold-toggle" id="settings-fold-toggle" onclick="toggleSidebarSettings()" type="button" title="更多设置" aria-expanded="false">
                     <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <circle cx="12" cy="12" r="3"></circle>
@@ -1582,7 +1442,17 @@
                         <polyline points="6 9 12 15 18 9"></polyline>
                     </svg>
                 </button>
-                <div class="settings-fold-group is-collapsed" id="settings-fold-group">
+                <div class="settings-fold-group sidebar-popover is-collapsed" id="settings-fold-group">
+                    <div class="sidebar-popover-title" data-i18n="common.moreSettings">更多设置</div>
+                <button class="side-pill" onclick="switchUI(this, 'api-settings')" type="button" title="API 设置">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M15 7h3a5 5 0 0 1 0 10h-3"></path>
+                        <path d="M9 17H6A5 5 0 0 1 6 7h3"></path>
+                        <line x1="8" y1="12" x2="16" y2="12"></line>
+                    </svg>
+                    <span class="side-pill-text" data-i18n="common.apiSettings">API 设置</span>
+                </button>
+
                     <button class="side-pill" onclick="toggleTheme()" id="theme-toggle-btn" type="button" title="切换夜间模式">
                         <svg id="icon-moon" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
@@ -1633,7 +1503,6 @@
                         </svg>
                         <span class="side-pill-text" data-i18n="common.comfyuiSettings">工作流设置</span>
                     </button>
-                </div>
                 <button id="github-entry-btn" class="side-pill" onclick="openProjectPage()" type="button" title="nadou ai GitHub">
                     <svg fill="currentColor" stroke="none" viewBox="0 0 24 24" aria-hidden="true">
                         <path d="M12 .5a12 12 0 0 0-3.79 23.39c.6.11.82-.26.82-.58v-2.05c-3.34.73-4.04-1.42-4.04-1.42-.55-1.39-1.34-1.76-1.34-1.76-1.09-.75.08-.74.08-.74 1.21.09 1.85 1.25 1.85 1.25 1.07 1.83 2.81 1.3 3.5.99.11-.78.42-1.3.76-1.6-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.12-.3-.54-1.53.12-3.18 0 0 1.01-.32 3.3 1.23a11.45 11.45 0 0 1 6.01 0c2.29-1.55 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.77.84 1.24 1.91 1.24 3.22 0 4.61-2.81 5.63-5.49 5.93.43.37.81 1.1.81 2.22v3.29c0 .32.22.69.83.57A12 12 0 0 0 12 .5Z"></path>
@@ -1648,9 +1517,11 @@
                     <span id="update-now-text" class="update-now-text" data-i18n="update.oneClick">一键更新</span>
                 </button>
                 <div id="project-version-badge" class="project-version-badge" title="点击检测更新" role="button" tabindex="0" onclick="checkForUpdates(true)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();checkForUpdates(true);}">v-</div>
+                </div>
             </div>
 
         </aside>
+        <button id="sidebarRestoreToggle" class="logo-ring sidebar-restore-toggle" type="button" onclick="toggleSidebarVisibility(event)" aria-controls="studioSidebar" aria-expanded="false" title="恢复左侧菜单" aria-label="恢复左侧菜单" data-i18n-title="studio.showNavigation"><span aria-hidden="true">N</span></button>
         <div id="sidebarTooltip" class="sidebar-tooltip" role="tooltip" aria-hidden="true"></div>
         <script>
             /* 在侧栏 DOM 解析完后立即把 active 类移到当前页对应的入口，避免首屏先在文生图上闪一下 */
@@ -1669,16 +1540,16 @@
         </script>
 
         <main class="stage">
-            <iframe id="frame-zimage" data-src="/static/zimage.html?v=2026.10.07.1791355485" class="active" scrolling="yes"></iframe>
-            <iframe id="frame-enhance" data-src="/static/enhance.html?v=2026.10.07.1791366631" scrolling="yes"></iframe>
-            <iframe id="frame-klein" data-src="/static/klein.html?v=2026.10.07.1791355485" scrolling="yes"></iframe>
-            <iframe id="frame-angle" data-src="/static/angle.html?v=2026.10.07.1791366631" scrolling="yes"></iframe>
-            <iframe id="frame-online" data-src="/static/online.html?v=2026.10.07.1791355485" scrolling="yes"></iframe>
-            <iframe id="frame-gpt-chat" data-src="/static/gpt-chat.html?v=2026.10.07.1791366631" scrolling="yes"></iframe>
-            <iframe id="frame-asset-manager" data-src="/static/asset-manager.html?v=2026.10.07.1791366631" scrolling="yes"></iframe>
-            <iframe id="frame-api-settings" data-src="/static/api-settings.html?v=2026.10.07.1791366631" scrolling="yes"></iframe>
-            <iframe id="frame-comfyui-settings" data-src="/static/comfyui-settings.html?v=2026.10.07.1791366631" scrolling="yes"></iframe>
-            <iframe id="frame-canvas" data-src="/static/canvas-list.html?v=2026.10.07.1791366631" scrolling="yes"></iframe>
+            <iframe id="frame-zimage" data-src="/static/zimage.html?v=2026.10.08.1.1791697745" class="active" scrolling="yes"></iframe>
+            <iframe id="frame-enhance" data-src="/static/enhance.html?v=2026.10.08.1.1791697745" scrolling="yes"></iframe>
+            <iframe id="frame-klein" data-src="/static/klein.html?v=2026.10.08.1.1791697745" scrolling="yes"></iframe>
+            <iframe id="frame-angle" data-src="/static/angle.html?v=2026.10.08.1.1791697745" scrolling="yes"></iframe>
+            <iframe id="frame-online" data-src="/static/online.html?v=2026.10.08.1.1791697745" scrolling="yes"></iframe>
+            <iframe id="frame-gpt-chat" data-src="/static/gpt-chat.html?v=2026.10.08.1.1791697745" scrolling="yes"></iframe>
+            <iframe id="frame-asset-manager" data-src="/static/asset-manager.html?v=2026.10.08.1.1791575935" scrolling="yes"></iframe>
+            <iframe id="frame-api-settings" data-src="/static/api-settings.html?v=2026.10.08.1.1791697745" scrolling="yes"></iframe>
+            <iframe id="frame-comfyui-settings" data-src="/static/comfyui-settings.html?v=2026.10.08.1.1791697745" scrolling="yes"></iframe>
+            <iframe id="frame-canvas" data-src="/static/canvas-list.html?v=2026.10.08.1.1791697745" scrolling="yes"></iframe>
 
         </main>
     </div>
@@ -1776,7 +1647,7 @@
         const ACTIVE_PAGE_KEY = 'studio_active_page';
         const LOCAL_NAV_COLLAPSED_KEY = 'studio_local_nav_collapsed';
         const SIDEBAR_SETTINGS_COLLAPSED_KEY = 'studio_sidebar_settings_collapsed';
-        const SIDEBAR_PINNED_KEY = 'studio_sidebar_pinned';
+        const SIDEBAR_HIDDEN_KEY = 'studio_sidebar_hidden';
         const DEFAULT_PAGE_ID = 'zimage';
         const PAGE_IDS = ['zimage','enhance','klein','angle','online','gpt-chat','canvas','asset-manager','api-settings','comfyui-settings'];
         const LOCAL_PAGE_IDS = ['zimage','enhance','klein','angle'];
@@ -1787,40 +1658,53 @@
         const updateSource = 'github';
         let projectUpdateNotes = null;
 
-        function setSidebarPinned(pinned, options = {}) {
-            const sidebar = document.getElementById('studioSidebar');
-            const logo = document.getElementById('sidebarLogoToggle');
-            if(!sidebar) return;
-            pauseScaleInFrames();
-            sidebar.classList.toggle('is-pinned', pinned);
-            if(!pinned) {
-                sidebar.classList.add('is-collapsing');
-                window.setTimeout(() => sidebar.classList.remove('is-collapsing'), 360);
-            } else {
-                sidebar.classList.remove('is-collapsing');
-            }
-            if(logo) {
-                logo.setAttribute('aria-pressed', pinned ? 'true' : 'false');
-                logo.title = pinned ? '收起导航栏' : '固定导航栏';
-            }
-            if(!options.skipRemember) localStorage.setItem(SIDEBAR_PINNED_KEY, pinned ? '1' : '0');
+        function syncSidebarRestorePlacement() {
+            const hidden = document.documentElement.classList.contains('studio-nav-hidden');
+            let embedded = false;
+            document.querySelectorAll('iframe').forEach(frame => {
+                const doc = frame.contentDocument;
+                if(!doc) return;
+                doc.documentElement.classList.toggle('studio-nav-hidden', hidden);
+                const button = doc.getElementById('canvasSidebarRestoreToggle');
+                if(button) {
+                    const label = document.getElementById('sidebarRestoreToggle').title;
+                    button.title = label;
+                    button.setAttribute('aria-label', label);
+                    if(frame.classList.contains('active') && button.getClientRects().length) embedded = true;
+                }
+            });
+            document.documentElement.classList.toggle('studio-nav-embedded', embedded);
         }
-
-        function toggleSidebarPinned(event) {
+        function setSidebarHidden(hidden, options = {}) {
+            pauseScaleInFrames();
+            closeSidebarPopovers();
+            document.documentElement.classList.toggle('studio-nav-hidden', hidden);
+            syncSidebarRestorePlacement();
+            document.getElementById('sidebarLogoToggle').setAttribute('aria-expanded', String(!hidden));
+            const tooltip = document.getElementById('sidebarTooltip');
+            tooltip.classList.remove('is-visible');
+            tooltip.setAttribute('aria-hidden', 'true');
+            if(!options.skipRemember) localStorage.setItem(SIDEBAR_HIDDEN_KEY, hidden ? '1' : '0');
+            if(!options.skipFocus) {
+                const inlineRestore = document.querySelector('iframe.active')?.contentDocument?.getElementById('canvasSidebarRestoreToggle');
+                const focusTarget = hidden ? (inlineRestore?.getClientRects().length ? inlineRestore : document.getElementById('sidebarRestoreToggle')) : document.getElementById('sidebarLogoToggle');
+                focusTarget.focus({preventScroll:true});
+            }
+        }
+        function toggleSidebarVisibility(event) {
             event?.preventDefault?.();
             event?.stopPropagation?.();
-            const sidebar = document.getElementById('studioSidebar');
-            setSidebarPinned(!sidebar?.classList.contains('is-pinned'));
+            setSidebarHidden(!document.documentElement.classList.contains('studio-nav-hidden'));
         }
-
-        function restoreSidebarPinned() {
-            setSidebarPinned(localStorage.getItem(SIDEBAR_PINNED_KEY) === '1', { skipRemember:true });
+        function restoreSidebarVisibility() {
+            setSidebarHidden(localStorage.getItem(SIDEBAR_HIDDEN_KEY) === '1', {skipRemember:true, skipFocus:true});
         }
 
         function setLocalNavCollapsed(collapsed, options = {}) {
             const group = document.getElementById('local-nav-group');
             const toggle = document.getElementById('local-nav-toggle');
             if(group) group.classList.toggle('is-collapsed', collapsed);
+            if(!collapsed) positionSidebarPopover(group, toggle);
             if(toggle) {
                 toggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
                 toggle.title = collapsed ? '展开本地功能' : '折叠本地功能';
@@ -1829,19 +1713,20 @@
         }
 
         function toggleLocalNav() {
+            setSidebarSettingsCollapsed(true, { skipRemember:true });
             const group = document.getElementById('local-nav-group');
             setLocalNavCollapsed(!group?.classList.contains('is-collapsed'));
         }
 
         function restoreLocalNav(id) {
-            const savedCollapsed = localStorage.getItem(LOCAL_NAV_COLLAPSED_KEY) === '1';
-            setLocalNavCollapsed(savedCollapsed && !LOCAL_PAGE_IDS.includes(id), { skipRemember:true });
+            setLocalNavCollapsed(true, { skipRemember:true });
         }
 
         function setSidebarSettingsCollapsed(collapsed, options = {}) {
             const group = document.getElementById('settings-fold-group');
             const toggle = document.getElementById('settings-fold-toggle');
             if(group) group.classList.toggle('is-collapsed', collapsed);
+            if(!collapsed) positionSidebarPopover(group, toggle);
             if(toggle) {
                 toggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
                 toggle.title = collapsed ? '展开更多设置' : '收起更多设置';
@@ -1850,13 +1735,13 @@
         }
 
         function toggleSidebarSettings() {
+            setLocalNavCollapsed(true, { skipRemember:true });
             const group = document.getElementById('settings-fold-group');
             setSidebarSettingsCollapsed(!group?.classList.contains('is-collapsed'));
         }
 
         function restoreSidebarSettings(id) {
-            const savedCollapsed = localStorage.getItem(SIDEBAR_SETTINGS_COLLAPSED_KEY) !== '0';
-            setSidebarSettingsCollapsed(savedCollapsed && id !== 'comfyui-settings', { skipRemember:true });
+            setSidebarSettingsCollapsed(true, { skipRemember:true });
         }
 
         function resetStudioRootScroll() {
@@ -1867,6 +1752,34 @@
             } catch(e) {}
         }
 
+        function positionSidebarPopover(group, toggle) {
+            if(!group || !toggle) return;
+            const sidebar = document.getElementById('studioSidebar');
+            const railRect = sidebar.getBoundingClientRect();
+            const scale = railRect.width / sidebar.offsetWidth || 1;
+            const anchor = toggle.getBoundingClientRect();
+            const top = (anchor.top - railRect.top) / scale;
+            group.style.top = `${Math.max(12, Math.min(top, sidebar.clientHeight - group.offsetHeight - 12))}px`;
+        }
+        function closeSidebarPopovers() {
+            setLocalNavCollapsed(true, { skipRemember:true });
+            setSidebarSettingsCollapsed(true, { skipRemember:true });
+        }
+        document.addEventListener('pointerdown', event => {
+            if(!event.target.closest?.('#studioSidebar')) closeSidebarPopovers();
+        });
+        document.addEventListener('keydown', event => {
+            if(event.key === 'Escape') closeSidebarPopovers();
+        });
+        window.addEventListener('blur', closeSidebarPopovers);
+        window.addEventListener('resize', closeSidebarPopovers);
+        window.addEventListener('studio-ui-scale-change', closeSidebarPopovers);
+        document.querySelectorAll('iframe').forEach(frame => {
+            frame.addEventListener('load', () => {
+                frame.contentDocument?.addEventListener('pointerdown', closeSidebarPopovers);
+            });
+        });
+
         function switchUI(el, id, options = {}) {
             resetStudioRootScroll();
             if(!PAGE_IDS.includes(id)) id = DEFAULT_PAGE_ID;
@@ -1876,19 +1789,15 @@
             const target = document.getElementById('frame-' + id);
             target.classList.add('active');
             if (!target.src) target.src = target.dataset.src;
+            syncSidebarRestorePlacement();
             if(!options.skipRemember) localStorage.setItem(ACTIVE_PAGE_KEY, id);
             // sync theme to newly activated iframe
             syncThemeToFrame(target);
             syncLanguageToFrame(target);
             syncScaleToFrame(target);
-            if(LOCAL_PAGE_IDS.includes(id)) {
-                setLocalNavCollapsed(false, { skipRemember:true });
-            } else {
-                setLocalNavCollapsed(localStorage.getItem(LOCAL_NAV_COLLAPSED_KEY) === '1', { skipRemember:true });
-            }
-            if(id === 'comfyui-settings') {
-                setSidebarSettingsCollapsed(false, { skipRemember:true });
-            }
+            closeSidebarPopovers();
+            document.getElementById('local-nav-toggle').classList.toggle('active', LOCAL_PAGE_IDS.includes(id));
+            document.getElementById('settings-fold-toggle').classList.toggle('active', ['api-settings','comfyui-settings'].includes(id));
             // 切换到画布时通知刷新工作流列表（防止在 comfyui-settings 修改后画布未及时更新）
             if (id === 'canvas' && target.src) {
                 try { target.contentWindow?.postMessage({ type: 'canvas-focus' }, '*'); } catch(e) {}
@@ -1916,7 +1825,7 @@
         } catch(e) {}
 
         function restoreActivePage() {
-            restoreSidebarPinned();
+            restoreSidebarVisibility();
             const id = PAGE_IDS.includes(localStorage.getItem(ACTIVE_PAGE_KEY)) ? localStorage.getItem(ACTIVE_PAGE_KEY) : DEFAULT_PAGE_ID;
             restoreLocalNav(id);
             restoreSidebarSettings(id);
@@ -1932,17 +1841,17 @@
                 const data = await res.json();
                 const monitor = document.getElementById('nano-monitor');
                 const queueVal = document.getElementById('queue-val');
-                const logoDot = document.getElementById('logo-dot');
+                const logoMark = document.getElementById('logo-mark');
                 const total = data.total || 0;
                 const pos = data.position || 0;
                 if (pos > 0) {
                     monitor?.classList.add('is-busy');
                     if (queueVal) queueVal.innerText = `${pos}/${total}`;
-                    if (logoDot) logoDot.style.backgroundColor = '#3b82f6';
+                    if (logoMark) logoMark.style.color = '#3b82f6';
                 } else {
                     monitor?.classList.remove('is-busy');
                     if (queueVal) queueVal.innerText = total > 0 ? total : '0';
-                    if (logoDot) logoDot.style.backgroundColor = 'var(--text)';
+                    if (logoMark) logoMark.style.color = 'var(--text)';
                 }
             } catch (e) { }
         }
@@ -2093,7 +2002,10 @@
             syncStudioScaleControl();
             broadcastScaleToFrames();
         });
-        window.addEventListener('studio-lang-change', syncStudioScaleControl);
+        window.addEventListener('studio-lang-change', () => {
+            syncStudioScaleControl();
+            syncSidebarRestorePlacement();
+        });
 
         function setupSidebarTooltips() {
             const sidebar = document.getElementById('studioSidebar');
@@ -2149,6 +2061,9 @@
                 syncThemeToFrame(f);
                 syncLanguageToFrame(f);
                 syncScaleToFrame(f);
+                syncSidebarRestorePlacement();
+                const shell = f.contentDocument?.getElementById('shell');
+                if(shell) new MutationObserver(syncSidebarRestorePlacement).observe(shell, {attributes:true, attributeFilter:['class']});
             });
         });
 

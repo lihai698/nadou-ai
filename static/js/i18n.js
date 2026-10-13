@@ -1,5 +1,5 @@
 (function(){
-    const VERSION = '2026.10.07.zimage-queue-state';
+    const VERSION = '2026.10.08.canvas-navigation';
     const scripts = [
         '/static/js/i18n-core.js',
         '/static/js/i18n/common.js',
@@ -10,14 +10,14 @@
         '/static/js/i18n/asset-manager.js',
         '/static/js/i18n/comfyui-settings.js',
     ];
-    const tags = scripts.map(src => '<script src="' + src + '?v=' + VERSION + '"></script>').join('');
+    const tags = scripts.map(src => '<script src="' + src + (src.includes('?') ? '&' : '?') + 'v=' + VERSION + '"></script>').join('');
     if(document.readyState === 'loading' && document.currentScript){
         document.write(tags);
         return;
     }
     scripts.reduce((promise, src) => promise.then(() => new Promise((resolve, reject) => {
         const script = document.createElement('script');
-        script.src = src + '?v=' + VERSION;
+        script.src = src + (src.includes('?') ? '&' : '?') + 'v=' + VERSION;
         script.onload = resolve;
         script.onerror = reject;
         document.head.appendChild(script);

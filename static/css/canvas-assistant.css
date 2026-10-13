@@ -46,7 +46,8 @@
 .canvas-assistant .canvas-assistant-skill-chip svg { width:12px; height:12px; }
 .canvas-assistant-skill-toggle.has-selection::after { content:''; width:5px; height:5px; border-radius:50%; background:currentColor; }
 .canvas-assistant-input,.canvas-assistant-user,.canvas-assistant-change,.canvas-assistant-error { background:rgb(from var(--soft) r g b / var(--assistant-bg-alpha,.8)); }
-.canvas-assistant textarea { flex:1; min-width:0; width:100%; height:68px; min-height:56px; resize:none; padding:0; color:var(--text); border:0; background:transparent; outline-offset:2px; }
+.canvas-assistant textarea { flex:1; min-width:0; width:100%; height:56px; min-height:40px; max-height:120px; resize:none; padding:0; color:var(--text); border:0; background:transparent; outline-offset:2px; }
+@supports (field-sizing:content) { .canvas-assistant textarea { field-sizing:content; height:auto; } }
 .canvas-assistant textarea::placeholder { color:var(--muted); }
 .canvas-assistant-send-row { display:flex; flex-wrap:wrap; gap:5px; margin-top:6px; align-items:center; }
 .canvas-assistant select { flex:1; width:0; min-width:0; height:30px; border:1px solid var(--line); border-radius:9px; background:var(--card); padding:4px; }
@@ -92,7 +93,10 @@ body:has(.smart-assistant-toggle) .canvas-assistant-model-picker select { height
 .canvas-assistant .canvas-assistant-send { background:var(--strong); color:var(--strong-text); border-color:var(--strong); min-width:55px; }
 .canvas-assistant-send-row .canvas-assistant-send { margin-left:auto; }
 .canvas-assistant .canvas-assistant-send:hover { background:var(--strong); color:var(--strong-text); border-color:var(--strong); }
-.canvas-assistant-status { display:none; }
+.canvas-assistant-status:empty,.canvas-assistant-status[hidden] { display:none; }
+.canvas-assistant-status { margin-top:4px; overflow-wrap:anywhere; }
+.canvas-assistant-plan { display:flex; flex-wrap:wrap; gap:4px; margin-top:8px; }
+.canvas-assistant-progress-controls:empty { display:none; }
 .canvas-assistant-reply-actions { display:flex; gap:4px; margin-top:6px; flex-wrap:wrap; }
 .canvas-assistant-reply-actions button,.canvas-assistant-template { min-height:24px; padding:2px 6px; font-size:11px; border-color:var(--line); background:var(--card); }
 .canvas-assistant-reply-actions svg,.canvas-assistant-template svg { width:12px; height:12px; }

@@ -28,6 +28,36 @@ def decision(tool=None, arguments=None, reply="已完成"):
 
 
 class AgentRouteTests(unittest.IsolatedAsyncioTestCase):
+    async def test_shot_tools_real_route_uses_selected_models_and_never_submits(self):
+        self.canvas.update(kind='classic',nodes=[{'id':'table','type':'shot-table','shotTableData':{
+            'source':{'fingerprint':'story'},'rows':[{'id':'s1','index':1,'cells':{'visual':'女孩读信'},'imagePrompt':'书店'}],
+            'productionData':{'style':'电影'},'generationMap':{}}}])
+        self.responses=[decision('create_shot_prompts',{'tableId':'table','rowIds':['s1']}),decision(reply='处理节点已保存')]
+        events=await self.send(creationSettings={},imageModelConfirmed=False)
+        self.assertEqual(events[-1]['state'],'completed',events[-1])
+        processor=next(n for n in self.canvas['nodes'] if n.get('shotPromptOrigin'))
+        source=next(n for n in self.canvas['nodes'] if n['id']==processor['shotPromptOrigin']['sourceNodeId'])
+        self.assertEqual((processor['llmProvider'],processor['model']),('mock','chat'))
+        processor['outputText']='模型的单镜提示词'
+        processor['shotPromptResult']={'sourceText':source['text'],'outputText':processor['outputText'],'provider':'mock','model':'chat'}
+        self.responses=[decision('create_shot_images',{'tableId':'table','rowIds':['s1']}),decision(reply='配图节点已保存，待确认运行')]
+        events=await self.send(requestId='shot-images-turn',creationSettings={'provider_id':'mock','model':'image'},imageModelConfirmed=True)
+        self.assertEqual(events[-1]['state'],'completed',events[-1])
+        gen=next(n for n in self.canvas['nodes'] if n['type']=='generator')
+        self.assertEqual((gen['apiProvider'],gen['model']),('mock','image'))
+        self.assertTrue(any(c['from']==processor['id'] and c['to']==gen['id'] for c in self.canvas['connections']))
+        self.assertFalse(self.tasks)
+
+    async def test_analysis_tool_binds_selected_text_model_without_image_settings(self):
+        self.canvas.update(kind='classic',nodes=[{'id':'story','type':'prompt','text':'女孩走进书店。她读着旧信。'}])
+        self.responses=[decision('create_story_analysis',{'sourceNodeId':'story','title':'雨夜','style':'电影'}),decision(reply='已创建分析节点，等待确认运行')]
+        events=await self.send(creationSettings={},imageModelConfirmed=False)
+        self.assertEqual(events[-1]['state'],'completed',events[-1])
+        node=next(n for n in self.canvas['nodes'] if n['type']=='llm')
+        self.assertEqual((node['llmProvider'],node['model']),('mock','chat'))
+        self.assertEqual(len(self.canvas['nodes']),2)
+        self.assertFalse(self.tasks)
+
     async def test_long_tool_records_keep_all_pages_outside_user_message(self):
         import main
         self.canvas['nodes'] = [{'id': 'p', 'type': 'prompt', 'text': '甲' * 12000 + '乙' * 12000 + '终页证据'}]

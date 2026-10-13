@@ -49,7 +49,7 @@
 .smart-api-audio-params .smart-control{flex:1;min-width:100px}
 .audio-smart-node .canvas-audio-card{border:0;padding:12px}
 .image-node:has(.audio-smart-node){min-width:316px;min-height:225px}
-.audio-smart-node{overflow:auto}
+.audio-smart-node{width:100%;min-width:0;box-sizing:border-box;overflow:auto}
 .audio-smart-node audio{min-width:0}
 .audio-drag-handle{user-select:none}
 .audio-node .node-body{max-height:none}

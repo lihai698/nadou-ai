@@ -582,6 +582,9 @@ def prepare_native_action(canvas,args,action_id,*,workflow_fields=None,creation_
             if field in args: public[field]=copy.deepcopy(args[field])
 
         if action=='run':
+            if node.get('shotPromptOrigin') and t in {'generator','smart-image'}:
+                from backend.canvas_assistant_shot_prompts import validate_shot_image
+                validate_shot_image(canvas,node)
             if t not in {'llm','smart-prompt','smart-image','smart-group','smart-loop','generator','msgen','midjourney','comfy','rh','video'}:_error('此类型的原生执行回执仍待接入，不能登记可执行方案',409)
             selected=node.get('runSettings') or {} if t in {'smart-image','smart-group'} else {}
             if not isinstance(selected,dict):_error('智能图片的原生运行设置无效，请在原节点重新核对',409)
@@ -595,6 +598,9 @@ def prepare_native_action(canvas,args,action_id,*,workflow_fields=None,creation_
                 if any(is_busy(n) for n in canvas['nodes'] if n['id'] in planned_loop['scopeNodeIds']):_error('循环链路或上游有原任务，请先核对原编号',409)
                 task_kind='image';provider='per-slot';model='逐轮使用原节点手选模型'
             elif t in {'llm','smart-prompt'}:
+                origin=node.get('storyAnalysisOrigin') or node.get('shotPromptOrigin')
+                if origin and (not any(n.get('id')==origin.get('sourceNodeId') and n.get('text','').strip() for n in canvas.get('nodes',[])) or not any(c.get('from')==origin.get('sourceNodeId') and c.get('to')==node['id'] and c.get('kind')=='input' for c in canvas.get('connections',[]))):
+                    _error('分析原文或输入连接已丢失，请先恢复再运行',409)
                 if public['maxCalls']!=1:_error('LLM 运行每次只允许确认一个模型调用',409)
                 if not node.get('llmProvider') or not node.get('llmModel' if t=='smart-prompt' else 'model'):_error('请先在原节点手动选择文本平台和模型，助手不代选默认模型',409)
                 if t=='smart-prompt' and node.get('llmEnabled') is not True:_error('请先在智能提示词节点开启 LLM 改写',409)
@@ -683,6 +689,7 @@ def prepare_native_action(canvas,args,action_id,*,workflow_fields=None,creation_
                 if not isinstance(ids,list) or len(ids)>121 or any(not isinstance(i,str) for i in ids) or not set(ids)<=set(rows) or len(set(ids))!=len(ids): _error('所选镜头必须存在且不能重复')
                 if action=='shot_materialize' and not ids: _error('请至少选择一个镜头')
                 if action=='shot_materialize':
+                    if any((table.get('shotPromptMap') or {}).get(rid) for rid in ids):_error('这些镜头使用LLM提示词处理，请调用create_shot_images创建配图节点',409)
                     by_id={n['id']:n for n in canvas.get('nodes',[])}
                     edges={(c.get('from'),c.get('to')) for c in canvas.get('connections',[])}
                     source=table.get('source') or {};smart=t=='smart-shot-table'

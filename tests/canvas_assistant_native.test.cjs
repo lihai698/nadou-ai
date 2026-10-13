@@ -7,6 +7,19 @@ const shotHost=require('../static/js/canvas-video-deconstruction-host.js');
 const fs=require('node:fs');
 const vm=require('node:vm');
 
+test('两种画布逐镜处理使用真实LLM入口并保存本次结果来源',async()=>{
+ for(const smart of [false,true]){
+  const node={id:'llm',type:smart?'smart-prompt':'llm',text:'',outputText:'',llmEnabled:true,llmProvider:'chosen',model:'text',llmModel:'text',llmInstruction:'处理上游',shotPromptOrigin:{tableId:'table',rowId:'one',sourceNodeId:'source'}};
+  let calls=0;
+  const ctx=vm.createContext({nodes:[node,{id:'source',text:'本镜素材'}],connections:[],cascadeTargetIdFromOptions:()=>'',llmInputText:()=> '本镜素材',llmInputAudios:()=>[],refreshNodes:()=>{},callCanvasLLM:async(n,input,refs,opts)=>{calls++;opts.onModelSelected({provider:'chosen',model:'text'});return '模型处理的本镜提示词';},scheduleGeneratorInputSync:()=>{},scheduleSave:()=>{},isCascadeAbortError:()=>false,alert:()=>{},promptNodeLLMInputText:()=> '本镜素材',render:()=>{},resolveChatProviderId:x=>x,resolveChatModel:x=>x,promptNodeInputMediaForLLM:()=>[],imageRefsOnly:()=>[],videoRefsOnly:()=>[],toast:()=>{},tr:x=>x,fetch:async()=>{calls++;return {ok:true,json:async()=>({text:'模型处理的本镜提示词'})};}});
+  const name=smart?'runPromptLLMNode':'runLLMNode',source=fs.readFileSync(require.resolve(smart?'../static/js/smart-canvas.js':'../static/js/canvas.js'),'utf8');
+  vm.runInContext(nativeFunction(source,name),ctx);
+  if(smart)node.assistantNativeRun={};
+  await ctx[name](node.id,{assistantNativeActionId:'shot-run',beforeSubmit:async()=>{}});
+  assert.equal(calls,1);assert.equal(node.shotPromptResult.sourceText,'本镜素材');assert.equal(node.shotPromptResult.outputText,'模型处理的本镜提示词');assert.equal(node.shotPromptResult.model,'text');assert.equal(node.storyAnalysisResult,undefined);
+ }
+});
+
 function setup(){
  const state={id:'canvas',updatedAt:7,kind:'classic',nodes:[],receipts:{}};
  const calls=[];
@@ -244,16 +257,17 @@ test('普通画布 LLM 原生运行只调用一次并保存完成回执',async()
 test('普通LLM空响应或报错保留原正文，成功才替换并刷新下游输入',async()=>{
  const source=fs.readFileSync(require.resolve('../static/js/canvas.js'),'utf8');
  for(const mode of ['empty','error','success']){
-  const node={id:'llm',type:'llm',outputText:'原有正文',userInput:'输入'};
+  const node={id:'llm',type:'llm',outputText:'原有正文',userInput:'输入',llmProvider:'chosen',model:'selected',storyAnalysisOrigin:{sourceNodeId:'story'}};
   const refreshed=[];let calls=0,inputSyncs=0;
-  const ctx=vm.createContext({nodes:[node],connections:[{from:'llm',to:'g'}],cascadeTargetIdFromOptions:()=>'',llmInputText:()=> '已确认输入',llmInputAudios:()=>[],refreshNodes:ids=>refreshed.push([...ids]),
-   callCanvasLLM:async()=>{calls++;if(mode==='error')throw new Error('模拟失败');return mode==='empty'?'':'新正文';},scheduleGeneratorInputSync:()=>inputSyncs++,scheduleSave:()=>{},isCascadeAbortError:()=>false,alert:()=>{}});
+  const ctx=vm.createContext({nodes:[node,{id:'story',text:'实际原文'}],connections:[{from:'llm',to:'g'}],cascadeTargetIdFromOptions:()=>'',llmInputText:()=> '已确认输入',llmInputAudios:()=>[],refreshNodes:ids=>refreshed.push([...ids]),
+   callCanvasLLM:async()=>{calls++;if(mode==='error')throw new Error('模拟失败');if(mode==='success')node.model='changed-during-request';return mode==='empty'?'':'新正文';},scheduleGeneratorInputSync:()=>inputSyncs++,scheduleSave:()=>{},isCascadeAbortError:()=>false,alert:()=>{}});
   vm.runInContext(nativeFunction(source,'runLLMNode'),ctx);
   await ctx.runLLMNode(node.id,{assistantNativeActionId:'a',beforeSubmit:async()=>{}});
   assert.equal(calls,1);
   assert.equal(node.outputText,mode==='success'?'新正文':'原有正文',mode);
   assert.equal(node.assistantNativeRun.status,mode==='success'?'succeeded':'failed',mode);
   assert.equal(inputSyncs,mode==='success'?1:0,'成功后复用原生输入预览同步');
+  if(mode==='success'){assert.equal(node.storyAnalysisResult.sourceText,'实际原文');assert.equal(node.storyAnalysisResult.outputText,'新正文');assert.equal(node.storyAnalysisResult.model,'selected','记录提交时模型，不能记录请求期间更换后的模型');}
  }
 });
 test('最终异步确认等待期间上游改变或切画布均阻止提交',async()=>{
@@ -398,6 +412,7 @@ test('智能提示词真实 LLM 入口确认后只调用一次，保留文本模
  const source=fs.readFileSync(require.resolve('../static/js/smart-canvas.js'),'utf8');
  const node={id:'p',type:'smart-prompt',llmEnabled:true,llmProvider:'codex',llmModel:'gpt-6.1-sol',text:'原文',llmInstruction:'按原文改写'};
  const s=editorSetup(node);let calls=0;const requests=[];
+ node.storyAnalysisOrigin={sourceNodeId:'story'};s.state.nodes.push({id:'story',type:'smart-prompt',text:'实际原文'});s.proposal.localSignature=s.editor.snapshot();
  const ctx=vm.createContext({nodes:s.state.nodes,promptNodeLLMInputText:n=>n.text+'\n'+n.llmInstruction,render:()=>{},resolveChatProviderId:x=>x,resolveChatModel:x=>x,promptNodeInputMediaForLLM:()=>[{url:'/output/ref.png',kind:'image'}],imageRefsOnly:items=>items.filter(i=>i.kind==='image'),videoRefsOnly:()=>[],scheduleSave:()=>{},toast:()=>{},tr:x=>x,fetch:async(url,options)=>{calls++;requests.push({url,body:JSON.parse(options.body)});return {ok:true,json:async()=>({text:'已完成智能改写'})};}});
  vm.runInContext(nativeFunction(source,'runPromptLLMNode'),ctx);
  s.adapter.runLLMNode=(n,options)=>ctx.runPromptLLMNode(n.id,options);
@@ -405,6 +420,7 @@ test('智能提示词真实 LLM 入口确认后只调用一次，保留文本模
  const receipt=await s.editor.execute(p);await s.editor.execute(p);
  assert.equal(calls,1);assert.equal(node.text,'已完成智能改写');assert.equal(node.llmModel,'gpt-6.1-sol');assert.equal(receipt.outputText,node.text);assert.equal(receipt.state,'succeeded');
  assert.deepEqual(requests[0].body.images,['/output/ref.png']);assert.equal(requests[0].body.provider,'codex');assert.equal(requests[0].body.model,'gpt-6.1-sol');
+ assert.equal(node.storyAnalysisResult.sourceText,'实际原文');assert.equal(node.storyAnalysisResult.outputText,'已完成智能改写');
 });
 
 

@@ -4,6 +4,16 @@ const vm=require('node:vm');
 const fs=require('node:fs');
 const context=vm.createContext({window:{},TextDecoder,Uint8Array});
 vm.runInContext(fs.readFileSync(require('node:path').join(__dirname,'../static/js/canvas-assistant.js'),'utf8'),context);
+
+test('执行状态只更新本轮摘要，局部错误在没有执行时可见',()=>{
+ const source=fs.readFileSync(require.resolve('../static/js/canvas-assistant.js'),'utf8');
+ const code=source.match(/function showStatus\(value\)\{[\s\S]*?\n        \}/)?.[0]||source.match(/function showStatus\(value\)\{[^\n]+/)[0];
+ const status={textContent:'',hidden:true},label={textContent:''};
+ const ctx=vm.createContext({status,request:{progress:{label}}});vm.runInContext(code,ctx);
+ ctx.showStatus('正在读取画布');assert.equal(label.textContent,'正在读取画布');assert.equal(status.textContent,'');assert.equal(status.hidden,true);
+ ctx.request=null;ctx.showStatus('连接失败，请重试');assert.equal(status.textContent,'连接失败，请重试');assert.equal(status.hidden,false);
+ ctx.showStatus('');assert.equal(status.hidden,true);
+});
 test('多步执行与待确认完成流按顺序交付，不丢失步骤回执',async()=>{
     const bytes=Buffer.from(JSON.stringify({type:'agent_step',step:{id:'s1',tool:'read_canvas',state:'succeeded'},label:'读取画布'})+'\n'+JSON.stringify({type:'turn_end',state:'waiting_confirmation',reply:'请确认生成'})+'\n');
     let offset=0;const seen=[];
@@ -60,7 +70,11 @@ test('真实历史渲染将完成操作收起，待确认与等待结果可在�
   messages=new El('div');const turn={id:'original-turn',state,message:'需求',reply:'给用户的成果',nativeActions:state==='running'?[]:[{id:'a',action:'update',state:state==='completed'?'completed':state==='waiting_result'?'accepted':'pending',nodeId:'n',arguments:{patch:{text:'new'}}}]};let cancelBody;
   const ctx=vm.createContext({document:{createElement:tag=>new El(tag)},messages,turnProgress:new Map(),session:{id:'s',turns:[turn]},canvasId:'c',busy:false,request:null,current:()=>({nodes:[]}),matches:()=>true,icons:()=>{},adapter:{},input:{},syncControls:()=>{},continueTurn:()=>{},api:async(path,body)=>{assert.equal(path,'cancel');cancelBody=body;return {};},selectSession:async()=>{turn.state='cancelled';ctx.drawHistory();},showStatus:()=>{},addReplyActions:()=>{},addProposalCard:()=>{}});
   for(const name of ['turnPresentation','progressPresentation','nativeActionAttention','addProgress','addNativeActionCard','drawHistory'])vm.runInContext(uiFunction(name),ctx);
+  turn.agent={plan:{state:'completed',steps:[{state:'completed'}],budget:{used:{serviceCalls:1},limit:{serviceCalls:2}}}};
+  if(['waiting_confirmation','waiting_result'].includes(state))turn.reply='';
   ctx.drawHistory();const elements=all(messages),stop=elements.find(e=>e.tagName==='button'&&e.textContent==='停止本轮'),card=elements.find(e=>e.attrs['aria-label']==='原生操作方案');
+  const plan=elements.find(e=>e.className==='canvas-assistant-plan');assert.ok(plan);assert.equal(plan.parentNode.className,'canvas-assistant-progress-body');
+  if(['waiting_confirmation','waiting_result'].includes(state))assert.equal(elements.some(e=>['等待操作确认','等待图片结果'].includes(e.textContent)),false,'摘要已经说明等待状态，不再添加重复回复');
   if(state==='completed'){assert.equal(stop,undefined);assert.equal(card.parentNode.className,'canvas-assistant-progress-body');}
   else{assert.ok(stop,state);assert.equal(stop.parentNode.parentNode,messages);await stop.onclick();assert.equal(cancelBody.requestId,'original-turn');assert.equal(cancelBody.sessionId,'s');assert.equal(turn.state,'cancelled');assert.equal(stop.isConnected,false);}
   if(state==='waiting_confirmation'){assert.equal(all(messages).some(e=>e.textContent==='确认操作'),false);assert.ok(all(messages).some(e=>e.textContent==='本轮已停止，方案未执行'));}

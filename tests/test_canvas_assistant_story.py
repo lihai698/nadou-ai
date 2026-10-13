@@ -20,6 +20,32 @@ def story_fixture():
 
 
 class StoryWorkflowTests(unittest.TestCase):
+    def test_classic_workflow_native_chain_edit_and_reuse(self):
+        self.canvas['kind'] = 'classic'
+        self.canvas['nodes'][0]['type'] = 'prompt'
+        canvas, receipt = self.prepare()
+        table = next(n for n in canvas['nodes'] if n['type'] == 'shot-table')
+        ids = {n['id']: n for n in canvas['nodes']}
+        self.assertEqual(len(ids), 14)
+        self.assertEqual(len(canvas['connections']), 17)
+        self.assertFalse(any(n['type'].startswith('smart-') for n in ids.values()))
+        for chain in table['shotTableData']['generationMap'].values():
+            gen = ids[chain['generatorId']]
+            self.assertEqual(gen['type'], 'generator')
+            self.assertEqual((gen['apiProvider'], gen['model']), ('custom', 'custom-image'))
+            self.assertEqual(ids[chain['outputId']]['images'], [])
+            self.assertTrue(any(e['from'] == gen['id'] and e['to'] == chain['outputId'] for e in canvas['connections']))
+        chain = next(iter(table['shotTableData']['generationMap'].values()))
+        plan = AssistantPlan.model_validate({'reply': '修改', 'operations': [{'op': 'update', 'operationId': 'edit', 'nodeId': chain['promptId'], 'content': '本镜独有新提示词'}]})
+        updated, _ = prepare_operations(canvas, plan.operations, **{**self.kw, 'request_id': 'edit'})
+        updated_table = next(n for n in updated['nodes'] if n['id'] == table['id'])
+        self.assertEqual(updated_table['shotTableData']['rows'][0]['imagePrompt'], '本镜独有新提示词')
+        self.assertEqual(next(n for n in updated['nodes'] if n['id'] == chain['generatorId'])['model'], 'custom-image')
+        self.kw['request_id'] = 'next-turn'
+        reused, result = self.prepare(canvas=canvas)
+        self.assertEqual(len(reused['nodes']), len(canvas['nodes']))
+        self.assertTrue(result['storyWorkflows'][0]['reused'])
+
     def setUp(self):
         self.canvas=dict(id='canvas',kind='smart',updated_at=1,nodes=[dict(id='story',type='smart-prompt',text='女孩走进书店。她读着旧信。',x=0,y=0)],connections=[])
         self.kw=dict(request_id='turn',user='u',expected_updated_at=1,creation_settings=dict(provider_id='custom',model='custom-image'),

@@ -1,0 +1,62 @@
+/* 专注画布布局：沿用原主题变量和控件，只调整入口层级。 */
+.sidebar.studio-focused-nav { position:relative; overflow:visible; padding:24px 0 16px; }
+.sidebar.studio-focused-nav .logo-ring { margin-bottom:22px !important; }
+.sidebar.studio-focused-nav #logo-mark { display:block; font-family:Arial,sans-serif; font-size:24px; font-weight:900; line-height:1; letter-spacing:-1px; background:transparent !important; transform:none; box-shadow:none; }
+.studio-nav-hidden #studioSidebar { display:none; }
+.sidebar-restore-toggle { display:none; position:fixed; left:0; top:24px; z-index:100; width:28px; height:32px; background:var(--sidebar-bg); font-family:Arial,sans-serif; font-size:20px; font-weight:900; line-height:1; letter-spacing:-1px; box-shadow:0 6px 20px var(--monitor-shadow); }
+.studio-nav-hidden .sidebar-restore-toggle { display:flex; }
+.studio-nav-hidden.studio-nav-embedded .sidebar-restore-toggle { display:none; }
+.canvas-nav .sidebar-restore-inline { display:none; flex:0 0 38px; width:38px; padding:0; color:var(--text); font-family:Arial,sans-serif; font-size:20px; font-weight:900; letter-spacing:-1px; }
+.studio-nav-hidden .canvas-nav .sidebar-restore-inline { display:flex; }
+body.studio-scale-host .sidebar-restore-toggle { zoom:var(--studio-ui-scale, 1); }
+.sidebar.studio-focused-nav nav { overflow-y:auto; overflow-x:hidden; scrollbar-gutter:auto; gap:7px; padding:0; }
+.sidebar.studio-focused-nav .nav-item,
+.sidebar.studio-focused-nav .nav-fold-toggle { width:60px; height:56px; flex:0 0 56px; margin:0; padding:7px 2px; border:0; border-radius:16px; flex-direction:column; justify-content:center; gap:5px; }
+.sidebar.studio-focused-nav .nav-text { opacity:1; max-width:none; margin:0; font-size:10px; font-weight:600; line-height:1.25; pointer-events:auto; }
+.sidebar.studio-focused-nav .nav-fold-icon { transform:none; }
+.sidebar.studio-focused-nav .nav-divider { width:32px; height:1px; background:var(--border); margin:7px auto; }
+.sidebar.studio-focused-nav .side-actions { gap:0; margin-bottom:0; padding:0; border:0; }
+.sidebar.studio-focused-nav .settings-fold-toggle { width:60px; height:56px; flex:0 0 56px; border:0; border-radius:16px; padding:7px 2px; gap:5px; flex-direction:column; }
+.sidebar.studio-focused-nav .settings-fold-toggle > .side-pill-text { opacity:1; max-width:none; font-size:10px; pointer-events:auto; }
+.sidebar.studio-focused-nav .settings-fold-chevron { display:none; }
+.sidebar.studio-focused-nav .sidebar-popover { position:absolute; left:calc(100% + 10px); z-index:100; width:224px; max-width:calc(100vw / var(--studio-ui-scale, 1) - 100px); max-height:calc(100vh / var(--studio-ui-scale, 1) - 32px); padding:10px; border:1px solid var(--border); border-radius:18px; background:var(--sidebar-bg); box-shadow:0 20px 50px var(--monitor-shadow); display:flex; align-items:stretch; gap:5px; overflow:auto; opacity:1; pointer-events:auto; transition:none; }
+.sidebar.studio-focused-nav .sidebar-popover.is-collapsed { display:none; }
+.sidebar.studio-focused-nav .sidebar-popover .nav-item,
+.sidebar.studio-focused-nav .sidebar-popover .side-pill { width:100%; min-height:40px; height:auto; flex:0 0 auto; padding:9px 10px; margin:0; flex-direction:row; justify-content:flex-start; gap:10px; border:0; border-radius:10px; }
+.sidebar.studio-focused-nav .sidebar-popover .nav-text,
+.sidebar.studio-focused-nav .sidebar-popover .side-pill-text { opacity:1; max-width:none; margin:0; font-size:12px; pointer-events:auto; }
+.sidebar.studio-focused-nav .sidebar-popover .update-now-btn.show { display:flex; width:100%; min-height:40px; gap:10px; justify-content:flex-start; padding:9px 10px; border-radius:10px; }
+.sidebar.studio-focused-nav .sidebar-popover .update-now-btn svg { display:block; }
+.sidebar.studio-focused-nav .sidebar-popover .update-now-text { max-width:none; font-size:12px; }
+.sidebar.studio-focused-nav .sidebar-popover .project-version-badge { width:100%; padding:8px; margin:0; font-size:11px; }
+.sidebar-popover-title { font-size:12px; font-weight:700; color:var(--text); padding:5px 10px 9px; }
+.sidebar.studio-focused-nav .nav-fold-toggle.active,
+.sidebar.studio-focused-nav .settings-fold-toggle.active { background:#000; color:#fff; }
+@media (max-height:620px) {
+    .sidebar.studio-focused-nav { padding:12px 0; }
+    .sidebar.studio-focused-nav .logo-ring { margin-bottom:10px !important; }
+    .sidebar.studio-focused-nav nav { gap:3px; }
+    .sidebar.studio-focused-nav nav > .nav-item,
+    .sidebar.studio-focused-nav .nav-fold-toggle { height:48px; flex-basis:48px; }
+}
+
+/* 保持固定工具位置，避免节点输入框聚焦令外层隐藏容器发生滚动。 */
+.shell { overflow:clip; }
+.canvas-actions { display:flex; align-items:center; gap:8px; pointer-events:auto; flex:0 0 auto; margin-left:auto; }
+.canvas-actions .tool-btn { box-shadow:0 8px 24px var(--shadow); }
+.canvas-more-toggle { width:38px; padding:0; }
+.canvas-more-menu { position:absolute; right:0; top:calc(100% + 10px); width:224px; max-width:100%; max-height:calc(100vh / var(--studio-ui-scale, 1) - 130px); overflow:auto; padding:8px; border-radius:18px; background:var(--card-solid); border:1px solid var(--line); box-shadow:0 20px 50px var(--shadow); pointer-events:auto; }
+.canvas-more-menu[hidden] { display:none; }
+.canvas-more-menu .tool-btn { width:100%; justify-content:flex-start; border:0; border-radius:10px; box-shadow:none; padding:0 12px; }
+.canvas-more-menu .tool-btn.active { background:var(--soft-2); color:var(--text); }
+.canvas-more-divider { border:0; border-top:1px solid var(--line); margin:6px 4px; }
+.canvas-more-menu .canvas-clear-btn { color:#b91c1c; }
+.theme-dark .canvas-more-menu .canvas-clear-btn { color:#fca5a5; }
+.canvas-more-menu .canvas-clear-btn span { display:inline; }
+.selection-hub .tool-btn { height:30px; min-width:30px; padding:0 10px; }
+.create-menu { max-width:calc(100% - 20px); max-height:calc(100% - 20px); overflow:auto; }
+@media (max-width:900px) {
+    .topbar .canvas-actions { order:2; align-self:flex-end; }
+    .canvas-actions .tool-btn { height:36px; min-width:36px; padding:0 10px; }
+    .canvas-actions .canvas-more-toggle { width:36px; padding:0; }
+}

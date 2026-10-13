@@ -10,6 +10,8 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from backend.canvas_assistant_operations import AssistantPlan, parse_plan
 from backend.canvas_assistant_story import StoryWorkflow
+from backend.canvas_assistant_story_analysis import StoryAnalysis, StoryAnalysisResult
+from backend.canvas_assistant_shot_prompts import ShotPrompts, ShotImages
 
 
 class StrictArgs(BaseModel):
@@ -129,12 +131,16 @@ class ExecutePlanStep(StrictArgs):
     stepId: str = Field(min_length=1, max_length=80)
     tool: Literal['read_canvas', 'read_project_knowledge', 'read_node_state', 'read_skill',
                   'read_native_capabilities', 'read_native_task', 'apply_canvas_operations',
-                  'propose_native_action', 'inspect_result', 'record_result_review', 'create_story_workflow']
+                  'propose_native_action', 'inspect_result', 'record_result_review', 'create_story_workflow', 'create_story_analysis', 'import_story_analysis', 'create_shot_prompts', 'create_shot_images']
     arguments: dict = Field(default_factory=dict)
 
 
 TOOLS = {
-    'create_story_workflow': ('创建文本分镜工作流', '将已保存故事拆解成剧情、角色、场景、道具、声音、原生分镜表与逐镜配图链；不提交生成，模型沿用手选设置', StoryWorkflow),
+    'create_shot_images': ('创建逐镜配图节点','读取指定镜头真实LLM结果，连接原生图片节点并绑定用户所选图片模型；只创建不提交。重复调用复用同一节点，newAttempt仅在用户明确要求重做同镜时使用，原图保留。',ShotImages),
+    'create_shot_prompts': ('创建逐镜提示词处理','为指定镜头建立素材到原生LLM的输入连接，绑定用户所选文本模型；不运行模型、不生成图片。修改单镜后可仅刷新该镜素材。',ShotPrompts),
+    'create_story_analysis': ('创建模型分析流程','为已保存原文创建真实原生LLM分析节点，绑定用户已选文本模型；不运行、不需要图片模型',StoryAnalysis),
+    'import_story_analysis': ('导入分析分镜','读取已运行分析节点的真实JSON结果，校验原文及模型后生成或更新原生分镜表；不调用模型',StoryAnalysisResult),
+    'create_story_workflow': ('保存故事分镜结果图', '保存助手已写好的故事拆解、资产、原生分镜表与配图链；这是内容结果图，没有阶段性模型执行节点', StoryWorkflow),
     'execute_plan_step': ('执行计划步骤', '按依赖领取一个步骤，调用已开放工具；完成状态由真实回执决定', ExecutePlanStep),
     'create_plan': ('保存创作计划', '保存带依赖的创作计划；预算由后端提供，不能由模型扩大', CreatePlan),
     'read_native_task': ('查询节点原任务','只查询当前节点持久保存的深度/图片/视频/ComfyUI任务，不提交或重试',ReadNativeTask),

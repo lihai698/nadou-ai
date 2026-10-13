@@ -312,7 +312,8 @@ function trf(key, vars={}){
 function setStatus(text){ statusEl.textContent = text || ''; }
 function broadcastStudioApiChange(type='providers-changed'){
     const message = { type, updated_at:Date.now() };
-    try { new BroadcastChannel('studio-api').postMessage(message); } catch(e) {}
+    try { localStorage.setItem('studio-api-updated-at', String(message.updated_at)); } catch(e) {}
+    try { const channel=new BroadcastChannel('studio-api');channel.postMessage(message);channel.close(); } catch(e) {}
     try { window.parent?.postMessage(message, '*'); } catch(e) {}
     try { window.top?.postMessage(message, '*'); } catch(e) {}
 }

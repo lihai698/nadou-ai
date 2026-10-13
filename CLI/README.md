@@ -29,7 +29,7 @@ ChatGPT 登录方式的图片请求由 Codex 调度模型调用 `image_generatio
 
 GPT CLI 生图和模型读取使用当前登录的官方 ChatGPT 订阅账号。模型读取为当前子进程指定官方 provider，不修改用户本机 Codex 的中转站配置；模型列表不是剩余额度查询。
 
-## Gemini CLI
+## Antigravity CLI（agy）
 
 - Windows install/update: `CLI/windows/gemini/1-install_gemini_cli.bat`
 - Windows start/sign in: `CLI/windows/gemini/2-start_gemini_cli.bat`
@@ -37,10 +37,10 @@ GPT CLI 生图和模型读取使用当前登录的官方 ChatGPT 订阅账号。
 After installation, open a new terminal and run:
 
 ```bash
-gemini
+agy
 ```
 
-The first run prompts you to sign in with your Google account or configure Gemini authentication.
+The first run prompts you to sign in with your Google account. The Windows installer uses `winget`; the application also checks the official WinGet installation directory when the current terminal PATH is stale.
 
 ## Jimeng CLI
 
@@ -51,3 +51,5 @@ The first run prompts you to sign in with your Google account or configure Gemin
 - macOS login/check: `CLI/macos/jimeng/login_jimeng_cli.command`
 
 Root-level scripts are kept as compatibility launchers.
+
+Windows Jimeng CLI runs inside WSL Ubuntu. If WSL has not been enabled, run `CLI/windows/jimeng/install_wsl_ubuntu.bat` as Administrator, finish any required Windows restart and Ubuntu first-run setup, then run `install_jimeng_cli.bat` and `login_jimeng_cli.bat`.

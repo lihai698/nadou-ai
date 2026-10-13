@@ -249,7 +249,7 @@ try {
 
     Write-Host ""
     Write-Host "Done. Run 'codex' in PowerShell to sign in and start using OpenAI Codex CLI."
-    Write-Host "You can also double-click CLI\windows\openai\start_openai_codex_cli.bat."
+    Write-Host "You can also double-click CLI\windows\openai\2-start_openai_codex_cli.bat."
     Pause-End
 } catch {
     Write-Host "Error: $($_.Exception.Message)"

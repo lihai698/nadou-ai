@@ -3537,16 +3537,9 @@ class SmartCanvasGroupExportRequest(BaseModel):
     group_name: str = "group"
     items: List[SmartCanvasGroupExportItem] = []
 
-class MiniMaxTimelineClip(BaseModel):
-    url: str = ""
-    name: str = ""
-    start: float = 0
-    end: float = 0
-    duration: float = 0
 
-class MiniMaxTimelineExportRequest(BaseModel):
-    clips: List[MiniMaxTimelineClip] = []
-    filename: str = "minimax-timeline.mp4"
+
+
 
 class LocalImageImportRequest(BaseModel):
     path: str = ""
@@ -13269,90 +13262,7 @@ def download_output(request: Request, url: str, name: str = "", inline: bool = F
 
     return StreamingResponse(stream_remote(), media_type=content_type, headers=headers, status_code=upstream.status_code)
 
-@app.post("/api/smart-canvas/minimax-export")
-async def export_minimax_timeline(payload: MiniMaxTimelineExportRequest):
-    ffmpeg = shutil.which("ffmpeg")
-    if not ffmpeg:
-        raise HTTPException(status_code=500, detail="未找到 ffmpeg，无法导出完整剪辑")
-    clips = [clip for clip in (payload.clips or []) if clip.url]
-    if not clips:
-        raise HTTPException(status_code=400, detail="时间轴里还没有可导出的视频")
-    tmpdir = tempfile.mkdtemp(prefix="minimax_timeline_")
-    try:
-        clip_sources = []
-        for clip in clips:
-            src = output_file_from_url(clip.url)
-            if not src:
-                raise HTTPException(status_code=400, detail="完整剪辑导出只支持本地生成素材")
-            clip_sources.append(src)
-        ffprobe = shutil.which("ffprobe")
-        preserve_audio = bool(ffprobe)
-        if ffprobe:
-            for src in clip_sources:
-                probe_cmd = [
-                    ffprobe, "-v", "error", "-select_streams", "a:0",
-                    "-show_entries", "stream=index", "-of", "csv=p=0", src,
-                ]
-                probe = await asyncio.to_thread(subprocess.run, probe_cmd, capture_output=True, text=True, timeout=30)
-                if probe.returncode != 0 or not (probe.stdout or "").strip():
-                    preserve_audio = False
-                    break
-        part_paths = []
-        normalize_video = "scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30"
-        for index, (clip, src) in enumerate(zip(clips, clip_sources)):
-            start = max(0.0, float(clip.start or 0))
-            end = float(clip.end or 0)
-            source_duration = max(0.0, float(clip.duration or 0))
-            if end <= start:
-                end = source_duration if source_duration > start else start + 0.1
-            trim_duration = max(0.1, end - start)
-            part_path = os.path.join(tmpdir, f"part_{index:03d}.mp4")
-            if preserve_audio:
-                cmd = [
-                    ffmpeg, "-hide_banner", "-loglevel", "error", "-y",
-                    "-ss", f"{start:.3f}", "-t", f"{trim_duration:.3f}", "-i", src,
-                    "-map", "0:v:0", "-map", "0:a:0", "-vf", normalize_video,
-                    "-c:v", "libx264", "-preset", "veryfast", "-pix_fmt", "yuv420p",
-                    "-c:a", "aac", "-ar", "48000", "-ac", "2",
-                    "-movflags", "+faststart", part_path,
-                ]
-            else:
-                cmd = [
-                    ffmpeg, "-hide_banner", "-loglevel", "error", "-y",
-                    "-ss", f"{start:.3f}", "-t", f"{trim_duration:.3f}", "-i", src,
-                    "-f", "lavfi", "-t", f"{trim_duration:.3f}", "-i", "anullsrc=channel_layout=stereo:sample_rate=48000",
-                    "-map", "0:v:0", "-map", "1:a:0", "-vf", normalize_video, "-shortest",
-                    "-c:v", "libx264", "-preset", "veryfast", "-pix_fmt", "yuv420p",
-                    "-c:a", "aac", "-ar", "48000", "-ac", "2",
-                    "-movflags", "+faststart", part_path,
-                ]
-            proc = await asyncio.to_thread(subprocess.run, cmd, capture_output=True, text=True, timeout=300)
-            if proc.returncode != 0:
-                raise HTTPException(status_code=500, detail=(proc.stderr or "视频裁剪失败").strip()[:300])
-            part_paths.append(part_path)
-        filename = sanitize_export_filename(payload.filename or "minimax-timeline.mp4", "minimax-timeline.mp4")
-        if not filename.lower().endswith(".mp4"):
-            filename += ".mp4"
-        output_path = output_path_for(filename, "output")
-        if len(part_paths) == 1:
-            shutil.copyfile(part_paths[0], output_path)
-        else:
-            concat_path = os.path.join(tmpdir, "concat.txt")
-            with open(concat_path, "w", encoding="utf-8") as fh:
-                for part in part_paths:
-                    safe_part = part.replace("\\", "/").replace("'", "'\\''")
-                    fh.write(f"file '{safe_part}'\n")
-            cmd = [
-                ffmpeg, "-hide_banner", "-loglevel", "error", "-y",
-                "-f", "concat", "-safe", "0", "-i", concat_path,
-                "-c", "copy", "-movflags", "+faststart", output_path,
-            ]
-            proc = await asyncio.to_thread(subprocess.run, cmd, capture_output=True, text=True, timeout=300)
-            if proc.returncode != 0:
-                raise HTTPException(status_code=500, detail=(proc.stderr or "视频拼接失败").strip()[:300])
-        return {"url": output_url_for(filename, "output"), "name": filename, "kind": "video"}
-    finally:
-        shutil.rmtree(tmpdir, ignore_errors=True)
+
 
 @app.post("/api/upload")
 async def upload_image(files: List[UploadFile] = File(...)):
@@ -13380,7 +13290,9 @@ async def upload_image(files: List[UploadFile] = File(...)):
     return {"files": uploaded_files}
 
 @app.post("/api/ai/upload")
-async def upload_ai_reference(files: List[UploadFile] = File(...)):
+async def upload_ai_reference(
+    files: List[UploadFile] = File(...),
+):
     uploaded = []
     image_exts = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
     video_exts = {".mp4", ".webm", ".mov", ".m4v", ".flv"}

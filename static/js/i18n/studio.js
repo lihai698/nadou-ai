@@ -2,6 +2,8 @@
     if(!window.StudioI18n) return;
     window.StudioI18n.register({
         "studio.ready": { zh: "队列空闲", en: "Queue idle" },
+        "studio.hideNavigation": { zh: "隐藏左侧菜单", en: "Hide navigation" },
+        "studio.showNavigation": { zh: "恢复左侧菜单", en: "Show navigation" },
         "studio.queueStatus": { zh: "队列状态", en: "Queue status" },
         "studio.queueUnavailable": { zh: "队列状态未知", en: "Queue status unavailable" },
         "studio.queueing": { zh: "排队中", en: "Queueing" },

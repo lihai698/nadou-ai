@@ -87,7 +87,10 @@
         const layoutKey=`canvas_assistant_layout_${adapter.kind}`;
         function listen(target,type,fn,options){ target.addEventListener(type,fn,options); listeners.push(()=>target.removeEventListener(type,fn,options)); }
         function icons(){ if(global.lucide) lucide.createIcons(); }
-        function showStatus(value){ status.textContent=value;if(request?.progress)request.progress.label.textContent=value; }
+        function showStatus(value){
+            if(request?.progress){request.progress.label.textContent=value;status.textContent='';status.hidden=true;}
+            else{status.textContent=value;status.hidden=!value;}
+        }
         function addProgress(turn){
             const details=document.createElement('details');details.className='canvas-assistant-progress';details.setAttribute('aria-label','执行详情');
             const summary=document.createElement('summary'),label=document.createElement('span'),hint=document.createElement('small'),body=document.createElement('div'),controls=document.createElement('div');
@@ -98,7 +101,7 @@
             function updatePlan(plan){
                 if(!plan)return;
                 if(planControls)planControls.remove();
-                planControls=document.createElement('div');controls.append(planControls);
+                planControls=document.createElement('div');planControls.className='canvas-assistant-plan';body.append(planControls);
                 const note=document.createElement('span');
                 note.textContent=`计划进度 ${plan.steps.filter(s=>s.state==='completed').length}/${plan.steps.length}；已预留 ${plan.budget.used.serviceCalls} 个服务任务，上限 ${plan.budget.limit.serviceCalls}。`;
                 planControls.append(note);
@@ -461,10 +464,10 @@
                 else if(['failed','interrupted'].includes(turn.state)){reply.classList.add('canvas-assistant-error');reply.textContent=turn.error||'这一轮没有完成';if(turn.state==='interrupted'){const retry=document.createElement('button');retry.type='button';retry.textContent='重新发送';retry.onclick=()=>{input.value=turn.message;syncControls();input.focus();};reply.append(retry);}}
                 else if(turn.state==='paused'){reply.textContent=turn.reply||'创作进度已保存，可以继续完成剩余步骤。';}
                 else if(turn.state==='cancelled'){reply.textContent=turn.error||'已停止本轮；已保存的操作仍保留。';}
-                else if(turn.state!=='completed'){reply.textContent=turn.reply||turnPresentation(turn.state).label;}
+                else if(turn.state!=='completed'){reply.textContent=turn.reply||(progress?'':turnPresentation(turn.state).label);}
                 if(turn.state==='completed')addReplyActions(reply,turn.reply||'',Array.isArray(turn.media)?turn.media:[]);
                 if(['interrupted','paused'].includes(turn.state)){const button=document.createElement('button');button.type='button';button.textContent='继续创作';button.onclick=()=>continueTurn(turn.id);messages.append(button);}
-                messages.append(reply);
+                reply.hidden=!reply.textContent;messages.append(reply);
                 for(const proposal of turn.proposals||[])addProposalCard(turn,proposal,progress);
                 for(const proposal of turn.nativeActions||[])addNativeActionCard(turn,proposal,progress);
                 const change=turn.change;
@@ -514,7 +517,7 @@
             fillImageModels(previousImage);imageConfirm.checked=!!imageModels.value;
             fillSkills();
             rememberModel();rememberImageModel();
-            showStatus(providers.length?(configuration.stage==='agent'?'可多步读取画布、操作节点并继续创作':'当前阶段：对话与创作建议'):'请先在 API 设置中配置聊天模型');
+            showStatus(providers.length?'':'请先在 API 设置中配置聊天模型');
             if(history.activeSessionId)await selectSession(history.activeSessionId);else if(sessions.length)await selectSession(sessions[0].id);else await newSession();
             contextChips();syncControls();
         }

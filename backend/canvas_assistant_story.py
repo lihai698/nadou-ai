@@ -72,15 +72,15 @@ class StoryWorkflow(StoryData):
     shots: list[Shot] = Field(min_length=1, max_length=121)
 
 
-def create_story_nodes(candidate, data, *, key, settings, x, y):
+def create_story_nodes(candidate, data, *, key, settings, x, y, images=True):
     """调用方已持锁且完成画布版本/幂等检查；此处仅修改候选文档。"""
     nodes = candidate['nodes']
     source = next((n for n in nodes if n['id'] == data.sourceNodeId), None)
     if not source or source.get('type') not in {'prompt', 'text', 'smart-prompt'} or not source.get('text', '').strip():
         raise HTTPException(409, '请先将完整故事保存为文本节点，再读取真实编号创建工作流')
-    if candidate.get('kind') != 'smart':
-        raise HTTPException(422, '文本到分镜工作流请在智能画布使用')
-    if not settings.get('provider_id') or not settings.get('model'):
+    smart = candidate.get('kind') == 'smart'
+    table_type = 'smart-shot-table' if smart else 'shot-table'
+    if images and (not settings.get('provider_id') or not settings.get('model')):
         raise HTTPException(409, '请先手动选择图片模型，新建分镜节点将保留此选择')
     groups = {name: getattr(data, name) for name in ('beats', 'characters', 'scenes', 'props', 'sounds', 'shots')}
     for name, values in groups.items():
@@ -114,7 +114,7 @@ def create_story_nodes(candidate, data, *, key, settings, x, y):
         raise HTTPException(422, '\n'.join(dict.fromkeys(validation_errors)))
     fingerprint = hashlib.sha256(source['text'].encode()).hexdigest()
     workflow_hash = hashlib.sha256(json.dumps({'data':data.model_dump(),'settings':settings,'source':fingerprint},ensure_ascii=False,sort_keys=True).encode()).hexdigest()
-    existing = next((n for n in nodes if n.get('type') == 'smart-shot-table' and (n.get('shotTableData') or {}).get('productionData',{}).get('workflowHash') == workflow_hash),None)
+    existing = next((n for n in nodes if n.get('type') == table_type and (n.get('shotTableData') or {}).get('productionData',{}).get('workflowHash') == workflow_hash),None)
     if existing:
         table=existing['shotTableData']
         return [],[],dict(tableId=existing['id'],sourceNodeId=source['id'],sourceFingerprint=fingerprint,
@@ -141,7 +141,7 @@ def create_story_nodes(candidate, data, *, key, settings, x, y):
         # 原生提示词节点没有独立标题栏，正文首行必须能看出文档用途。
         if not ref.startswith('shot-'):
             text = title + '\n\n' + text
-        n = dict(id=uid(ref), type='smart-prompt', title=title, text=text, x=px, y=py, w=316, h=260,
+        n = dict(id=uid(ref), type='smart-prompt' if smart else 'prompt', title=title, text=text, x=px, y=py, w=316, h=260,
                  promptSeparator=';', promptSplitEnabled=False, llmEnabled=False, llmSystemEnabled=False,
                  storyWorkflowOrigin={'tableId': table_id, 'sourceNodeId': source['id'], 'sourceFingerprint': fingerprint})
         add(n)
@@ -191,19 +191,31 @@ def create_story_nodes(candidate, data, *, key, settings, x, y):
         if len(text)>12000:
             raise HTTPException(422, f'分镜 {shot.id} 的资产设定与提示词过长，请精简')
         row['imagePrompt'] = text
+        if not images:
+            continue
         px,py=x+2680,y+index*330
         p = prompt('shot-'+shot.id, f'分镜 {index+1} · {shot.title}',text,px,py)
         link('table-'+shot.id, table_id, p)
         image_id=uid('image-'+shot.id)
         origin=dict(tableId=table_id,rowId=shot.id,sourceFingerprint=fingerprint,durationSeconds=duration,motionPrompt=shot.motionPrompt)
-        add(dict(id=image_id,type='smart-image',title=f'分镜 {index+1} 配图',x=px+370,y=py,w=340,h=260,images=[],
+        if smart:
+            add(dict(id=image_id,type='smart-image',title=f'分镜 {index+1} 配图',x=px+370,y=py,w=340,h=260,images=[],
                  runSettings={**settings,'engine':'api','apiKind':'image','count':1},
                  promptDraftText=text,promptDraftHtml=html.escape(text),promptDraftTouched=True,shotTableOrigin=origin))
+            output_id = image_id
+        else:
+            from backend.canvas_assistant_operations import new_node, CreateNode
+            image = new_node('classic', CreateNode(op='create', operationId='image', ref='image', type='image_generator', title=f'分镜 {index+1} 配图'), image_id, px+370, py, settings, candidate.get('updated_at'))
+            image.update(w=340, h=260, count=1, shotTableOrigin=origin)
+            add(image)
+            output_id = uid('output-'+shot.id)
+            add(dict(id=output_id, type='output', title=f'分镜 {index+1} 输出', x=px+810, y=py, w=260, h=260, images=[]))
+            link('output-'+shot.id, image_id, output_id, 'input')
         link(shot.id, p, image_id, 'input')
-        table['generationMap'][f'{fingerprint}:{shot.id}']=dict(promptId=p,generatorId=image_id,outputId=image_id)
+        table['generationMap'][f'{fingerprint}:{shot.id}']=dict(promptId=p,generatorId=image_id,outputId=output_id)
     table['source']['durationSeconds']=elapsed
     table['selectedRowIds']=[s.id for s in data.shots]
-    add(dict(id=table_id,type='smart-shot-table',name=data.title+' · 文本分镜表',title='文本分镜表',x=x+1400,y=y+495,w=1120,h=390,shotTableData=table))
+    add(dict(id=table_id,type=table_type,name=data.title+' · 文本分镜表',title='文本分镜表',x=x+1400,y=y+495,w=1120,h=390,shotTableData=table))
     return created, edges, {'tableId':table_id,'sourceNodeId':source['id'],'sourceFingerprint':fingerprint,'documentNodeIds':document_ids,'shotCount':len(data.shots),'durationSeconds':elapsed,'generationMap':copy.deepcopy(table['generationMap'])}
 
 
@@ -218,6 +230,8 @@ def sync_story_prompt(candidate, prompt, content):
         raise HTTPException(409, '工作流镜头表已丢失，请先核对来源')
     table = table_node.get('shotTableData') or {}
     chains = [v for v in (table.get('generationMap') or {}).values() if v.get('promptId') == prompt['id']]
+    if any(v.get('promptProcessorId') for v in chains):
+        raise HTTPException(409,'逐镜素材由分镜表同步，请编辑对应表行再运行本镜LLM')
     if not chains:  # 资产文档也记录表归属，但不是某镜配图链。
         return []
     if len(chains) != 1:
@@ -225,14 +239,14 @@ def sync_story_prompt(candidate, prompt, content):
     image = nodes.get(chains[0].get('generatorId'))
     row_id = (image or {}).get('shotTableOrigin', {}).get('rowId')
     row = next((r for r in table.get('rows', []) if r['id'] == row_id), None)
-    if (not image or image.get('type') != 'smart-image' or not row
+    if (not image or image.get('type') not in {'smart-image', 'generator'} or not row
             or image.get('shotTableOrigin', {}).get('tableId') != table_node['id']
             or not any(e['from'] == prompt['id'] and e['to'] == image['id'] for e in candidate['connections'])):
         raise HTTPException(409, '镜头配图链不完整，未修改')
     from backend.canvas_assistant_operations import is_busy
     if is_busy(image):
         raise HTTPException(409, '对应配图节点正在运行，未修改')
-    if row.get('imagePrompt') == content and image.get('promptDraftText') == content:
+    if row.get('imagePrompt') == content and (image.get('type') == 'generator' or image.get('promptDraftText') == content):
         return []
     row['imagePrompt'] = content
     table['revision'] = int(table.get('revision') or 0) + 1
@@ -241,5 +255,6 @@ def sync_story_prompt(candidate, prompt, content):
         if shot['id'] == row_id:
             shot['imagePrompt'] = content
     production.pop('workflowHash', None)  # 编辑后不能再以旧正文摘要复用。
-    image.update(promptDraftText=content, promptDraftHtml=html.escape(content), promptDraftTouched=True)
+    if image.get('type') == 'smart-image':
+        image.update(promptDraftText=content, promptDraftHtml=html.escape(content), promptDraftTouched=True)
     return [table_node['id'], image['id']]
