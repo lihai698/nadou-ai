@@ -66,14 +66,14 @@ def create_shot_prompts(candidate,data,settings,providers):
             source={'id':sid,'type':'smart-prompt' if smart else 'prompt','title':f'分镜 {row.get("index",row_id)} · 素材',
                 'text':text,'x':float(table_node.get('x',0))+1200,'y':float(table_node.get('y',0))+len(mapping)*500,'w':340,'h':360,
                 'storyWorkflowOrigin':{'tableId':data.tableId}}
-            if smart:source.update(images=[],llmEnabled=False,llmSystemEnabled=False,promptSplitEnabled=False,promptSeparator=';')
+            if smart:source.update(images=[],llmEnabled=False,llmSystemEnabled=False,llmProvider=provider,llmModel=model,promptSplitEnabled=False,promptSeparator=';')
             candidate['nodes'].append(source);created.append(sid)
             added,linked,receipt=create_analysis(candidate,StoryAnalysis(sourceNodeId=sid,title=f'分镜 {row.get("index",row_id)}',style=table.get('productionData',{}).get('style') or '遵循镜头素材'),settings,providers)
             processor=next(n for n in candidate['nodes'] if n['id']==receipt['analysisNodeId'])
             processor.pop('storyAnalysisOrigin',None)
             processor.update(title=f'分镜 {row.get("index",row_id)} · LLM提示词',shotPromptOrigin={'tableId':data.tableId,'rowId':row_id,'sourceNodeId':sid},storyWorkflowOrigin={'tableId':data.tableId})
             instruction='根据上游单镜素材编写可直接用于图片模型的画面提示词。只输出提示词正文，不输出JSON、解释或Markdown。cells是当前用户编辑的镜头内容，优先于旧imagePrompt；保持角色、场景、道具及风格一致，只描绘本镜，不编造其他镜头。'
-            if smart:processor.update(llmInstruction='处理上游单镜素材为图片提示词。',llmSystemPrompt=instruction)
+            if smart:processor.update(llmInstruction=instruction,llmSystemEnabled=False,llmSystemPrompt='')
             else:processor['systemPrompt']=instruction
             eid=sid+'_table';candidate['connections'].append({'id':eid,'from':data.tableId,'to':sid,'kind':'story'})
             created.extend(added);edges.extend([*linked,eid]);mapping[row_id]={'sourceNodeId':sid,'processorId':processor['id']}
@@ -89,6 +89,8 @@ def processed_prompt(candidate,table_id,row_id):
     source=nodes.get(mapping.get('sourceNodeId'));processor=nodes.get(mapping.get('processorId'))
     if not row or not source or not processor:
         raise HTTPException(409,'请先为该镜创建并运行LLM提示词处理节点')
+    if processor.get('llmOutputStale'):
+        raise HTTPException(409,'该镜处理规则已变化，请重新运行本镜LLM')
     output=processor.get('text' if processor['type']=='smart-prompt' else 'outputText','')
     proof=processor.get('shotPromptResult') or {}
     try:current=json.loads(source.get('text',''))==shot_input(table,row)
@@ -142,8 +144,11 @@ def create_shot_images(candidate,data,settings,key):
         x=float(processor.get('x',0))+440;y=float(processor.get('y',0))
         shot_origin={'tableId':data.tableId,'rowId':rid,'sourceFingerprint':table.get('source',{}).get('fingerprint',''),'durationSeconds':row.get('durationSeconds'), 'motionPrompt':row.get('motionPrompt','')}
         if smart:
+            # 与智能画布原生图片节点的保存格式一致，避免首次渲染补默认值使确认失配。
+            native_settings={**settings,'engine':'api','apiKind':'image','count':1,'videoTempShLinks':[],
+                'videoMultimodal':not bool(settings.get('videoUseFrameRoles'))}
             gen={'id':gid,'type':'smart-image','title':f'分镜 {row.get("index",rid)} 配图','x':x,'y':y,'w':340,'h':260,'images':[],
-                'runSettings':{**settings,'engine':'api','apiKind':'image','count':1},'promptDraftText':'','promptDraftHtml':'','promptDraftTouched':False}
+                'runSettings':native_settings,'promptDraftText':'','promptDraftHtml':'','promptDraftTouched':False}
             oid=gid
         else:
             gen=new_node('classic',CreateNode(op='create',operationId='image',ref='image',type='image_generator',title=f'分镜 {row.get("index",rid)} 配图'),gid,x,y,settings,candidate.get('updated_at'))

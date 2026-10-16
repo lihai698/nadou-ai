@@ -29,6 +29,7 @@ from backend.canvas_assistant_state import canvas_overview, read_node_state
 from backend.canvas_assistant_native import native_catalog, prepare_native_action, validate_native_snapshot, native_effect, native_run_result, native_task_reference, native_task_binding, public_native_task, public_workflow_fields, native_run_input_hash, native_comfy_foreign_busy, native_smart_group_foreign_busy, validate_video_run_provider
 from backend.canvas_assistant_loop import loop_foreign_busy, loop_plan
 from backend.canvas_assistant_lora import read_lora_catalog
+from backend.canvas_assistant_autonomy import authorize as authorize_autonomy, reserve as reserve_autonomy, safe_action
 from backend.diagnostics import write_diagnostic
 
 
@@ -64,6 +65,7 @@ class ProposalAction(BaseModel):
     imageProvider: str = ""
     imageModel: str = ""
     imageRequest: dict = Field(default_factory=dict)
+    automatic: bool = False
 
 
 class CancelRequest(BaseModel):
@@ -81,6 +83,18 @@ class PlanBudgetRequest(CancelRequest):
     total: int = Field(strict=True,ge=0,le=100)
 
 
+class AuthorizationModel(BaseModel):
+    model_config={'extra':'forbid'}
+    provider:str=Field(min_length=1,max_length=200)
+    model:str=Field(min_length=1,max_length=200)
+
+
+class AuthorizationRequest(CancelRequest):
+    model_config={'extra':'forbid'}
+    total:int=Field(strict=True,ge=1,le=100)
+    models:list[AuthorizationModel]=Field(min_length=1,max_length=8)
+
+
 class NativeActionRequest(BaseModel):
     canvasId: str
     sessionId: str
@@ -88,6 +102,7 @@ class NativeActionRequest(BaseModel):
     actionId: str
     action: str = Field(pattern=r'^(confirm|check|query|finish|retry|resume|dismiss|abandon)$')
     expectedUpdatedAt: int | None = None
+    automatic: bool = False
 
 
 def checked_id(value):
@@ -492,6 +507,20 @@ def create_assistant_router(*, root, load_canvas, providers, user_id, call_model
             turn['agent']['plan']=updated
             turn.setdefault('serviceBudgetAuthorizations',[]).append({'total':payload.total,'at':int(time.time()*1000)})
             return {'plan':copy.deepcopy(updated)}
+        return await asyncio.to_thread(store.transact,user,payload.canvasId,change)
+
+    @router.post('/authorization')
+    async def authorization(payload:AuthorizationRequest,request:Request,x_user_id:str=Header(default='')):
+        user,_=identity(request,x_user_id,payload.canvasId)
+        def change(doc):
+            turn=next((t for t in store.session(doc,payload.sessionId)['turns'] if t['id']==payload.requestId),None)
+            if not turn:raise HTTPException(404,'当前创作回合不存在')
+            grant=authorize_autonomy(turn,payload.total,[m.model_dump() for m in payload.models])
+            plan=(turn.get('agent') or {}).get('plan')
+            if plan:
+                used=plan['budget']['used']['serviceCalls']
+                turn['agent']['plan']=persistent_plan.set_service_limit(plan,used+max(0,grant['limit']-grant['used']),canvas_id=payload.canvasId,session_id=payload.sessionId)
+            return {'authorization':copy.deepcopy(grant)}
         return await asyncio.to_thread(store.transact,user,payload.canvasId,change)
 
     @router.get("/status")
@@ -974,6 +1003,11 @@ def create_assistant_router(*, root, load_canvas, providers, user_id, call_model
                     if payload.expectedUpdatedAt!=current.get('updated_at',0) or content_hash(current)!=proposal['canvasHash']: raise HTTPException(409,'画布或上游已变化，不能沿用旧确认')
                     proposal['updatedAt']=payload.expectedUpdatedAt
                 validate_native_snapshot(current,proposal,workflow_fields=current_workflow_fields(current,proposal['nodeId']) if proposal['action']=='workflow_parameters' else None,providers=providers(),media_export_prepare=media_export_prepare)
+                if payload.automatic:
+                    if proposal.get('chargeable'):
+                        run=proposal.get('runSettings') or {}
+                        reserve_autonomy(turn,'native:'+proposal['id'],run.get('provider'),run.get('model'),run.get('maxCalls'))
+                    elif not safe_action(proposal):raise HTTPException(409,'这项操作需要在任务面板手动确认')
                 if proposal.get('planStepId') and proposal.get('chargeable'):
                     plan = turn['agent']['plan']
                     if plan['state'] in {'interrupted','paused'}:
@@ -1343,6 +1377,7 @@ def create_assistant_router(*, root, load_canvas, providers, user_id, call_model
             if p["state"] != "pending":
                 raise HTTPException(409, "方案正在处理或已处理，请查询原任务")
             validate_snapshot(load_canvas(payload.canvasId), p, providers(), payload.expectedUpdatedAt)
+            if payload.automatic:reserve_autonomy(turn,'image:'+p['id'],p['provider'],p['model'],1)
             p.update(state="submitting", imageRequest=copy.deepcopy(payload.imageRequest), confirmedUpdatedAt=payload.expectedUpdatedAt)
             return copy.deepcopy(p)
         claimed = await asyncio.to_thread(change_proposal, user, payload, claim)

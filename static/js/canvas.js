@@ -4351,10 +4351,10 @@ async function uploadImages(files, point){
 async function uploadImageGroup(files, point){
     return uploadMediaFiles(files, point, false, {group:true});
 }
-function createImageCardFromUrl(url, point, name='image'){
+function createImageCardFromUrl(url, point, name='image', kind=''){
     if(!ensureCanvas() || !url) return;
     const p = point || defaultPoint(0, 0);
-    const mediaKind = isVideoUrl(url) ? 'video' : isAudioUrl(url) ? 'audio' : 'image';
+    const mediaKind = ['image','video','audio'].includes(kind) ? kind : isVideoUrl(url) ? 'video' : isAudioUrl(url) ? 'audio' : 'image';
     nodes.push({id:uid('img'), type:'image', x:p.x, y:p.y, url, name:name || outputImageName(url), mediaKind});
     window.CanvasAudio.migrate(nodes[nodes.length-1]);
     render();
@@ -16871,7 +16871,7 @@ window.onload = async () => {
             bindReferencePreviews:element=>bindCanvasPreviewImageFallbacks(element),
             openPromptTemplates:async callback=>{canvasAssistantTemplateCallback=callback;await openPromptTemplateModal('');},
             addTextNode:async text=>{const node=addPromptNode(defaultPoint(0,0));if(!node)return false;node.text=String(text||'');render();scheduleSave();return true;},
-            addImageNode:async (url,name)=>{if(!url)return false;createImageCardFromUrl(url,defaultPoint(0,0),name||'助手图片');return true;},
+            addImageNode:async (url,name,kind)=>{if(!url)return false;createImageCardFromUrl(url,defaultPoint(0,0),name||'助手图片',kind);return saveCanvas();},
             viewChanges:async ids=>{
                 await syncRemoteCanvasNow();
                 const affected=nodes.filter(node=>ids.includes(node.id));

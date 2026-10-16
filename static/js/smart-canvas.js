@@ -1990,7 +1990,7 @@ function promptNodeMinHeight(node){
 function promptTextItemsForNode(node, ctx=smartLoopContext){
     if(!node) return [];
     if(isSmartImageNode(node)&&node.audioOutputText)return [node.audioOutputText];
-    if(node.type === 'smart-prompt') return promptNodePromptItems(node);
+    if(node.type === 'smart-prompt') return node.llmEnabled && node.llmOutputStale ? [] : promptNodePromptItems(node);
     if(node.type === 'smart-loop'){
         const text = smartLoopPrompt(node, ctx);
         return text ? [text] : [];
@@ -2010,9 +2010,7 @@ function promptNodeUpstreamPromptText(node, ctx=smartLoopContext){
     return promptNodeUpstreamPromptItems(node, ctx).join('\n\n');
 }
 function promptNodeLLMInputText(node, ctx=smartLoopContext){
-    const upstream = promptNodeUpstreamPromptText(node, ctx).trim();
-    const instruction = String(node?.llmInstruction || '').trim() || promptNodePromptItems(node).join('\n\n').trim();
-    return [upstream, instruction].filter(Boolean).join('\n\n');
+    return promptNodeUpstreamPromptText(node, ctx).trim();
 }
 function promptNodeExpandedHeight(node){
     // 指令文本框（发送给 LLM 的内容）可拖动加高，超出默认高度的部分要叠加进节点高度。
@@ -4674,7 +4672,7 @@ function resetPromptPresetDeleteState(){
     }
 }
 function createPromptPresetFromNode(node, {openPanel=true, openTemplatePanel=false}={}){
-    const text = String(node?.text || '').trim();
+    const text = String((node?.llmEnabled ? node.llmInstruction : node?.text) || '').trim();
     if(!text){ toast(tr('smart.promptPresetEmpty')); return null; }
     const preset = {id:uid('preset'), name:defaultPromptPresetName(text), text, createdAt:Date.now(), updatedAt:Date.now()};
     promptPresets.unshift(preset);
@@ -4944,6 +4942,10 @@ function closePromptTemplatePanel(){
     syncComposerTemplateButton();
     render();
 }
+function setPromptTemplateText(node,text){
+    if(node.llmEnabled){node.llmInstruction=text;node.llmOutputStale=true;}
+    else node.text=text;
+}
 function applyPromptTemplateToNode(mode='positive'){
     const template = promptTemplateItems().find(item => item.id === promptTemplateSelectedId);
     if(!template) return;
@@ -4966,7 +4968,7 @@ function applyPromptTemplateToNode(mode='positive'){
     }
     const node = nodes.find(n => n.id === promptTemplatePanel?.dataset.nodeId);
     if(!node) return;
-    node.text = promptTemplateText(template, mode);
+    setPromptTemplateText(node,promptTemplateText(template, mode));
     node.promptPresetId = template.builtin ? '' : template.sourceId || '';
     closePromptTemplatePanel();
     render();
@@ -4978,7 +4980,7 @@ async function saveCurrentPromptAsTemplate(){
     if(library.readonly){ toast('请选择可编辑的提示词库'); return; }
     const text = promptTemplatePanel?.dataset.target === 'composer'
         ? promptPlainText()
-        : String(nodes.find(n => n.id === promptTemplatePanel?.dataset.nodeId)?.text || '').trim();
+        : (()=>{const node=nodes.find(n=>n.id===promptTemplatePanel?.dataset.nodeId);return String((node?.llmEnabled?node.llmInstruction:node?.text)||'').trim();})();
     if(!text){ toast(tr('smart.promptPresetEmpty')); return; }
     try {
         const data = await fetch('/api/prompt-libraries/items', {
@@ -5061,7 +5063,7 @@ async function savePromptTemplateEdit(){
         const idx = promptPresets.findIndex(p => p.id === preset.id);
         if(idx >= 0) promptPresets[idx] = {...promptPresets[idx], name, text, category, updatedAt:Date.now()};
         savePromptPresets();
-        nodes.forEach(node => { if(node.promptPresetId === preset.id) node.text = text; });
+        nodes.forEach(node => { if(node.promptPresetId === preset.id) setPromptTemplateText(node,text); });
     }
     promptTemplateEditing = false;
     renderPromptTemplatePanel();
@@ -7603,6 +7605,7 @@ function promptNodeBodyHtml(node){
             ${node.llmSystemEnabled ? `<textarea class="prompt-node-control prompt-llm-system" placeholder="${escapeHtml(tr('smart.promptLlmSystemPlaceholder'))}">${escapeHtml(systemPrompt || 'You are a helpful prompt assistant.')}</textarea>` : ''}
         </div>` : '';
     return `<div class="prompt-node-card">
+        ${node.llmEnabled && node.llmOutputStale ? '<div class="prompt-node-section-title">旧结果 · 规则已变化，运行后更新</div>' : ''}
         <textarea class="prompt-node-text prompt-node-control" ${readonly} placeholder="${escapeHtml(tr('smart.promptPlaceholderNode'))}">${escapeHtml(node.text || '')}</textarea>
         <div class="prompt-node-tools">
             <button class="prompt-node-pill prompt-node-control prompt-preset-edit ${templateActive ? 'active' : ''}" type="button"><i data-lucide="library"></i><span>模板库</span></button>
@@ -8670,6 +8673,7 @@ function bindPromptNodeControls(el, node){
         e.preventDefault(); e.stopPropagation();
         node.llmEnabled = !node.llmEnabled;
         if(node.llmEnabled){
+            node.llmOutputStale = true;
             node.llmProvider = resolveChatProviderId(node.llmProvider || '');
             node.llmModel = resolveChatModel(node.llmModel || '', node.llmProvider);
             node.h = Math.max(Number(node.h) || 0, promptNodeExpandedHeight(node));
@@ -8686,26 +8690,28 @@ function bindPromptNodeControls(el, node){
         e.stopPropagation();
         node.llmProvider = resolveChatProviderId(e.target.value);
         node.llmModel = resolveChatModel('', node.llmProvider);
+        node.llmOutputStale = true;
         render();
         scheduleSave();
     };
     const modelEl = el.querySelector('.prompt-llm-model');
-    if(modelEl) modelEl.onchange = e => { e.stopPropagation(); node.llmModel = e.target.value; scheduleSave(); };
+    if(modelEl) modelEl.onchange = e => { e.stopPropagation(); node.llmModel = e.target.value; node.llmOutputStale=true; scheduleSave(); };
     const systemToggleEl = el.querySelector('.prompt-system-toggle');
     if(systemToggleEl) systemToggleEl.onclick = e => {
         e.preventDefault();
         e.stopPropagation();
         const prevHeight = Number(node.h) || 0;
         node.llmSystemEnabled = !node.llmSystemEnabled;
+        node.llmOutputStale = true;
         if(node.llmSystemEnabled) node.h = Math.max(prevHeight, promptNodeExpandedHeight(node));
         else if(prevHeight <= 364) node.h = promptNodeExpandedHeight(node);
         render();
         scheduleSave();
     };
     const systemEl = el.querySelector('.prompt-llm-system');
-    if(systemEl) { bindScrollableText(systemEl); systemEl.oninput = e => { node.llmSystemPrompt = e.target.value; scheduleSave(); }; }
+    if(systemEl) { bindScrollableText(systemEl); systemEl.oninput = e => { node.llmSystemPrompt = e.target.value; node.llmOutputStale=true; scheduleSave(); }; }
     const instructionEl = el.querySelector('.prompt-llm-instruction');
-    if(instructionEl) { bindScrollableText(instructionEl); instructionEl.oninput = e => { node.llmInstruction = e.target.value; scheduleSave(); }; }
+    if(instructionEl) { bindScrollableText(instructionEl); instructionEl.oninput = e => { node.llmInstruction = e.target.value; node.llmOutputStale=true; scheduleSave(); }; }
     const instructionResizeEl = el.querySelector('[data-llm-instruction-resize]');
     if(instructionResizeEl) instructionResizeEl.addEventListener('mousedown', e => {
         if(e.button !== 0) return;
@@ -13494,7 +13500,7 @@ function selfReferenceImagesForNode(node, consume=false, ctx=smartLoopContext){
 function textForNode(node, ctx=smartLoopContext){
     if(!node) return '';
     if(isSmartImageNode(node)&&node.audioOutputText)return node.audioOutputText;
-    if(node.type === 'smart-prompt') return promptNodePromptItems(node).join('\n\n');
+    if(node.type === 'smart-prompt') return promptTextItemsForNode(node, ctx).join('\n\n');
     if(node.type === 'smart-loop') return smartLoopPrompt(node, ctx);
     if(node.type === 'smart-group') return smartGroupMembers(node).map(member => textForNode(member, ctx)).filter(Boolean).join('\n\n');
     return '';
@@ -16147,12 +16153,14 @@ async function runGeneration(options={}){
 async function runPromptLLMNode(nodeId, options={}){
     const node = nodes.find(n => n.id === nodeId);
     if(!node || node.type !== 'smart-prompt') return;
-    const message = promptNodeLLMInputText(node).trim();
+    const upstream = promptNodeLLMInputText(node).trim();
+    const instruction = String(node.llmInstruction || '').trim();
+    const message = upstream || (instruction ? '请按照处理规则生成结果。' : '');
     const storyOrigin=node.storyAnalysisOrigin || node.shotPromptOrigin;
     const storyResultField=node.shotPromptOrigin ? "shotPromptResult" : "storyAnalysisResult";
     const storySourceText=storyOrigin ? nodes.find(n=>n.id===storyOrigin.sourceNodeId)?.text : undefined;
     if(!message){ toast(tr('smart.promptLlmNeedText')); return; }
-    const systemPrompt = (node.llmSystemPrompt || '').trim();
+    const systemPrompt = [node.llmSystemEnabled ? (node.llmSystemPrompt || '').trim() : '',instruction].filter(Boolean).join('\n\n');
     if(!options.assistantNativeActionId) node.llmEnabled = true;
     node.running = true;
     render();
@@ -16162,6 +16170,7 @@ async function runPromptLLMNode(nodeId, options={}){
         const mediaRefs = promptNodeInputMediaForLLM(node);
         const images = imageRefsOnly(mediaRefs).map(img => img.url).filter(Boolean);
         const videos = videoRefsOnly(mediaRefs).map(video => video.url).filter(Boolean);
+        const inputConfig = JSON.stringify([node.llmProvider,node.llmModel,node.llmEnabled,images,videos]);
         if(options.assistantNativeActionId){
             if(!node.llmEnabled || !node.llmProvider || !node.llmModel || provider!==node.llmProvider || model!==node.llmModel){
                 const error=new Error('智能提示词的文本模型或 LLM 开关已变化，未提交调用');
@@ -16169,6 +16178,7 @@ async function runPromptLLMNode(nodeId, options={}){
             }
         }
         if(options.beforeSubmit) await options.beforeSubmit();
+        node.llmOutputStale = true;
         if(storyOrigin) delete node[storyResultField];
         const result = await fetch('/api/canvas-llm', {
             method:'POST',
@@ -16181,15 +16191,20 @@ async function runPromptLLMNode(nodeId, options={}){
                 model,
                 provider,
                 ms_model: provider === 'modelscope' ? model : '',
-                system_prompt:node.llmSystemEnabled ? (systemPrompt || 'You are a helpful prompt assistant.') : ''
+                system_prompt:systemPrompt
             })
         }).then(async r => {
             if(!r.ok) throw new Error(await r.text());
             return r.json();
         });
         const output = (result.text || '').trim();
-        if(options.assistantNativeActionId && !output) throw new Error('LLM 返回空文本，原正文已保留');
+        if(!output) throw new Error('LLM 返回空文本，旧结果已保留，请检查后重新运行');
+        const currentSystem=[node.llmSystemEnabled ? (node.llmSystemPrompt || '').trim() : '',String(node.llmInstruction || '').trim()].filter(Boolean).join('\n\n');
+        const currentMedia=promptNodeInputMediaForLLM(node);
+        const currentConfig=JSON.stringify([node.llmProvider,node.llmModel,node.llmEnabled,imageRefsOnly(currentMedia).map(img=>img.url).filter(Boolean),videoRefsOnly(currentMedia).map(video=>video.url).filter(Boolean)]);
+        if(promptNodeLLMInputText(node).trim()!==upstream || currentSystem!==systemPrompt || currentConfig!==inputConfig)throw new Error('运行期间规则、模型或上游内容已变化，旧结果已保留，请重新运行');
         node.text = output;
+        node.llmOutputStale = false;
         if(storyOrigin) node[storyResultField]={sourceText:storySourceText,outputText:output,provider,model};
         node.llmProvider = provider;
         node.llmModel = model;
@@ -16206,6 +16221,7 @@ async function runPromptLLMNode(nodeId, options={}){
             scheduleSave();
             throw e;
         }
+        scheduleSave();
         toast((e.message || tr('smart.promptLlmFailed')).slice(0, 160));
     } finally {
         node.running = false;
@@ -19373,7 +19389,7 @@ window.onload = async () => {
         bindReferencePreviews:element=>bindSmartPreviewImageFallbacks(element),
         openPromptTemplates:async callback=>{canvasAssistantTemplateCallback=callback;await openPromptTemplatePanel('', '', {target:'assistant'});},
         addTextNode:async text=>{const node=createPromptNode((viewport?.x||0)+120,(viewport?.y||0)+120);if(!node)return false;node.text=String(text||'');render();scheduleSave();return true;},
-        addImageNode:async (url,name)=>{if(!url)return false;createNode((viewport?.x||0)+120,(viewport?.y||0)+120,[{url,name:name||'助手图片'}],{select:true});return true;},
+        addImageNode:async (url,name,kind)=>{if(!url)return false;createNode((viewport?.x||0)+120,(viewport?.y||0)+120,[{url,name:name||'助手图片',kind:kind||'image'}],{select:true});return saveCanvas();},
         viewChanges:async ids=>{
             await mergeReloadCanvasNow();
             const affected=nodes.filter(node=>ids.includes(node.id));

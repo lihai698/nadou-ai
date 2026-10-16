@@ -26,7 +26,12 @@ class StoryAnalysisTests(unittest.TestCase):
             self.assertEqual(receipt['storyAnalyses'][0]['analysisNodeId'],analysis['id'])
             self.assertNotIn('storyAnalysisResult',analysis)
             self.assertNotIn('running',analysis,'原生保存会移除运行时字段，创建时不写入以免确认快照变化')
-            if kind=='smart':self.assertEqual(analysis['images'],[],'智能画布会补齐空素材数组，创建时使用同一格式')
+            if kind=='smart':
+                self.assertEqual(analysis['images'],[],'智能画布会补齐空素材数组，创建时使用同一格式')
+                self.assertIn('JSON Schema',analysis['llmInstruction'])
+                self.assertFalse(analysis['llmSystemEnabled'])
+                self.assertEqual(analysis['llmSystemPrompt'],'')
+                self.assertEqual(analysis['text'],'')
             from backend.canvas_assistant_native import prepare_native_action
             prepare_native_action(result,{'action':'run','nodeId':analysis['id'],'maxCalls':1},'run-analysis',providers=[{'id':'chosen','chat_models':['chosen-text']}])
             disconnected=copy.deepcopy(result);disconnected['connections']=[]
@@ -41,6 +46,10 @@ class StoryAnalysisTests(unittest.TestCase):
             n['storyAnalysisResult']={'sourceText':result['nodes'][0]['text'],'outputText':output,'provider':'chosen','model':'chosen-text'}
             op={'op':'story_analysis_result','operationId':'table','analysisNodeId':n['id']}
             saved,receipt=self.prepare(result,op,'table')
+            if kind=='smart':
+                changed_rules=copy.deepcopy(result)
+                changed_rules['nodes'][1]['llmOutputStale']=True
+                with self.assertRaises(HTTPException):self.prepare(changed_rules,op,'changed-rules')
             table=next(t for t in saved['nodes'] if t['type'] in {'shot-table','smart-shot-table'})
             self.assertEqual(len(table['shotTableData']['rows']),2)
             self.assertFalse(any(t['type'] in {'generator','smart-image'} for t in saved['nodes']))

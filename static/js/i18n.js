@@ -6,7 +6,7 @@
         '/static/js/i18n/studio.js',
         '/static/js/i18n/api-settings.js?audio-models=2026.10.10.2',
         '/static/js/i18n/canvas.js',
-        '/static/js/i18n/smart-canvas.js',
+        '/static/js/i18n/smart-canvas.js?prompt-rules=2026.10.15.1',
         '/static/js/i18n/asset-manager.js',
         '/static/js/i18n/comfyui-settings.js',
     ];

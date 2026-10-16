@@ -115,6 +115,13 @@ def parse_plan(text):
 
 def content_hash(canvas):
     content = {key: canvas.get(key) for key in ("nodes", "connections", "settings")}
+    # 浏览器保存会把 0.0 写为 0；相同数值不应使原生确认失效。
+    def numbers(value):
+        if isinstance(value,dict):return {key:numbers(item) for key,item in value.items()}
+        if isinstance(value,list):return [numbers(item) for item in value]
+        if isinstance(value,float) and value.is_integer():return int(value)
+        return value
+    content=numbers(content)
     return hashlib.sha256(json.dumps(content, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 

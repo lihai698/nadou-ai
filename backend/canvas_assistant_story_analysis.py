@@ -41,8 +41,8 @@ def create_analysis(candidate,data,settings,providers):
         'x':float(source.get('x',0))+440,'y':float(source.get('y',0)),'w':360,'h':420,
         'llmProvider':provider,'storyAnalysisOrigin':spec}
     if smart:
-        node.update(text='',images=[],llmEnabled=True,llmModel=model,llmInstruction='请分析上游原文并生成结构化分镜。',
-            llmSystemEnabled=True,llmSystemPrompt=instruction,inputNodeIds=[source['id']],promptSplitEnabled=False,promptSeparator=';')
+        node.update(text='',images=[],llmEnabled=True,llmModel=model,llmInstruction=instruction,
+            llmSystemEnabled=False,llmSystemPrompt='',inputNodeIds=[source['id']],promptSplitEnabled=False,promptSeparator=';')
     else:
         node.update(model=model,mode='node',showSystem=True,systemPrompt=instruction,userInput='',outputText='',messages=[])
     edge={'id':nid+'_input','from':source['id'],'to':nid,'kind':'input'}
@@ -55,6 +55,8 @@ def import_analysis(candidate,analysis_id):
     origin=(node or {}).get('storyAnalysisOrigin')
     if not origin or node.get('running'):
         raise HTTPException(409,'请先完成原生文本分析节点的运行')
+    if node.get('llmOutputStale'):
+        raise HTTPException(409,'分析规则或模型已变化，请重新运行分析节点')
     source=next((n for n in candidate['nodes'] if n['id']==origin['sourceNodeId']),None)
     if not any(c.get('from')==origin['sourceNodeId'] and c.get('to')==analysis_id and c.get('kind')=='input' for c in candidate['connections']):
         raise HTTPException(409,'原文到分析节点的输入连接已改变，请核对并重新运行')

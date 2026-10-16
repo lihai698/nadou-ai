@@ -278,7 +278,8 @@ def native_run_result(canvas,proposal,tasks):
     # 两个原任务仍必须成功且有结果，但不把中间图误当作必须展示的成品。
     final_outputs=wanted[-1:] if proposal['runSettings']['taskKind']=='comfy' and len(expected)==2 else wanted
     if any(not values for values in wanted) or any(not values<=saved for values in final_outputs):return {**receipt,'state':'accepted','error':'原任务成功，媒体尚未完整保存到原生结果节点，请恢复原任务并保存'}
-    return {**receipt,'state':'completed','node':read_node_state(canvas,node['id'])}
+    return {**receipt,'state':'completed','node':read_node_state(canvas,node['id']),
+            'result':{'urls':sorted(set().union(*final_outputs))}}
 
 
 def native_catalog(kind):
@@ -604,7 +605,7 @@ def prepare_native_action(canvas,args,action_id,*,workflow_fields=None,creation_
                 if public['maxCalls']!=1:_error('LLM 运行每次只允许确认一个模型调用',409)
                 if not node.get('llmProvider') or not node.get('llmModel' if t=='smart-prompt' else 'model'):_error('请先在原节点手动选择文本平台和模型，助手不代选默认模型',409)
                 if t=='smart-prompt' and node.get('llmEnabled') is not True:_error('请先在智能提示词节点开启 LLM 改写',409)
-                has_input=bool((node.get('text') or node.get('llmInstruction') if t=='smart-prompt' else node.get('userInput') or node.get('outputText')) or any(c.get('to')==node['id'] and c.get('from') and c.get('from')!=node['id'] for c in canvas.get('connections',[])))
+                has_input=bool((node.get('llmInstruction') if t=='smart-prompt' else node.get('userInput') or node.get('outputText')) or any(c.get('to')==node['id'] and c.get('from') and c.get('from')!=node['id'] and (t!='smart-prompt' or c.get('kind')=='input') for c in canvas.get('connections',[])))
                 if not has_input:_error('LLM 节点缺少输入正文，请先连接提示词或填写正文',409)
                 task_kind='llm'; provider=node.get('llmProvider'); model=node.get('llmModel' if t=='smart-prompt' else 'model')
             # Comfy 节点的一次运行通常提交一个任务；增强/编辑开启超分时还会提交第二个任务。

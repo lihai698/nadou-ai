@@ -28,6 +28,43 @@ def decision(tool=None, arguments=None, reply="已完成"):
 
 
 class AgentRouteTests(unittest.IsolatedAsyncioTestCase):
+    async def test_turn_authorization_bounds_native_calls_and_is_persistent(self):
+        node={'id':'llm','type':'llm','llmProvider':'mock','model':'chat','userInput':'整理本镜提示词','outputText':''}
+        self.canvas.update(kind='classic',nodes=[node])
+        self.responses=[decision('propose_native_action',{'action':'run','nodeId':'llm','maxCalls':1}),decision('propose_native_action',{'action':'run','nodeId':'llm','maxCalls':1})]
+        await self.send();turn=await self.history();proposal=turn['nativeActions'][0]
+        body={'canvasId':'canvas-a','sessionId':self.session,'turnId':'turn-a','actionId':proposal['id'],'action':'confirm','automatic':True}
+        missing=await self.client.post('/api/canvas-assistant/native/action',json=body);self.assertEqual(missing.status_code,409)
+        grant=await self.client.post('/api/canvas-assistant/authorization',json={'canvasId':'canvas-a','sessionId':self.session,'requestId':'turn-a','total':1,'models':[{'provider':'mock','model':'chat'}]})
+        self.assertEqual(grant.status_code,200,grant.text)
+        confirmed=await self.client.post('/api/canvas-assistant/native/action',json=body);self.assertEqual(confirmed.status_code,200,confirmed.text);self.assertTrue(confirmed.json()['canExecute'])
+        node.update(outputText='真实原生保存结果',assistantNativeRun={'actionId':proposal['id'],'taskKind':'llm','taskIds':[],'status':'succeeded','outputText':'真实原生保存结果'})
+        self.canvas['updated_at']+=1
+        done=await self.client.post('/api/canvas-assistant/native/action',json={**body,'action':'finish'});self.assertEqual(done.status_code,200,done.text)
+        repeated=await self.client.post('/api/canvas-assistant/native/action',json=body);self.assertFalse(repeated.json().get('canExecute'))
+        self.assertEqual((await self.history())['authorization']['used'],1)
+        continued=await self.client.post('/api/canvas-assistant/continue',json={'canvasId':'canvas-a','sessionId':self.session,'requestId':'turn-a'})
+        self.assertEqual(continued.status_code,200,continued.text)
+        next_turn=await self.history();next_proposal=next_turn['nativeActions'][-1];self.assertNotEqual(next_proposal['id'],proposal['id'])
+        exhausted=await self.client.post('/api/canvas-assistant/native/action',json={**body,'actionId':next_proposal['id']});self.assertEqual(exhausted.status_code,409,exhausted.text)
+        self.assertFalse(self.tasks)
+
+    async def test_automatic_safe_edit_needs_no_grant_but_export_does(self):
+        self.canvas.update(kind='classic',nodes=[{'id':'p','type':'prompt','text':'old'}])
+        self.responses=[decision('propose_native_action',{'action':'update','nodeId':'p','patch':{'text':'new'}}),decision(reply='修改完成')]
+        await self.send();proposal=(await self.history())['nativeActions'][0]
+        body={'canvasId':'canvas-a','sessionId':self.session,'turnId':'turn-a','actionId':proposal['id'],'action':'confirm','automatic':True}
+        confirmed=await self.client.post('/api/canvas-assistant/native/action',json=body);self.assertEqual(confirmed.status_code,200,confirmed.text);self.assertTrue(confirmed.json()['canExecute'])
+        self.canvas['nodes'][0]['text']='new';self.canvas['updated_at']+=1
+        done=await self.client.post('/api/canvas-assistant/native/action',json={**body,'action':'finish'});self.assertEqual(done.status_code,200,done.text)
+        await self.client.post('/api/canvas-assistant/continue',json={'canvasId':'canvas-a','sessionId':self.session,'requestId':'turn-a'})
+        self.responses=[decision('propose_native_action',{'action':'export','nodeId':'p','includeResources':False})]
+        await self.send(requestId='export-turn')
+        history=await self.client.get('/api/canvas-assistant/history',params={'canvasId':'canvas-a','sessionId':self.session})
+        proposal=history.json()['session']['turns'][-1]['nativeActions'][0]
+        forbidden=await self.client.post('/api/canvas-assistant/native/action',json={**body,'turnId':'export-turn','actionId':proposal['id']});self.assertEqual(forbidden.status_code,409,forbidden.text)
+        self.assertFalse(self.tasks)
+
     async def test_shot_tools_real_route_uses_selected_models_and_never_submits(self):
         self.canvas.update(kind='classic',nodes=[{'id':'table','type':'shot-table','shotTableData':{
             'source':{'fingerprint':'story'},'rows':[{'id':'s1','index':1,'cells':{'visual':'女孩读信'},'imagePrompt':'书店'}],
@@ -994,7 +1031,9 @@ class AgentRouteTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_smart_prompt_run_route_confirm_finish_restore_and_continue(self):
         self.canvas['kind']='smart'
-        self.canvas['nodes']=[{'id':'p','type':'smart-prompt','text':'原文','llmEnabled':True,'llmProvider':'mock','llmModel':'chat'}]
+        self.canvas['nodes']=[{'id':'p','type':'smart-prompt','text':'旧结果','llmInstruction':'改写上游原文','llmEnabled':True,'llmProvider':'mock','llmModel':'chat'},
+            {'id':'source','type':'smart-prompt','text':'原文','llmEnabled':False}]
+        self.canvas['connections']=[{'id':'source-input','from':'source','to':'p','kind':'input'}]
         self.responses=[decision('propose_native_action',{'action':'run','nodeId':'p','maxCalls':1}),decision(reply='已核对保存的智能改写正文')]
         await self.send()
         action=(await self.history())['nativeActions'][0]

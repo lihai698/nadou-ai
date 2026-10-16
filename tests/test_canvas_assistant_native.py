@@ -102,7 +102,9 @@ class NativeActionTests(unittest.TestCase):
         for field in ['canvas_id','node_id','assistant_action_id','input_hash','provider_id','model']:
             self.assertEqual(projected[field],task[field])
         c['nodes'][1]['images']=[{'url':'/output/video.mp4','kind':'video'}]
-        self.assertEqual(native_run_result(c,p,[task])['state'],'completed')
+        completed=native_run_result(c,p,[task])
+        self.assertEqual(completed['state'],'completed')
+        self.assertEqual(completed['result']['urls'],['/output/video.mp4'])
         for field in ['canvas_id','node_id','assistant_action_id','input_hash']:
             with self.subTest(field=field),self.assertRaises(HTTPException):native_run_result(c,p,[{**task,field:'foreign'}])
         c['connections']=[];self.assertNotEqual(native_run_input_hash(c,'n'),before)
@@ -569,7 +571,7 @@ class NativeActionTests(unittest.TestCase):
     def test_smart_prompt_run_uses_selected_text_model_and_saved_text(self):
         canvas=self.canvas('smart-prompt');canvas['kind']='smart'
         node=canvas['nodes'][0]
-        node.update(text='原文',llmEnabled=True,llmProvider='codex',llmModel='gpt-6.1-sol')
+        node.update(text='旧结果',llmInstruction='处理原文',llmEnabled=True,llmProvider='codex',llmModel='gpt-6.1-sol')
         proposal=prepare_native_action(canvas,{'action':'run','nodeId':'n','maxCalls':1},'smart-llm')
         row=next(r for r in native_catalog('smart') if r['type']=='smart-prompt')
         self.assertIn('run',row['availableActions'])
@@ -584,8 +586,8 @@ class NativeActionTests(unittest.TestCase):
     def test_smart_prompt_run_rejects_disabled_missing_model_or_empty_input(self):
         canvas=self.canvas('smart-prompt');canvas['kind']='smart'
         node=canvas['nodes'][0]
-        node.update(text='原文',llmEnabled=True,llmProvider='codex',llmModel='gpt-6.1-sol')
-        for field,value in [('llmEnabled',False),('llmModel',''),('llmProvider',''),('text','')]:
+        node.update(text='旧结果',llmInstruction='处理原文',llmEnabled=True,llmProvider='codex',llmModel='gpt-6.1-sol')
+        for field,value in [('llmEnabled',False),('llmModel',''),('llmProvider',''),('llmInstruction','')]:
             changed=copy.deepcopy(canvas);changed['nodes'][0][field]=value
             with self.subTest(field=field),self.assertRaises(HTTPException):
                 prepare_native_action(changed,{'action':'run','nodeId':'n','maxCalls':1},'smart-llm')
