@@ -473,6 +473,7 @@
                 try{if(!adapter.syncNativeTask)throw new Error('原任务回填入口不可用');const synced=await adapter.syncNativeTask(proposal);if(synced&&proposal.action==='run'){const saved=await api('native/action',{canvasId:owner,sessionId,turnId:turn.id,actionId:proposal.id,action:'finish'});if(alive())Object.assign(proposal,saved.proposal);}}
                 catch(err){error=err.message||'回填尚未保存，可重试同步原任务';}
                 finally{flight=false;if(alive())render();}
+                if(!error&&proposal.state==='completed'&&alive()){autoErrors.delete(turn.id);closeTasks();queueAutomatic();}
             }
             async function act(action,automatic=false){
                 if(busy||flight||!alive())return;flight=true;error='';render();
@@ -604,7 +605,7 @@
                 else if(turn.state==='cancelled'){reply.textContent=turn.error||'已停止本轮；已保存的操作仍保留。';}
                 else if(turn.state!=='completed'){reply.textContent=turn.reply||(progress?'':turnPresentation(turn.state).label);}
                 if(turn.state==='completed')addReplyActions(reply,turn.reply||'',resultMedia(turn));
-                if(['interrupted','paused'].includes(turn.state)){const button=document.createElement('button');button.type='button';button.textContent='继续创作';button.onclick=()=>{autoErrors.delete(turn.id);continueTurn(turn.id);};progress?.controls.append(button);}
+                if(['interrupted','paused'].includes(turn.state)||turn.state==='failed'&&turn.agent){const button=document.createElement('button');button.type='button';button.textContent='继续创作';button.onclick=()=>{autoErrors.delete(turn.id);continueTurn(turn.id);};progress?.controls.append(button);}
                 if(turn.state!=='completed'){if(turn.reply&&progress){const explanation=document.createElement('div');explanation.className='canvas-assistant-task-notice';explanation.textContent=turn.reply;progress.body.append(explanation);}reply.replaceChildren();reply.textContent='';}
                 reply.hidden=!reply.textContent;messages.append(reply);
                 for(const proposal of turn.proposals||[])addProposalCard(turn,proposal,progress);
@@ -702,7 +703,7 @@
             }
         }
         async function continueTurn(turnId,wait=false){
-            if(busy||!session)return;const owner=canvasId,sessionId=session.id,active={canvasId:owner,sessionId,id:turnId,controller:new AbortController()};request=active;busy=true;syncControls();showStatus(wait?'等待图片完成后继续创作…':'正在继续创作…');
+            if(busy||!session)return;autoErrors.delete(turnId);closeTasks();const owner=canvasId,sessionId=session.id,active={canvasId:owner,sessionId,id:turnId,controller:new AbortController()};request=active;busy=true;syncControls();showStatus(wait?'等待图片完成后继续创作…':'正在继续创作…');
             active.progress=turnProgress.get(turnId)||addProgress({id:turnId,state:'running'});active.progress.label.textContent=wait?'等待原任务完成':'正在继续创作';
             const reply=document.createElement('div');reply.className='canvas-assistant-message canvas-assistant-reply';reply.hidden=true;messages.append(reply);let output='';
             try{

@@ -160,7 +160,7 @@ test('真实历史渲染将完成操作收起，待确认与等待结果可在�
   get isConnected(){return this===messages||this===taskList||!!this.parentNode?.isConnected;}
  }
  const all=el=>[el,...el.children.flatMap(all)];
- for(const state of ['running','waiting_confirmation','waiting_result','completed']){
+ for(const state of ['running','waiting_confirmation','waiting_result','completed','failed']){
   messages=new El('div');taskList=new El('div');const turn={id:'original-turn',state,message:'需求',reply:'给用户的成果',nativeActions:state==='running'?[]:[{id:'a',action:'update',state:state==='completed'?'completed':state==='waiting_result'?'accepted':'pending',nodeId:'n',arguments:{patch:{text:'new'}}}]};let cancelBody;
   const ctx=vm.createContext({document:{createElement:tag=>new El(tag)},...taskGlobals(messages),messages,taskList,...taskGlobals(taskList),turnProgress:new Map(),session:{id:'s',turns:[turn]},canvasId:'c',busy:false,request:null,current:()=>({nodes:[]}),matches:()=>true,icons:()=>{},adapter:{},input:{},syncControls:()=>{},continueTurn:()=>{},api:async(path,body)=>{assert.equal(path,'cancel');cancelBody=body;return {};},selectSession:async()=>{turn.state='cancelled';ctx.drawHistory();},showStatus:()=>{},addReplyActions:()=>{},addProposalCard:()=>{}});
   for(const name of ['turnPresentation','progressPresentation','nativeActionAttention','addProgress','addNativeActionCard','drawHistory'])vm.runInContext(uiFunction(name),ctx);
@@ -171,7 +171,8 @@ test('真实历史渲染将完成操作收起，待确认与等待结果可在�
   const plan=elements.find(e=>e.className==='canvas-assistant-plan');assert.ok(plan);assert.equal(plan.parentNode.className,'canvas-assistant-progress-body');
   const skills=elements.find(e=>e.className.includes('canvas-assistant-turn-skills'));assert.equal(skills.parentNode.className,'canvas-assistant-progress-body');
   if(['waiting_confirmation','waiting_result'].includes(state))assert.equal(elements.some(e=>['等待操作确认','等待图片结果'].includes(e.textContent)),false,'摘要已经说明等待状态，不再添加重复回复');
-  if(state==='completed'){assert.equal(stop,undefined);assert.equal(card.parentNode.className,'canvas-assistant-progress-body');}
+  if(state==='failed'){assert.equal(stop,undefined);assert.ok(all(taskList).some(e=>e.tagName==='button'&&e.textContent==='继续创作'),'失败回合应在任务面板提供原回合继续入口');assert.equal(all(messages).some(e=>e.tagName==='button'&&e.textContent==='继续创作'),false);}
+  else if(state==='completed'){assert.equal(stop,undefined);assert.equal(card.parentNode.className,'canvas-assistant-progress-body');}
   else{assert.ok(stop,state);assert.equal(stop.parentNode.parentNode.className,'canvas-assistant-activity');assert.equal(stop.parentNode.parentNode.parentNode,taskList);await stop.onclick();assert.equal(cancelBody.requestId,'original-turn');assert.equal(cancelBody.sessionId,'s');assert.equal(turn.state,'cancelled');assert.equal(stop.isConnected,false);}
   if(state==='waiting_confirmation'){assert.equal(all(taskList).some(e=>e.textContent==='确认操作'),false);assert.ok(all(taskList).some(e=>e.textContent==='本轮已停止，方案未执行'));}
  }
