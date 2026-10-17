@@ -204,7 +204,7 @@ class RecoveryToolTests(unittest.TestCase):
             result = subprocess.run(
                 command + ["--root", str(root)],
                 capture_output=True,
-                text=True,
+                text=True, encoding="utf-8",
                 check=False,
             )
 
@@ -228,23 +228,23 @@ class RecoveryToolTests(unittest.TestCase):
             command = [sys.executable, str(ROOT / "tools" / "check-data-formats.py")]
 
             initial = subprocess.run(command + ["--root", str(working), "--snapshot", str(backup)],
-                                     capture_output=True, text=True, check=False)
+                                     capture_output=True, text=True, encoding="utf-8", check=False)
             self.assertEqual(initial.returncode, 0, initial.stderr)
             interrupted = working / "data" / ".projects.json.interrupted.tmp"
             interrupted.write_text('{"incomplete":', encoding="utf-8")
             residue = subprocess.run(command + ["--root", str(working)],
-                                     capture_output=True, text=True, check=False)
+                                     capture_output=True, text=True, encoding="utf-8", check=False)
             self.assertEqual(residue.returncode, 1)
             interrupted.unlink()
             before_backup = (backup / "data" / "projects.json").read_bytes()
             (working / "data" / "projects.json").write_text('{broken', encoding="utf-8")
             damaged = subprocess.run(command + ["--root", str(working)],
-                                     capture_output=True, text=True, check=False)
+                                     capture_output=True, text=True, encoding="utf-8", check=False)
             self.assertEqual(damaged.returncode, 1)
 
             shutil.copytree(backup, restored)
             recovered = subprocess.run(command + ["--root", str(restored), "--snapshot", str(backup)],
-                                       capture_output=True, text=True, check=False)
+                                       capture_output=True, text=True, encoding="utf-8", check=False)
             self.assertEqual(recovered.returncode, 0, recovered.stderr)
             self.assertEqual((backup / "data" / "projects.json").read_bytes(), before_backup)
             self.assertEqual(json.loads((restored / "data" / "projects.json").read_text(encoding="utf-8"))
@@ -272,7 +272,7 @@ class RecoveryToolTests(unittest.TestCase):
 
             checked = subprocess.run(
                 command + ["--root", str(working), "--snapshot", str(backup), "--all-json"],
-                capture_output=True, text=True, check=False,
+                capture_output=True, text=True, encoding="utf-8", check=False,
             )
             self.assertEqual(checked.returncode, 0, checked.stderr)
             self.assertIn("json v0", checked.stdout)
@@ -282,7 +282,7 @@ class RecoveryToolTests(unittest.TestCase):
             conversation.write_text('{"messages":["changed"]}', encoding="utf-8")
             changed = subprocess.run(
                 command + ["--root", str(working), "--snapshot", str(backup), "--all-json"],
-                capture_output=True, text=True, check=False,
+                capture_output=True, text=True, encoding="utf-8", check=False,
             )
             self.assertEqual(changed.returncode, 1)
             self.assertIn("data/conversations/user.json: 内容哈希不同", changed.stdout)

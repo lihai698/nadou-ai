@@ -6,6 +6,7 @@ import json
 import re
 import shutil
 import subprocess
+import sys
 import urllib.error
 import urllib.request
 import zipfile
@@ -225,6 +226,9 @@ def build_release(files, version, notes, parent=None):
 
 
 def main():
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(description="检查或制作不含本地数据与旧 Git 历史的公开发布包")
     parser.add_argument("--build", action="store_true", help="通过检查后生成完整目录和 ZIP")
     parser.add_argument("--allow-current-version", action="store_true", help="仅供已推送同一版本的发布工作流使用")

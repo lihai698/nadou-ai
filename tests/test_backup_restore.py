@@ -125,7 +125,7 @@ class BackupRestoreTests(unittest.TestCase):
 
             created = subprocess.run(
                 command + ["create", "--source", str(source), "--snapshot", str(snapshot)],
-                capture_output=True, text=True, check=False,
+                capture_output=True, text=True, encoding="utf-8", check=False,
             )
             self.assertEqual(created.returncode, 0, created.stderr)
             self.assertIn("format_version=1", created.stdout)
@@ -133,12 +133,12 @@ class BackupRestoreTests(unittest.TestCase):
 
             verified = subprocess.run(
                 command + ["verify", "--snapshot", str(snapshot)],
-                capture_output=True, text=True, check=False,
+                capture_output=True, text=True, encoding="utf-8", check=False,
             )
             self.assertEqual(verified.returncode, 0, verified.stderr)
             restored_result = subprocess.run(
                 command + ["restore", "--snapshot", str(snapshot), "--destination", str(restored)],
-                capture_output=True, text=True, check=False,
+                capture_output=True, text=True, encoding="utf-8", check=False,
             )
             self.assertEqual(restored_result.returncode, 0, restored_result.stderr)
             self.assertEqual(

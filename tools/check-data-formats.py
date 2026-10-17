@@ -149,6 +149,9 @@ def compare_snapshot(current: dict, snapshot: dict) -> list[str]:
 
 
 def main() -> int:
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", required=True, type=Path, help="待检查的数据副本目录")
     parser.add_argument("--snapshot", type=Path, help="可选：与原始备份的 JSON 哈希比较")

@@ -29,7 +29,7 @@ class TaskCleanupCliTests(unittest.TestCase):
             preview = subprocess.run(
                 [sys.executable, str(tool), "--root", str(root), "--ttl-days", "0.00001"],
                 capture_output=True,
-                text=True,
+                text=True, encoding="utf-8",
                 check=False,
             )
             self.assertEqual(preview.returncode, 0, preview.stderr)
@@ -47,7 +47,7 @@ class TaskCleanupCliTests(unittest.TestCase):
                     str(plan),
                 ],
                 capture_output=True,
-                text=True,
+                text=True, encoding="utf-8",
                 check=False,
             )
             self.assertEqual(planned.returncode, 0, planned.stderr)
@@ -58,7 +58,7 @@ class TaskCleanupCliTests(unittest.TestCase):
             applied = subprocess.run(
                 [sys.executable, str(tool), "--apply-plan", str(plan)],
                 capture_output=True,
-                text=True,
+                text=True, encoding="utf-8",
                 check=False,
             )
             self.assertEqual(applied.returncode, 0, applied.stderr)
