@@ -282,6 +282,26 @@ def native_run_result(canvas,proposal,tasks):
             'result':{'urls':sorted(set().union(*final_outputs))}}
 
 
+def _catalog_limits(node_type, can_run):
+    common='目录不代表已经执行，完成状态以真实回执和保存结果为准；查询和恢复使用原任务编号，受理未知不重复提交。'
+    notes={
+        'llm':'使用已选择的文本模型和上游输入，结果保存在原生 OUTPUT。',
+        'smart-prompt':'开启 LLM 后才可运行；中间框是系统规则，下方是上游原文，顶部保存模型结果。',
+        'generator':'使用已保存的图片模型和输入；实际结果须保存到原生输出节点。',
+        'smart-image':'助手运行当前只开放空智能节点的 API 图片生成；视频和其他引擎沿用原入口，不由目录替用户选择模型。',
+        'video':'沿用已选择的视频模型与素材；作品检查仅有限关键帧，不代表全片和音频语义已验收。',
+        'comfy':'保留当前工作流和参数，部分模式包含多次服务调用；ComfyUI 无远端取消。',
+        'rh':'模型、工作流或应用须有已保存且一致的配置和参数结构；按实际任务查询结果。',
+        'msgen':'沿用已选择模型、输出节点和 LoRA 配置；数量及输入限制按原生运行合同检查。',
+        'midjourney':'保留已选择模型、模式和原供应商任务编号；具体模式和输入限制按原生合同检查。',
+        'smart-loop':'按现有逐轮输入和任务预算执行，保留每轮原任务；循环次数不由文本段数自动推断。',
+        'smart-group':'按已保存的分组成员、分支和模型执行，预算按实际分支计；不把整个分组当作一次模型调用。',
+    }
+    if not can_run:
+        return '此类型不开放独立 run；编辑、连接、预览和导出仅限 availableActions，生成须交给对应运行节点。'+common
+    return notes.get(node_type,'仅运行当前节点已保存的配置与输入。')+common+'入口已接入不等于所有供应商模式和作品质量已验收。'
+
+
 def native_catalog(kind):
     types = SMART_TYPES if kind == 'smart' else CLASSIC_TYPES
     rows=[]
@@ -308,7 +328,9 @@ def native_catalog(kind):
         available=[a for a in actions if a in {'update','create','preview','query','task_refresh','task_cancel','connect','export','loop_prompts','clip_edit','shot_edit','shot_column','shot_select','shot_materialize','group_members','workflow_parameters','lora_parameters'}]
         if t in {'llm','smart-prompt','smart-image','smart-group','smart-loop','generator','msgen','midjourney','comfy','rh','video'}:available.append('run')
         if t in {'clip'}:available.append('media_export')
-        rows.append({'type':t,'actions':actions,'availableActions':available,'plannedActions':[a for a in actions if a not in available],'taskControls':{'task_refresh':['image','video'],'task_cancel':['depth']},'editableFields':editable_fields(t),'confirmation':'原生动作须用户确认；不更换模型','limits':'仅操作节点已保存的原任务；ComfyUI无远端取消，服务执行仍待逐类接入，不以目录作为已执行证据'})
+        rows.append({'type':t,'actions':actions,'availableActions':available,'plannedActions':[a for a in actions if a not in available],'taskControls':{'task_refresh':['image','video'],'task_cancel':['depth']},'editableFields':editable_fields(t),
+            'confirmation':'安全编辑白名单由程序自动执行，非白名单修改和导出等仍按原入口确认；可运行节点仅在本轮授权的所选模型与调用上限内自动推进，未授权或超额等待确认，不更换用户模型。',
+            'limits':_catalog_limits(t,'run' in available)})
     return rows
 
 

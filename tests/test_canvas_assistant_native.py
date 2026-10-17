@@ -7,6 +7,24 @@ from backend.canvas_assistant_native import native_catalog, prepare_native_actio
 
 
 class NativeActionTests(unittest.TestCase):
+    def test_catalog_describes_actual_authorization_and_type_specific_run_limits(self):
+        for kind in ('classic','smart'):
+            for row in native_catalog(kind):
+                if row['type']=='audio':continue
+                self.assertIn('安全编辑',row['confirmation'])
+                self.assertIn('本轮授权',row['confirmation'])
+                self.assertNotIn('原生动作须用户确认',row['confirmation'])
+                self.assertNotIn('服务执行仍待逐类接入',row['limits'])
+                self.assertIn('真实回执',row['limits'])
+                if 'run' not in row['availableActions']:self.assertIn('不开放独立 run',row['limits'])
+        classic={r['type']:r for r in native_catalog('classic')}
+        smart={r['type']:r for r in native_catalog('smart')}
+        self.assertIn('无远端取消',classic['comfy']['limits'])
+        self.assertIn('有限关键帧',classic['video']['limits'])
+        self.assertIn('空智能节点',smart['smart-image']['limits'])
+        self.assertIn('API 图片',smart['smart-image']['limits'])
+        self.assertIn('视频和其他引擎沿用原入口',smart['smart-image']['limits'])
+
     def test_paused_audio_blocks_writes_until_original_task_has_ended(self):
         from backend.canvas_assistant_operations import is_busy
         for node_type, kind in [('generator','classic'),('smart-image','smart')]:

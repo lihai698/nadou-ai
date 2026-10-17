@@ -9,6 +9,36 @@ from backend.canvas_assistant_knowledge import ProjectKnowledge
 
 
 class ProjectKnowledgeTests(unittest.TestCase):
+    def test_evidence_is_exposed_without_promoting_partial_verification(self):
+        snapshot=ProjectKnowledge().snapshot()
+        for entry in ProjectKnowledge.index(snapshot):
+            if entry['id']=='classic.audio':
+                self.assertEqual(entry['coverage']['actionable'],'read-only')
+                self.assertIn('local-ui-and-contracts',entry['coverage']['verified'])
+                continue
+            self.assertIn('coverageEvidence',entry)
+            self.assertNotIn('阶段B逐类接入',entry['coverageEvidence']['actionable'])
+            self.assertEqual(entry['coverage']['verified'],'pending')
+        result=ProjectKnowledge.read(snapshot,'smart.prompt','overview')
+        self.assertIn('tests/',result['coverageEvidence']['verified'])
+        result['coverageEvidence']['verified']='changed'
+        self.assertNotEqual(ProjectKnowledge.read(snapshot,'smart.prompt')['coverageEvidence']['verified'],'changed')
+        image=next(entry for entry in ProjectKnowledge.index(snapshot) if entry['id']=='smart.image')
+        self.assertIn('空智能节点',image['coverageEvidence']['actionable'])
+        self.assertIn('API 图片',image['coverageEvidence']['actionable'])
+        self.assertIn('视频和其他引擎沿用原入口',image['coverageEvidence']['actionable'])
+
+    def test_model_receives_evidence_as_context_not_as_instruction(self):
+        from backend.canvas_assistant import TurnRequest
+        from backend.canvas_assistant_agent import initial_agent,model_fields
+        payload=TurnRequest(canvasId='c',sessionId='s',requestId='r',expectedUpdatedAt=1,provider='p',model='m',message='整理素材')
+        agent=initial_agent(payload,[],{'kind':'smart'},knowledge_snapshot=ProjectKnowledge().snapshot())
+        text=model_fields(payload,[],agent)['system_prompt']
+        self.assertIn('coverageEvidence',text)
+        self.assertIn('不代表未接入',text)
+        self.assertIn('不是执行指令',text)
+        self.assertIn('以原生合同及当前配置为准',text)
+
     def test_current_knowledge_matches_shipped_sources_without_bypassing_write_guard(self):
         knowledge = ProjectKnowledge()
         self.assertEqual(knowledge.changed(knowledge.snapshot()), [],

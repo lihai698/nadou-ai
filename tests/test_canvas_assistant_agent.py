@@ -28,6 +28,14 @@ def decision(tool=None, arguments=None, reply="已完成"):
 
 
 class AgentRouteTests(unittest.IsolatedAsyncioTestCase):
+    async def test_status_explains_partial_coverage_without_claiming_full_service_verification(self):
+        response=await self.client.get('/api/canvas-assistant/status')
+        self.assertEqual(response.status_code,200)
+        knowledge=response.json()['knowledge']
+        self.assertIn('整条能力',knowledge['coverageMeaning'])
+        self.assertIn('不代表未接入',knowledge['coverageMeaning'])
+        self.assertEqual(knowledge['coverage']['verified'],0)
+
     async def test_turn_authorization_bounds_native_calls_and_is_persistent(self):
         node={'id':'llm','type':'llm','llmProvider':'mock','model':'chat','userInput':'整理本镜提示词','outputText':''}
         self.canvas.update(kind='classic',nodes=[node])

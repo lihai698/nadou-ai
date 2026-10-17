@@ -103,7 +103,7 @@ class ProjectKnowledge:
 
     @staticmethod
     def index(snapshot: dict, kind: str = "all", native_types: list[str] | None = None) -> list[dict]:
-        return [{k: e.get(k) for k in ("id", "kind", "nativeType", "name", "summary", "coverage", "sourceStatus")}
+        return [{k: copy.deepcopy(e.get(k)) for k in ("id", "kind", "nativeType", "name", "summary", "coverage", "coverageEvidence", "sourceStatus")}
                 for e in snapshot.get("entries", []) if kind in {"all", e.get("kind")} and (not native_types or e.get("nativeType") in native_types)]
 
     @staticmethod
@@ -134,4 +134,5 @@ class ProjectKnowledge:
         return {"id": entry["id"], "kind": entry.get("kind"), "nativeType": entry.get("nativeType"),
                 "section": section, "content": entry["sections"][section], "version": snapshot.get("knowledgeVersion", ""),
                 "sourceStatus": ProjectKnowledge._source_status(snapshot, entry, source_root),
-                "coverage": copy.deepcopy(entry.get("coverage") or {}), "sources": copy.deepcopy(entry.get("sources") or [])}
+                "coverage": copy.deepcopy(entry.get("coverage") or {}), "coverageEvidence": copy.deepcopy(entry.get("coverageEvidence") or {}),
+                "sources": copy.deepcopy(entry.get("sources") or [])}

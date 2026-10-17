@@ -537,6 +537,7 @@ def create_assistant_router(*, root, load_canvas, providers, user_id, call_model
                 knowledge_info = {"available": True, "version": snapshot.get("knowledgeVersion", ""), "coverage": {"entries": len(snapshot.get("entries", [])), "documented": sum(item.get("coverage", {}).get("documented") == "passed" for item in snapshot.get("entries", [])), "readable": sum(item.get("coverage", {}).get("readable") == "passed" for item in snapshot.get("entries", [])), "actionable": sum(item.get("coverage", {}).get("actionable") == "passed" for item in snapshot.get("entries", [])), "verified": sum(item.get("coverage", {}).get("verified") == "passed" for item in snapshot.get("entries", []))}}
             except HTTPException as exc:
                 knowledge_info = {"available": False, "version": "", "coverage": {}, "error": str(exc.detail)}
+        knowledge_info['coverageMeaning']='actionable/verified 仅统计整条能力完整登记为 passed 的数量；pending 不代表未接入，组件测试、模拟流程与真实供应商质量验收须分开查看。'
         return {"stage": "agent" if apply_operations else "conversation",
                 "providers": catalog("chat_models"), "image_providers": catalog("image_models"),
                 "skills": skills.index() if apply_operations else [], "knowledge": knowledge_info}

@@ -324,8 +324,8 @@
       "coverageEvidence": {
         "documented": "sources.sha256 + nodes/*.md",
         "readable": "tests/test_canvas_assistant_knowledge.py; output/assistant-project-knowledge-verification/all-sections.json; api-results.json",
-        "actionable": "pending: 阶段B逐类接入",
-        "verified": "pending: 全动作和真实供应商效果未验收"
+        "actionable": "已接入读取、预览、连接和安全字段编辑；生成交给对应图片运行节点。",
+        "verified": "tests/test_canvas_assistant_state.py、tests/test_canvas_assistant_native.py 已覆盖部分合同；真实素材兼容性与全界面流程未完整验收。"
       }
     },
     {
@@ -492,8 +492,8 @@
       "coverageEvidence": {
         "documented": "sources.sha256 + nodes/*.md",
         "readable": "tests/test_canvas_assistant_knowledge.py; output/assistant-project-knowledge-verification/all-sections.json; api-results.json",
-        "actionable": "pending: 阶段B逐类接入",
-        "verified": "pending: 全动作和真实供应商效果未验收"
+        "actionable": "已接入创建、读取、连接和安全文本编辑；此节点本身不调用模型。",
+        "verified": "tests/test_canvas_assistant_state.py、tests/test_canvas_assistant_native.py 已覆盖部分合同；完整界面操作仍待验收。"
       }
     },
     {
@@ -660,8 +660,8 @@
       "coverageEvidence": {
         "documented": "sources.sha256 + nodes/*.md",
         "readable": "tests/test_canvas_assistant_knowledge.py; output/assistant-project-knowledge-verification/all-sections.json; api-results.json",
-        "actionable": "pending: 阶段B逐类接入",
-        "verified": "pending: 全动作和真实供应商效果未验收"
+        "actionable": "已接入读取、连接和安全编辑；分组内容仍按原生节点合同处理。",
+        "verified": "tests/test_canvas_assistant_native.py 已覆盖目录和动作合同；完整分组界面流程仍待验收。"
       }
     },
     {
@@ -1125,8 +1125,8 @@
       "coverageEvidence": {
         "documented": "sources.sha256 + nodes/*.md",
         "readable": "tests/test_canvas_assistant_knowledge.py; output/assistant-project-knowledge-verification/all-sections.json; api-results.json",
-        "actionable": "pending: 阶段B逐类接入",
-        "verified": "pending: 全动作和真实供应商效果未验收"
+        "actionable": "已接入读取、连接和循环提示词编辑；保持现有循环逻辑，不自动推断文本分段。",
+        "verified": "tests/test_canvas_assistant_loop.py、tests/canvas_assistant_loop.test.cjs 已覆盖关键合同；真实批量服务效果未验收。"
       }
     },
     {
@@ -1323,8 +1323,8 @@
       "coverageEvidence": {
         "documented": "sources.sha256 + nodes/*.md",
         "readable": "tests/test_canvas_assistant_knowledge.py; output/assistant-project-knowledge-verification/all-sections.json; api-results.json",
-        "actionable": "pending: 阶段B逐类接入",
-        "verified": "pending: 全动作和真实供应商效果未验收"
+        "actionable": "已接入读取、连接和分组成员配置；分组本身不替代下游运行节点。",
+        "verified": "tests/test_canvas_assistant_native.py 已覆盖部分合同；完整分组界面流程未验收。"
       }
     },
     {
@@ -1672,8 +1672,8 @@
       "coverageEvidence": {
         "documented": "sources.sha256 + nodes/*.md",
         "readable": "tests/test_canvas_assistant_knowledge.py; output/assistant-project-knowledge-verification/all-sections.json; api-results.json",
-        "actionable": "pending: 阶段B逐类接入",
-        "verified": "pending: 全动作和真实供应商效果未验收"
+        "actionable": "已接入创建、连接、安全编辑和本轮授权内运行；沿用用户选择的文本模型。",
+        "verified": "tests/test_canvas_assistant_story_analysis.py、tests/test_canvas_assistant_native.py 已覆盖关键数据流；真实模型质量与全部供应商未验收。"
       }
     },
     {
@@ -2250,8 +2250,8 @@
       "coverageEvidence": {
         "documented": "sources.sha256 + nodes/*.md",
         "readable": "tests/test_canvas_assistant_knowledge.py; output/assistant-project-knowledge-verification/all-sections.json; api-results.json",
-        "actionable": "pending: 阶段B逐类接入",
-        "verified": "pending: 全动作和真实供应商效果未验收"
+        "actionable": "已接入创建、连接、安全编辑和本轮授权内运行；沿用节点保存的图片模型。",
+        "verified": "tests/test_canvas_assistant_catalog_image.py、tests/test_canvas_assistant_native.py 已覆盖关键合同；真实供应商生成质量未验收。"
       }
     },
     {
@@ -2317,7 +2317,7 @@
         },
         {
           "path": "backend/canvas_assistant_native.py",
-          "sha256": "58153bfc28b0f0fc60aee1999818410f9a145653527582c589bdcfcd3f5b939f",
+          "sha256": "05001a217ab5c74193c15f9cde45e65fc2e686cd9f2cb8535747a991b5c65cb1",
           "evidence": "backend/canvas_assistant_native.py:",
           "symbol": "",
           "line": 21
@@ -2930,8 +2930,8 @@
       "coverageEvidence": {
         "documented": "sources.sha256 + nodes/*.md",
         "readable": "tests/test_canvas_assistant_knowledge.py; output/assistant-project-knowledge-verification/all-sections.json; api-results.json",
-        "actionable": "pending: 阶段B逐类接入",
-        "verified": "pending: 全动作和真实供应商效果未验收"
+        "actionable": "已接入读取、配置、查询、恢复和本轮授权内运行；保留原任务编号与模式。",
+        "verified": "tests/test_canvas_assistant_midjourney.py 已覆盖关键合同；全部模式和真实供应商效果未验收。"
       }
     },
     {
@@ -2997,7 +2997,7 @@
         },
         {
           "path": "backend/canvas_assistant_native.py",
-          "sha256": "58153bfc28b0f0fc60aee1999818410f9a145653527582c589bdcfcd3f5b939f",
+          "sha256": "05001a217ab5c74193c15f9cde45e65fc2e686cd9f2cb8535747a991b5c65cb1",
           "evidence": "backend/canvas_assistant_native.py:",
           "symbol": "",
           "line": 21
@@ -3743,8 +3743,8 @@
       "coverageEvidence": {
         "documented": "sources.sha256 + nodes/*.md",
         "readable": "tests/test_canvas_assistant_knowledge.py; output/assistant-project-knowledge-verification/all-sections.json; api-results.json",
-        "actionable": "pending: 阶段B逐类接入",
-        "verified": "pending: 全动作和真实供应商效果未验收"
+        "actionable": "已接入读取、LoRA 配置、查询、恢复和本轮授权内运行。",
+        "verified": "tests/test_canvas_assistant_msgen.py、tests/test_canvas_assistant_lora.py 已覆盖关键合同；真实供应商生成质量未验收。"
       }
     },
     {
@@ -4433,8 +4433,8 @@
       "coverageEvidence": {
         "documented": "sources.sha256 + nodes/*.md",
         "readable": "tests/test_canvas_assistant_knowledge.py; output/assistant-project-knowledge-verification/all-sections.json; api-results.json",
-        "actionable": "pending: 阶段B逐类接入",
-        "verified": "pending: 全动作和真实供应商效果未验收"
+        "actionable": "已接入读取、配置、查询、恢复和本轮授权内运行；沿用已选模型与素材。",
+        "verified": "tests/test_canvas_assistant_video_quality.py、tests/test_canvas_assistant_native.py 已覆盖关键合同；仅有限关键帧检查，未验收全片和音频语义。"
       }
     },
     {
@@ -5201,8 +5201,8 @@
       "coverageEvidence": {
         "documented": "sources.sha256 + nodes/*.md",
         "readable": "tests/test_canvas_assistant_knowledge.py; output/assistant-project-knowledge-verification/all-sections.json; api-results.json",
-        "actionable": "pending: 阶段B逐类接入",
-        "verified": "pending: 全动作和真实供应商效果未验收"
+        "actionable": "已接入工作流参数读取、配置、查询、恢复和本轮授权内运行。",
+        "verified": "tests/test_canvas_assistant_workflow_fields.py、tests/test_canvas_assistant_native.py 已覆盖关键合同；真实工作流和供应商效果未验收。"
       }
     },
     {
@@ -6120,8 +6120,8 @@
       "coverageEvidence": {
         "documented": "sources.sha256 + nodes/*.md",
         "readable": "tests/test_canvas_assistant_knowledge.py; output/assistant-project-knowledge-verification/all-sections.json; api-results.json",
-        "actionable": "pending: 阶段B逐类接入",
-        "verified": "pending: 全动作和真实供应商效果未验收"
+        "actionable": "已接入工作流参数读取、配置、查询和本轮授权内运行；无远端取消。",
+        "verified": "tests/test_canvas_assistant_workflow_fields.py、tests/test_canvas_assistant_native.py 已覆盖关键合同；真实工作流和多次调用效果未验收。"
       }
     },
     {
@@ -6398,8 +6398,8 @@
       "coverageEvidence": {
         "documented": "sources.sha256 + nodes/*.md",
         "readable": "tests/test_canvas_assistant_knowledge.py; output/assistant-project-knowledge-verification/all-sections.json; api-results.json",
-        "actionable": "pending: 阶段B逐类接入",
-        "verified": "pending: 全动作和真实供应商效果未验收"
+        "actionable": "已接入读取、片段编辑和媒体导出；不作为独立生成节点运行。",
+        "verified": "tests/test_canvas_assistant_media_export.py 已覆盖关键合同；完整格式兼容与界面导出流程未验收。"
       }
     },
     {
@@ -6550,8 +6550,8 @@
       "coverageEvidence": {
         "documented": "sources.sha256 + nodes/*.md",
         "readable": "tests/test_canvas_assistant_knowledge.py; output/assistant-project-knowledge-verification/all-sections.json; api-results.json",
-        "actionable": "pending: 阶段B逐类接入",
-        "verified": "pending: 全动作和真实供应商效果未验收"
+        "actionable": "已接入读取、预览和导出；仅展示上游保存结果，不独立调用模型。",
+        "verified": "tests/test_canvas_assistant_state.py、tests/test_canvas_assistant_media_export.py 已覆盖部分合同；完整格式兼容未验收。"
       }
     },
     {
@@ -6950,8 +6950,8 @@
       "coverageEvidence": {
         "documented": "sources.sha256 + nodes/*.md",
         "readable": "tests/test_canvas_assistant_knowledge.py; output/assistant-project-knowledge-verification/all-sections.json; api-results.json",
-        "actionable": "pending: 阶段B逐类接入",
-        "verified": "pending: 全动作和真实供应商效果未验收"
+        "actionable": "已接入创建、连接和安全编辑；助手运行当前只开放空智能节点的 API 图片生成，视频和其他引擎沿用原入口。",
+        "verified": "tests/test_canvas_assistant_catalog_image.py、tests/test_canvas_assistant_native.py 已覆盖关键合同；真实供应商生成质量未验收。"
       }
     },
     {
@@ -7469,8 +7469,8 @@
       "coverageEvidence": {
         "documented": "sources.sha256 + nodes/*.md",
         "readable": "tests/test_canvas_assistant_knowledge.py; output/assistant-project-knowledge-verification/all-sections.json; api-results.json",
-        "actionable": "pending: 阶段B逐类接入",
-        "verified": "pending: 全动作和真实供应商效果未验收"
+        "actionable": "已接入创建、连接、安全编辑和开启 LLM 后的本轮授权运行；系统规则、上游原文和顶部结果分离。",
+        "verified": "tests/test_canvas_assistant_story_analysis.py、tests/smart_prompt_template_flow.test.cjs 已覆盖关键数据流；真实模型质量未验收。"
       }
     },
     {
@@ -8158,8 +8158,8 @@
       "coverageEvidence": {
         "documented": "sources.sha256 + nodes/*.md",
         "readable": "tests/test_canvas_assistant_knowledge.py; output/assistant-project-knowledge-verification/all-sections.json; api-results.json",
-        "actionable": "pending: 阶段B逐类接入",
-        "verified": "pending: 全动作和真实供应商效果未验收"
+        "actionable": "已接入创建、连接、循环提示词配置和本轮授权内逐轮运行；不自动按文本分段。",
+        "verified": "tests/test_canvas_assistant_loop.py、tests/canvas_assistant_loop.test.cjs 已覆盖关键合同；真实批量服务效果未验收。"
       }
     },
     {
@@ -8550,8 +8550,8 @@
       "coverageEvidence": {
         "documented": "sources.sha256 + nodes/*.md",
         "readable": "tests/test_canvas_assistant_knowledge.py; output/assistant-project-knowledge-verification/all-sections.json; api-results.json",
-        "actionable": "pending: 阶段B逐类接入",
-        "verified": "pending: 全动作和真实供应商效果未验收"
+        "actionable": "已接入创建、连接、成员配置和本轮授权内按分支运行；调用预算按实际分支计算。",
+        "verified": "tests/test_canvas_assistant_native.py 已覆盖关键合同；完整分支界面和真实模型效果未验收。"
       }
     },
     {
@@ -8573,7 +8573,7 @@
           "symbol": "AGENT_GUIDE",
           "line": 20,
           "evidence": "backend/canvas_assistant_agent.py:AGENT_GUIDE",
-          "sha256": "b67562f1168336e82c2fb7871590722deec484d16f6499c232c1a92705852494"
+          "sha256": "812e4528fd44f1ebcdaadd82587800ef7a99c9d432663ea0b73bf167bc6abbf9"
         },
         {
           "path": "static/js/canvas.js",
@@ -8596,8 +8596,8 @@
       "coverageEvidence": {
         "documented": "sources.sha256 + nodes/*.md",
         "readable": "tests/test_canvas_assistant_knowledge.py; output/assistant-project-knowledge-verification/all-sections.json; api-results.json",
-        "actionable": "pending: 阶段B逐类接入",
-        "verified": "pending: 全动作和真实供应商效果未验收"
+        "actionable": "已接入画布、节点、连接、任务状态和项目知识读取，以及白名单内画布操作。",
+        "verified": "tests/test_canvas_assistant_knowledge.py、tests/test_canvas_assistant_state.py、tests/test_canvas_assistant_operations.py 已覆盖关键合同；全画布人工验收未完成。"
       }
     },
     {
@@ -8626,7 +8626,7 @@
           "symbol": "AGENT_GUIDE",
           "line": 20,
           "evidence": "backend/canvas_assistant_agent.py:AGENT_GUIDE",
-          "sha256": "b67562f1168336e82c2fb7871590722deec484d16f6499c232c1a92705852494"
+          "sha256": "812e4528fd44f1ebcdaadd82587800ef7a99c9d432663ea0b73bf167bc6abbf9"
         },
         {
           "path": "static/js/canvas.js",
@@ -8670,8 +8670,8 @@
       "coverageEvidence": {
         "documented": "sources.sha256 + nodes/*.md",
         "readable": "tests/test_canvas_assistant_knowledge.py; output/assistant-project-knowledge-verification/all-sections.json; api-results.json",
-        "actionable": "pending: 阶段B逐类接入",
-        "verified": "pending: 全动作和真实供应商效果未验收"
+        "actionable": "已接入计划、故事分析、逐镜提示词和画布操作工具；执行仍受原生合同与本轮授权限制。",
+        "verified": "tests/test_canvas_assistant_plan.py、tests/test_canvas_assistant_story_analysis.py、tests/test_canvas_assistant_shot_prompts.py 已覆盖关键合同；真实模型创作质量未验收。"
       }
     },
     {
@@ -9262,8 +9262,8 @@
       "coverageEvidence": {
         "documented": "原生model/host/ui/backend源码核对",
         "readable": "tests/test_canvas_assistant_shot_table.py",
-        "actionable": "pending: 阶段B",
-        "verified": "pending: 原生动作及供应商效果"
+        "actionable": "已接入分镜读取、列编辑、镜头选择和原生节点物化；模型生成须走相应运行节点。",
+        "verified": "tests/test_canvas_assistant_shot_table.py、tests/test_canvas_assistant_shot_prompts.py 已覆盖关键合同；完整界面与真实供应商效果未验收。"
       }
     },
     {
@@ -9861,8 +9861,8 @@
       "coverageEvidence": {
         "documented": "智能 render/storage/initSmartVideoDeconstructionBridge 与共享 host/model/ui 源码核对；复制归属有 VM 检查，页面复制及保存重开仍待验",
         "readable": "tests/test_canvas_assistant_shot_table.py",
-        "actionable": "pending: 阶段B",
-        "verified": "pending: 原生动作及供应商效果"
+        "actionable": "已接入分镜读取、列编辑、镜头选择和原生节点物化；模型生成须走相应运行节点。",
+        "verified": "tests/test_canvas_assistant_shot_table.py、tests/test_canvas_assistant_shot_prompts.py 已覆盖关键合同；完整界面与真实供应商效果未验收。"
       }
     },
     {
@@ -9903,9 +9903,9 @@
         {
           "path": "backend/canvas_assistant_native.py",
           "symbol": "native_catalog",
-          "line": 285,
+          "line": 305,
           "evidence": "backend/canvas_assistant_native.py:native_catalog",
-          "sha256": "58153bfc28b0f0fc60aee1999818410f9a145653527582c589bdcfcd3f5b939f"
+          "sha256": "05001a217ab5c74193c15f9cde45e65fc2e686cd9f2cb8535747a991b5c65cb1"
         },
         {
           "path": "static/js/canvas-audio-host.js",
@@ -9995,9 +9995,9 @@
           "source": {
             "path": "backend/canvas_assistant_native.py",
             "symbol": "native_catalog",
-            "line": 285,
+            "line": 305,
             "evidence": "backend/canvas_assistant_native.py:native_catalog",
-            "sha256": "58153bfc28b0f0fc60aee1999818410f9a145653527582c589bdcfcd3f5b939f"
+            "sha256": "05001a217ab5c74193c15f9cde45e65fc2e686cd9f2cb8535747a991b5c65cb1"
           },
           "verification": "passed"
         },
@@ -10011,9 +10011,9 @@
           "source": {
             "path": "backend/canvas_assistant_native.py",
             "symbol": "native_catalog",
-            "line": 285,
+            "line": 305,
             "evidence": "backend/canvas_assistant_native.py:native_catalog",
-            "sha256": "58153bfc28b0f0fc60aee1999818410f9a145653527582c589bdcfcd3f5b939f"
+            "sha256": "05001a217ab5c74193c15f9cde45e65fc2e686cd9f2cb8535747a991b5c65cb1"
           },
           "verification": "partial"
         },
