@@ -27,6 +27,7 @@ from backend import media_storage_service
 from backend import conversation_service
 from backend import chat_execution_service
 from backend import workflow_archive_service
+from backend import canvas_asset_export_service
 from backend import comfy_workflow_service
 from backend import runninghub_config_service
 from backend import runninghub_fields
@@ -7016,60 +7017,10 @@ async def check_canvas_assets(payload: CanvasAssetCheckRequest):
 
 @app.post("/api/canvas-assets/download")
 async def download_canvas_assets(payload: CanvasAssetDownloadRequest):
-    buffer = BytesIO()
-    used_names = set()
-    count = 0
-    raw_items = payload.items or [{"url": url} for url in payload.urls]
-    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:
-        for raw in raw_items[:1000]:
-            if isinstance(raw, dict):
-                text = str(raw.get("url") or "").strip()
-                requested_name = str(raw.get("name") or "").strip()
-            else:
-                text = str(raw or "").strip()
-                requested_name = ""
-            if not text:
-                continue
-            path = output_file_from_url(text)
-            content = None
-            content_type = ""
-            if path and os.path.isfile(path):
-                base = sanitize_export_filename(requested_name or os.path.basename(path), os.path.basename(path) or f"image-{count + 1}.png")
-            else:
-                local_by_name = local_media_file_by_basename(filename_from_media_url(text, ""))
-                if local_by_name and os.path.isfile(local_by_name):
-                    path = local_by_name
-                    base = sanitize_export_filename(requested_name or os.path.basename(path), os.path.basename(path) or f"image-{count + 1}.png")
-                else:
-                    try:
-                        remote = fetch_remote_media_bytes(text)
-                    except Exception:
-                        remote = None
-                    if not remote:
-                        continue
-                    content, content_type = remote
-                    base = sanitize_export_filename(requested_name or filename_from_media_url(text, f"image-{count + 1}.bin"), f"image-{count + 1}.bin")
-            name, ext = os.path.splitext(base)
-            archive_name = base
-            suffix = 2
-            while archive_name in used_names:
-                archive_name = f"{name}-{suffix}{ext}"
-                suffix += 1
-            used_names.add(archive_name)
-            if path and os.path.isfile(path):
-                zf.write(path, archive_name)
-            else:
-                zf.writestr(archive_name, content)
-            count += 1
-    if count <= 0:
-        raise HTTPException(status_code=404, detail="没有可下载的本地图片")
-    buffer.seek(0)
-    filename = re.sub(r'[\\/:*?"<>|]+', "_", payload.filename or "canvas-output-images.zip")
-    if not filename.lower().endswith(".zip"):
-        filename += ".zip"
-    encoded = urllib.parse.quote(filename)
-    headers = {"Content-Disposition": f"attachment; filename*=UTF-8''{encoded}"}
-    return Response(buffer.getvalue(), media_type="application/zip", headers=headers)
+    return await canvas_asset_export_service.download_canvas_assets(
+        payload, output_file_from_url=output_file_from_url,
+        local_media_file_by_basename=local_media_file_by_basename,
+        fetch_remote_media_bytes=fetch_remote_media_bytes)
 
 def canvas_workflow_collect_resource_refs(value, found=None):
     return workflow_archive_service.canvas_workflow_collect_resource_refs(value, found, canvas_workflow_collect_resource_refs=canvas_workflow_collect_resource_refs)
@@ -7108,63 +7059,14 @@ async def import_canvas_workflow(file: UploadFile = File(...)):
     return await workflow_archive_service.import_canvas_workflow(file, ASSETS_DIR=ASSETS_DIR, BytesIO=BytesIO, HTTPException=HTTPException, OUTPUT_INPUT_DIR=OUTPUT_INPUT_DIR, canvas_workflow_payload=canvas_workflow_payload, canvas_workflow_replace_strings=canvas_workflow_replace_strings, read_upload_file_limited=read_upload_file_limited, sanitize_export_filename=sanitize_export_filename, shutil=shutil, validate_workflow_zip_limits=validate_workflow_zip_limits, write_diagnostic=write_diagnostic)
 
 def smart_group_export_folder(folder: str, group_name: str) -> str:
-    text = str(folder or "").strip()
-    if text:
-        path = os.path.abspath(os.path.expanduser(text))
-    else:
-        stamp = time.strftime("%Y%m%d-%H%M%S")
-        safe_group = sanitize_export_filename(group_name or "group", "group")
-        path = os.path.abspath(os.path.join(OUTPUT_DIR, "smart-groups", f"{safe_group}-{stamp}"))
-    os.makedirs(path, exist_ok=True)
-    return path
+    return canvas_asset_export_service.smart_group_export_folder(
+        folder, group_name, output_dir=OUTPUT_DIR)
 
 @app.post("/api/smart-canvas/group-export")
 async def export_smart_canvas_group(payload: SmartCanvasGroupExportRequest):
-    target_dir = smart_group_export_folder(payload.folder, payload.group_name)
-    used_names = set()
-    count = 0
-    text_index = 1
-    for item in payload.items[:2000]:
-        kind = str(item.kind or "").lower()
-        if kind == "text":
-            text = str(item.text or "")
-            if not text.strip():
-                continue
-            base = sanitize_export_filename(item.name or f"{text_index}.txt", f"{text_index}.txt")
-            if not base.lower().endswith(".txt"):
-                base += ".txt"
-            text_index += 1
-            name, ext = os.path.splitext(base)
-            out_name = base
-            suffix = 2
-            while out_name in used_names:
-                out_name = f"{name}-{suffix}{ext}"
-                suffix += 1
-            used_names.add(out_name)
-            with open(os.path.join(target_dir, out_name), "w", encoding="utf-8") as f:
-                f.write(text)
-            count += 1
-            continue
-        src = output_file_from_url(item.url)
-        if not src or not os.path.isfile(src):
-            continue
-        base = sanitize_export_filename(item.name or os.path.basename(src), os.path.basename(src) or f"asset-{count + 1}")
-        name, ext = os.path.splitext(base)
-        if not ext:
-            _, src_ext = os.path.splitext(src)
-            ext = src_ext or ".bin"
-            base = name + ext
-        out_name = base
-        suffix = 2
-        while out_name in used_names:
-            out_name = f"{name}-{suffix}{ext}"
-            suffix += 1
-        used_names.add(out_name)
-        shutil.copy2(src, os.path.join(target_dir, out_name))
-        count += 1
-    if count <= 0:
-        raise HTTPException(status_code=404, detail="没有可导出的内容")
-    return {"ok": True, "folder": target_dir, "count": count}
+    return await canvas_asset_export_service.export_smart_canvas_group(
+        payload, export_folder=smart_group_export_folder,
+        output_file_from_url=output_file_from_url)
 
 @app.get("/api/asset-library")
 async def get_asset_library():
