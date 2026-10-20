@@ -10,7 +10,7 @@ from urllib.parse import urlsplit, parse_qs
 from fastapi import HTTPException
 
 from backend.canvas_assistant_node_rules import is_busy
-from backend.canvas_assistant_operations import content_hash, generation_settings, would_cycle
+from backend.canvas_assistant_canvas_rules import content_hash, generation_settings, would_cycle
 from backend.canvas_assistant_state import PARAMETERS, SECRET_KEY, LOCAL_PATH, read_node_state, _project
 from backend.canvas_assistant_loop import loop_plan, loop_input_hash, loop_receipt, loop_run_result
 from backend.canvas_assistant_lora import prepare_lora_patch

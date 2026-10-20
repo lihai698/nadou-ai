@@ -17,7 +17,8 @@ from pydantic import BaseModel, Field, PrivateAttr
 
 from backend.atomic_json import write_json_atomic
 from backend.process_lock import interprocess_file_lock
-from backend.canvas_assistant_operations import AssistantPlan, parse_plan, receipt_key, content_hash
+from backend.canvas_assistant_operations import AssistantPlan, parse_plan, receipt_key
+from backend.canvas_assistant_canvas_rules import content_hash
 from backend.canvas_assistant_plan import create_plan as create_persistent_plan
 from backend import canvas_assistant_plan as persistent_plan
 from backend.canvas_assistant_tools import validate_tool

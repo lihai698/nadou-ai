@@ -26,7 +26,7 @@ def connect(a, b, operation_id="edge_1"):
 
 class OperationTests(unittest.TestCase):
     def test_snapshot_numbers_survive_browser_roundtrip_but_real_changes_do_not(self):
-        from backend.canvas_assistant_operations import content_hash
+        from backend.canvas_assistant_canvas_rules import content_hash
         original={'nodes':[{'id':'n','x':0.0,'y':12.0,'text':'正文','parameters':{'strength':1.0}}],'connections':[],'settings':{}}
         saved=copy.deepcopy(original);saved['nodes'][0].update(x=0,y=12);saved['nodes'][0]['parameters']['strength']=1
         self.assertEqual(content_hash(original),content_hash(saved))

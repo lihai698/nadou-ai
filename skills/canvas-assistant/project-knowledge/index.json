@@ -2527,7 +2527,7 @@
         },
         {
           "path": "backend/canvas_assistant_native.py",
-          "sha256": "031fe0caacaf2bb6f24dd3c677f98c4109d8e428998f417e696e171c0e14ebfd",
+          "sha256": "5fb9ee86ef66ca35bee4e3d2ca5203e7a91d72411ac9a9d9cc63d0946cfb89aa",
           "evidence": "backend/canvas_assistant_native.py:",
           "symbol": "",
           "line": 21
@@ -3237,7 +3237,7 @@
         },
         {
           "path": "backend/canvas_assistant_native.py",
-          "sha256": "031fe0caacaf2bb6f24dd3c677f98c4109d8e428998f417e696e171c0e14ebfd",
+          "sha256": "5fb9ee86ef66ca35bee4e3d2ca5203e7a91d72411ac9a9d9cc63d0946cfb89aa",
           "evidence": "backend/canvas_assistant_native.py:",
           "symbol": "",
           "line": 21
@@ -10565,7 +10565,7 @@
           "symbol": "native_catalog",
           "line": 305,
           "evidence": "backend/canvas_assistant_native.py:native_catalog",
-          "sha256": "031fe0caacaf2bb6f24dd3c677f98c4109d8e428998f417e696e171c0e14ebfd"
+          "sha256": "5fb9ee86ef66ca35bee4e3d2ca5203e7a91d72411ac9a9d9cc63d0946cfb89aa"
         },
         {
           "path": "static/js/canvas-audio-host.js",
@@ -10657,7 +10657,7 @@
             "symbol": "native_catalog",
             "line": 305,
             "evidence": "backend/canvas_assistant_native.py:native_catalog",
-            "sha256": "031fe0caacaf2bb6f24dd3c677f98c4109d8e428998f417e696e171c0e14ebfd"
+            "sha256": "5fb9ee86ef66ca35bee4e3d2ca5203e7a91d72411ac9a9d9cc63d0946cfb89aa"
           },
           "verification": "passed"
         },
@@ -10673,7 +10673,7 @@
             "symbol": "native_catalog",
             "line": 305,
             "evidence": "backend/canvas_assistant_native.py:native_catalog",
-            "sha256": "031fe0caacaf2bb6f24dd3c677f98c4109d8e428998f417e696e171c0e14ebfd"
+            "sha256": "5fb9ee86ef66ca35bee4e3d2ca5203e7a91d72411ac9a9d9cc63d0946cfb89aa"
           },
           "verification": "partial"
         },

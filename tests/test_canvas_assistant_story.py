@@ -154,7 +154,7 @@ class StoryWorkflowTests(unittest.TestCase):
 
     def test_long_source_workflow_has_complete_acyclic_saved_dependencies(self):
         import json
-        from backend.canvas_assistant_operations import would_cycle
+        from backend.canvas_assistant_canvas_rules import would_cycle
         for length in (1000, 2000, 3000, 4000, 5000):
             with self.subTest(length=length):
                 original = copy.deepcopy(self.canvas)

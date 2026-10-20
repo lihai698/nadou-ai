@@ -17,7 +17,7 @@ class BlockOrchestrator(importlib.abc.MetaPathFinder):
         if fullname in {'backend.canvas_assistant_operations', 'main'}:
             raise AssertionError('domain imported orchestrator: ' + fullname)
 sys.meta_path.insert(0, BlockOrchestrator())
-for name in ('node_rules', 'generation', 'story', 'story_analysis', 'shot_prompts', 'state'):
+for name in ('node_rules', 'generation', 'story', 'story_analysis', 'shot_prompts', 'state', 'loop', 'native'):
     module = importlib.import_module('backend.canvas_assistant_' + name)
     assert Path(module.__file__).resolve().is_relative_to(Path(sys.argv[1]))
 from backend.canvas_assistant_node_rules import CreateNode, new_node, is_busy
