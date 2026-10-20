@@ -118,6 +118,7 @@ from backend.atomic_json import write_json_atomic, write_text_atomic
 from backend.process_lock import interprocess_file_lock
 from backend.canvas_assistant import create_assistant_router
 from backend.canvas_assistant_canvas_rules import canvas_context
+from backend import canvas_assistant_reference_service
 from backend.canvas_assistant_generation import validate_snapshot
 from backend.canvas_assistant_operations import prepare_operations
 from backend.realtime import (
@@ -6601,30 +6602,9 @@ async def submit_canvas_assistant_image(proposal, image_request, request):
 
 def canvas_assistant_reference_assets():
     """从真实素材索引读取公开展示字段，不接受客户端自报媒体地址。"""
-    items = []
-    library = load_asset_library()
-    for lib in library.get("libraries", []):
-        library_id = str(lib.get("id") or "")
-        for category in lib.get("categories", []):
-            if category.get("type") == "workflow":
-                continue
-            for item in category.get("items", []):
-                if not isinstance(item, dict):
-                    continue
-                url = item.get("url")
-                item_id = str(item.get("id") or "")
-                kind = item.get("kind") or asset_library_media_kind(url or "")
-                if not item_id or kind not in {"image", "video"} or not isinstance(url, str) or not url.startswith(("/assets/", "/output/", "/api/storage-files/local/", "https://", "http://")):
-                    continue
-                items.append({"id": f"asset:{library_id}:{item_id}", "url": url, "thumbnail": item.get("thumbnail") or item.get("thumb") or item.get("preview") or "", "name": item.get("name") or "图片资产", "kind": kind, "source": "asset", "libraryId": library_id, "categoryId": str(category.get("id") or ""), "libraryName": lib.get("name") or "资产库", "categoryName": category.get("name") or ""})
-    _, local_items = _local_upload_tree_and_items()
-    for item in local_items:
-        item_id = str(item.get("id") or "")
-        url = item.get("url")
-        if not item_id or item.get("kind") not in {"image", "video"} or not isinstance(url, str) or not url.startswith("/api/storage-files/local/"):
-            continue
-        items.append({"id": f"local:{item_id}", "url": url, "thumbnail": "", "name": item.get("name") or "本地素材", "kind": item["kind"], "source": "local", "libraryId": "local", "categoryId": item.get("folder") or "", "libraryName": "本地素材", "categoryName": item.get("folder") or "全部上传"})
-    return items
+    return canvas_assistant_reference_service.read_reference_assets(
+        load_asset_library=load_asset_library, load_local_tree_and_items=_local_upload_tree_and_items,
+        media_kind=asset_library_media_kind)
 
 
 async def query_canvas_assistant_native_task(kind, task_id):
