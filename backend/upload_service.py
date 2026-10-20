@@ -7,6 +7,10 @@ import base64
 import mimetypes
 import os
 import uuid
+import re
+import shutil
+import urllib.parse
+import urllib.request
 
 async def read_upload_file_limited(file, *, batch_state=None, file_limit, batch_limit, chunk_bytes, limit_error):
     """分块读取 UploadFile，并同时执行单文件与批次大小限制。"""
@@ -154,4 +158,57 @@ async def upload_comfyui_base64(payload, *, size_hint, max_bytes, limit_error, k
         raise error_factory(status_code=502, detail="上传到 ComfyUI 失败")
     return {"name": comfy_name}
 
+
+def normalize_local_image_path(value, *, HTTPException):
+    text = str(value or "").strip().strip('"').strip("'")
+    if not text:
+        raise HTTPException(status_code=400, detail="本地图片路径为空")
+    if text.lower().startswith("file:"):
+        parsed = urllib.parse.urlparse(text)
+        if parsed.scheme.lower() != "file":
+            raise HTTPException(status_code=400, detail="只支持本地图片路径")
+        if parsed.netloc and re.match(r"^[a-zA-Z]:$", parsed.netloc) and os.name == "nt":
+            path = f"{parsed.netloc}{urllib.request.url2pathname(parsed.path or '')}"
+        elif parsed.netloc and parsed.netloc.lower() not in ("localhost",):
+            raise HTTPException(status_code=400, detail="只支持本机图片路径")
+        else:
+            path = urllib.request.url2pathname(parsed.path or "")
+    else:
+        path = text
+    path = path.strip().strip('"').strip("'")
+    if re.match(r"^/[a-zA-Z]:[\\/]", path):
+        path = path[1:]
+    if re.match(r"^[a-zA-Z]:[\\/]", path):
+        return os.path.abspath(path)
+    if path.startswith("/") and os.name != "nt":
+        return os.path.abspath(path)
+    raise HTTPException(status_code=400, detail="只支持本机绝对图片路径")
+
+
+def import_local_image_file(path, *, HTTPException, LOCAL_IMAGE_IMPORT_EXTS, LOCAL_IMAGE_IMPORT_MAX_BYTES, Image, output_path_for, output_url_for):
+    ext = os.path.splitext(path)[1].lower()
+    if ext not in LOCAL_IMAGE_IMPORT_EXTS:
+        raise HTTPException(status_code=400, detail="仅支持 PNG、JPG、JPEG、WEBP、GIF 图片")
+    if not os.path.isfile(path):
+        raise HTTPException(status_code=404, detail="本地图片不存在或无法读取")
+    try:
+        size = os.path.getsize(path)
+    except OSError:
+        raise HTTPException(status_code=404, detail="本地图片不存在或无法读取")
+    if size <= 0:
+        raise HTTPException(status_code=400, detail="本地图片为空")
+    if size > LOCAL_IMAGE_IMPORT_MAX_BYTES:
+        raise HTTPException(status_code=413, detail="本地图片过大，请使用 50MB 以内的图片")
+    try:
+        with Image.open(path) as img:
+            img.verify()
+    except Exception:
+        raise HTTPException(status_code=400, detail="文件不是可识别的图片")
+    filename = f"ai_ref_{uuid.uuid4().hex[:12]}{ext}"
+    dest = output_path_for(filename, "input")
+    try:
+        shutil.copyfile(path, dest)
+    except OSError:
+        raise HTTPException(status_code=500, detail="导入本地图片失败")
+    return {"url": output_url_for(filename, "input"), "name": os.path.basename(path) or filename, "kind": "image"}
 

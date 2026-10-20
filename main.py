@@ -3299,31 +3299,7 @@ def output_file_from_url(url):
         raise HTTPException(status_code=400, detail="非法文件路径") from exc
 
 def local_media_path_from_url(url: str) -> Optional[str]:
-    """Resolve a local media URL using the same mapping as the app mounts."""
-    if not url:
-        return None
-    clean = urllib.parse.unquote(str(url).split("?", 1)[0]).replace("\\", "/")
-    if clean.startswith("/api/storage-files/"):
-        rest = clean[len("/api/storage-files/"):].lstrip("/")
-        kind, _, rel = rest.partition("/")
-        return storage_file_path(kind, rel) if kind and rel else None
-    if clean.startswith("/assets/"):
-        root = ASSETS_DIR
-        rel = clean[len("/assets/"):]
-    elif clean.startswith("/output/"):
-        root = OUTPUT_DIR
-        rel = clean[len("/output/"):]
-    else:
-        return None
-    rel = rel.lstrip("/")
-    if not rel:
-        return None
-    root = os.path.abspath(root)
-    path = os.path.abspath(os.path.join(root, rel))
-    try:
-        return path if os.path.commonpath([root, path]) == root and os.path.exists(path) else None
-    except ValueError:
-        return None
+    return media_storage_service.local_media_path_from_url(url, ASSETS_DIR=ASSETS_DIR, OUTPUT_DIR=OUTPUT_DIR, storage_file_path=storage_file_path)
 
 _canvas_clip_manager = None
 _canvas_clip_manager_key = None
@@ -3590,56 +3566,10 @@ def ensure_same_origin_request(request: Request):
         raise HTTPException(status_code=403, detail="只允许从当前页面导入本地图片")
 
 def normalize_local_image_path(value):
-    text = str(value or "").strip().strip('"').strip("'")
-    if not text:
-        raise HTTPException(status_code=400, detail="本地图片路径为空")
-    if text.lower().startswith("file:"):
-        parsed = urllib.parse.urlparse(text)
-        if parsed.scheme.lower() != "file":
-            raise HTTPException(status_code=400, detail="只支持本地图片路径")
-        if parsed.netloc and re.match(r"^[a-zA-Z]:$", parsed.netloc) and os.name == "nt":
-            path = f"{parsed.netloc}{urllib.request.url2pathname(parsed.path or '')}"
-        elif parsed.netloc and parsed.netloc.lower() not in ("localhost",):
-            raise HTTPException(status_code=400, detail="只支持本机图片路径")
-        else:
-            path = urllib.request.url2pathname(parsed.path or "")
-    else:
-        path = text
-    path = path.strip().strip('"').strip("'")
-    if re.match(r"^/[a-zA-Z]:[\\/]", path):
-        path = path[1:]
-    if re.match(r"^[a-zA-Z]:[\\/]", path):
-        return os.path.abspath(path)
-    if path.startswith("/") and os.name != "nt":
-        return os.path.abspath(path)
-    raise HTTPException(status_code=400, detail="只支持本机绝对图片路径")
+    return upload_service.normalize_local_image_path(value, HTTPException=HTTPException)
 
 def import_local_image_file(path):
-    ext = os.path.splitext(path)[1].lower()
-    if ext not in LOCAL_IMAGE_IMPORT_EXTS:
-        raise HTTPException(status_code=400, detail="仅支持 PNG、JPG、JPEG、WEBP、GIF 图片")
-    if not os.path.isfile(path):
-        raise HTTPException(status_code=404, detail="本地图片不存在或无法读取")
-    try:
-        size = os.path.getsize(path)
-    except OSError:
-        raise HTTPException(status_code=404, detail="本地图片不存在或无法读取")
-    if size <= 0:
-        raise HTTPException(status_code=400, detail="本地图片为空")
-    if size > LOCAL_IMAGE_IMPORT_MAX_BYTES:
-        raise HTTPException(status_code=413, detail="本地图片过大，请使用 50MB 以内的图片")
-    try:
-        with Image.open(path) as img:
-            img.verify()
-    except Exception:
-        raise HTTPException(status_code=400, detail="文件不是可识别的图片")
-    filename = f"ai_ref_{uuid.uuid4().hex[:12]}{ext}"
-    dest = output_path_for(filename, "input")
-    try:
-        shutil.copyfile(path, dest)
-    except OSError:
-        raise HTTPException(status_code=500, detail="导入本地图片失败")
-    return {"url": output_url_for(filename, "input"), "name": os.path.basename(path) or filename, "kind": "image"}
+    return upload_service.import_local_image_file(path, HTTPException=HTTPException, LOCAL_IMAGE_IMPORT_EXTS=LOCAL_IMAGE_IMPORT_EXTS, LOCAL_IMAGE_IMPORT_MAX_BYTES=LOCAL_IMAGE_IMPORT_MAX_BYTES, Image=Image, output_path_for=output_path_for, output_url_for=output_url_for)
 
 def default_asset_library():
     return asset_library_index.default_asset_library(now_ms=now_ms)
@@ -4928,71 +4858,11 @@ async def index():
 
 @app.get("/api/view")
 def view_image(filename: str, type: str = "input", subfolder: str = ""):
-    # 先按原逻辑去各 ComfyUI 后端找
-    for addr in COMFYUI_INSTANCES:
-        try:
-            url = f"http://{addr}/view"
-            params = {"filename": filename, "type": type, "subfolder": subfolder}
-            r = requests.get(url, params=params, timeout=1)
-            if r.status_code == 200:
-                return Response(content=r.content, media_type=r.headers.get('Content-Type'))
-        except Exception:
-            continue
-    # 后端都拿不到时回退本地 assets/<input|output>/
-    # 适用场景：画布通过 /api/ai/upload 把参考图直接落到本地 assets/input/，
-    # 但 ComfyUI 的 input 可能因为重启/清理而丢失，导致 enhance/klein 等页面预览对比图 404
-    if not subfolder and type in ("input", "output"):
-        safe_name = os.path.basename(filename or "")
-        if safe_name:
-            local_path = output_path_for(safe_name, "input" if type == "input" else "output")
-            if os.path.isfile(local_path):
-                return FileResponse(local_path, media_type=content_type_for_path(local_path))
-    raise HTTPException(status_code=404, detail="Image not found on any available backend")
+    return media_storage_service.view_image(filename, type, subfolder, COMFYUI_INSTANCES=COMFYUI_INSTANCES, requests=requests, Response=Response, FileResponse=FileResponse, HTTPException=HTTPException, output_path_for=output_path_for, content_type_for_path=content_type_for_path)
 
 @app.get("/api/download-output")
 def download_output(request: Request, url: str, name: str = "", inline: bool = False):
-    url = rewrite_runninghub_file_url(url)
-    path = output_file_from_url(url)
-    if not path:
-        path = local_media_file_by_basename(filename_from_media_url(url, ""))
-    if path:
-        filename = sanitize_export_filename(os.path.basename(name) if name else os.path.basename(path), os.path.basename(path))
-        return FileResponse(path, media_type=content_type_for_path(path), filename=None if inline else filename)
-    # 远程文件：流式代理，绝不把整段视频/大文件读进内存（否则多个视频同时代理会撑爆内存、拖垮单进程服务）。
-    parsed = urllib.parse.urlparse(str(url or "").strip())
-    if parsed.scheme not in ("http", "https") or not parsed.netloc:
-        raise HTTPException(status_code=400, detail="无效的下载地址")
-    try:
-        upstream_headers = {"User-Agent": "ComfyUI-API-Modelscope/1.0"}
-        range_header = request.headers.get("range")
-        if range_header:
-            upstream_headers["Range"] = range_header
-        upstream = requests.get(
-            url, stream=True, timeout=(10, 60),
-            headers=upstream_headers,
-        )
-        upstream.raise_for_status()
-    except requests.RequestException as exc:
-        raise HTTPException(status_code=502, detail="远程文件下载失败，请检查地址或网络连接。") from exc
-    content_type = upstream.headers.get("content-type") or "application/octet-stream"
-    fallback = filename_from_media_url(url, "download.bin")
-    filename = sanitize_export_filename(os.path.basename(name) if name else fallback, fallback)
-    disposition = "inline" if inline else "attachment"
-    headers = {"Content-Disposition": f"{disposition}; filename*=UTF-8''{urllib.parse.quote(filename)}"}
-    for key in ("content-range", "accept-ranges"):
-        value = upstream.headers.get(key)
-        if value:
-            headers["-".join(part.capitalize() for part in key.split("-"))] = value
-
-    def stream_remote():
-        try:
-            for chunk in upstream.iter_content(chunk_size=256 * 1024):
-                if chunk:
-                    yield chunk
-        finally:
-            upstream.close()
-
-    return StreamingResponse(stream_remote(), media_type=content_type, headers=headers, status_code=upstream.status_code)
+    return media_storage_service.download_output(request, url, name, inline, rewrite_runninghub_file_url=rewrite_runninghub_file_url, output_file_from_url=output_file_from_url, local_media_file_by_basename=local_media_file_by_basename, filename_from_media_url=filename_from_media_url, sanitize_export_filename=sanitize_export_filename, FileResponse=FileResponse, content_type_for_path=content_type_for_path, HTTPException=HTTPException, requests=requests, StreamingResponse=StreamingResponse)
 
 
 

@@ -8,6 +8,7 @@ import asyncio
 import hashlib
 import json
 import urllib.parse
+from typing import Optional
 
 def image_has_alpha(img):
     if img.mode in ("RGBA", "LA"):
@@ -252,4 +253,99 @@ async def image_jpeg(url, w=0, *, FileResponse, HTTPException, Image, ImageOps, 
         write_diagnostic(f"image jpeg conversion failed error={type(exc).__name__}")
         raise HTTPException(status_code=415, detail="无法转换图片，请检查素材文件。") from exc
 
+
+def local_media_path_from_url(url: str, *, ASSETS_DIR, OUTPUT_DIR, storage_file_path) -> Optional[str]:
+    """Resolve a local media URL using the same mapping as the app mounts."""
+    if not url:
+        return None
+    clean = urllib.parse.unquote(str(url).split("?", 1)[0]).replace("\\", "/")
+    if clean.startswith("/api/storage-files/"):
+        rest = clean[len("/api/storage-files/"):].lstrip("/")
+        kind, _, rel = rest.partition("/")
+        return storage_file_path(kind, rel) if kind and rel else None
+    if clean.startswith("/assets/"):
+        root = ASSETS_DIR
+        rel = clean[len("/assets/"):]
+    elif clean.startswith("/output/"):
+        root = OUTPUT_DIR
+        rel = clean[len("/output/"):]
+    else:
+        return None
+    rel = rel.lstrip("/")
+    if not rel:
+        return None
+    root = os.path.abspath(root)
+    path = os.path.abspath(os.path.join(root, rel))
+    try:
+        return path if os.path.commonpath([root, path]) == root and os.path.exists(path) else None
+    except ValueError:
+        return None
+
+
+def view_image(filename: str, type: str = "input", subfolder: str = "", *, COMFYUI_INSTANCES, requests, Response, FileResponse, HTTPException, output_path_for, content_type_for_path):
+    # 先按原逻辑去各 ComfyUI 后端找
+    for addr in COMFYUI_INSTANCES:
+        try:
+            url = f"http://{addr}/view"
+            params = {"filename": filename, "type": type, "subfolder": subfolder}
+            r = requests.get(url, params=params, timeout=1)
+            if r.status_code == 200:
+                return Response(content=r.content, media_type=r.headers.get('Content-Type'))
+        except Exception:
+            continue
+    # 后端都拿不到时回退本地 assets/<input|output>/
+    # 适用场景：画布通过 /api/ai/upload 把参考图直接落到本地 assets/input/，
+    # 但 ComfyUI 的 input 可能因为重启/清理而丢失，导致 enhance/klein 等页面预览对比图 404
+    if not subfolder and type in ("input", "output"):
+        safe_name = os.path.basename(filename or "")
+        if safe_name:
+            local_path = output_path_for(safe_name, "input" if type == "input" else "output")
+            if os.path.isfile(local_path):
+                return FileResponse(local_path, media_type=content_type_for_path(local_path))
+    raise HTTPException(status_code=404, detail="Image not found on any available backend")
+
+
+def download_output(request, url: str, name: str = "", inline: bool = False, *, rewrite_runninghub_file_url, output_file_from_url, local_media_file_by_basename, filename_from_media_url, sanitize_export_filename, FileResponse, content_type_for_path, HTTPException, requests, StreamingResponse):
+    url = rewrite_runninghub_file_url(url)
+    path = output_file_from_url(url)
+    if not path:
+        path = local_media_file_by_basename(filename_from_media_url(url, ""))
+    if path:
+        filename = sanitize_export_filename(os.path.basename(name) if name else os.path.basename(path), os.path.basename(path))
+        return FileResponse(path, media_type=content_type_for_path(path), filename=None if inline else filename)
+    # 远程文件：流式代理，绝不把整段视频/大文件读进内存（否则多个视频同时代理会撑爆内存、拖垮单进程服务）。
+    parsed = urllib.parse.urlparse(str(url or "").strip())
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        raise HTTPException(status_code=400, detail="无效的下载地址")
+    try:
+        upstream_headers = {"User-Agent": "ComfyUI-API-Modelscope/1.0"}
+        range_header = request.headers.get("range")
+        if range_header:
+            upstream_headers["Range"] = range_header
+        upstream = requests.get(
+            url, stream=True, timeout=(10, 60),
+            headers=upstream_headers,
+        )
+        upstream.raise_for_status()
+    except requests.RequestException as exc:
+        raise HTTPException(status_code=502, detail="远程文件下载失败，请检查地址或网络连接。") from exc
+    content_type = upstream.headers.get("content-type") or "application/octet-stream"
+    fallback = filename_from_media_url(url, "download.bin")
+    filename = sanitize_export_filename(os.path.basename(name) if name else fallback, fallback)
+    disposition = "inline" if inline else "attachment"
+    headers = {"Content-Disposition": f"{disposition}; filename*=UTF-8''{urllib.parse.quote(filename)}"}
+    for key in ("content-range", "accept-ranges"):
+        value = upstream.headers.get(key)
+        if value:
+            headers["-".join(part.capitalize() for part in key.split("-"))] = value
+
+    def stream_remote():
+        try:
+            for chunk in upstream.iter_content(chunk_size=256 * 1024):
+                if chunk:
+                    yield chunk
+        finally:
+            upstream.close()
+
+    return StreamingResponse(stream_remote(), media_type=content_type, headers=headers, status_code=upstream.status_code)
 
