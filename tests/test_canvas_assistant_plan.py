@@ -6,7 +6,7 @@ import unittest
 from fastapi import HTTPException
 
 from backend import canvas_assistant_plan as plans
-from backend.canvas_assistant import AssistantStore
+from backend.canvas_assistant_store import AssistantStore
 
 
 class PersistentPlanTests(unittest.TestCase):

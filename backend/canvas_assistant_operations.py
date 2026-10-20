@@ -7,6 +7,7 @@ import html
 import json
 
 from fastapi import HTTPException
+from backend.canvas_assistant_receipt_rules import receipt_key
 from backend.canvas_assistant_operation_schema import UpdateNode, ProposeImage, CreateStoryWorkflow, CreateStoryAnalysis, ImportStoryAnalysis, CreateShotPrompts, CreateShotImages
 from backend.canvas_assistant_canvas_rules import content_hash, generation_settings, allowed_connection, would_cycle
 from backend.canvas_assistant_node_rules import CreateNode, new_node, is_busy
@@ -14,10 +15,6 @@ from backend.canvas_assistant_story import create_story_nodes
 from backend.canvas_assistant_story_schema import StoryWorkflow, StoryAnalysis, ShotPrompts, ShotImages
 from backend.canvas_assistant_story_analysis import create_analysis, import_analysis
 from backend.canvas_assistant_shot_prompts import create_shot_prompts, create_shot_images
-
-
-def receipt_key(user, request_id):
-    return hashlib.sha256((user + ":" + request_id).encode()).hexdigest()
 
 
 def prepare_operations(canvas, operations, *, request_id, user, expected_updated_at, creation_settings, providers, image_model_confirmed=False, reference_images=None):

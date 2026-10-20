@@ -9,7 +9,8 @@ import httpx
 from fastapi import FastAPI, HTTPException
 
 from backend.canvas_assistant import create_assistant_router
-from backend.canvas_assistant_operations import prepare_operations, receipt_key
+from backend.canvas_assistant_operations import prepare_operations
+from backend.canvas_assistant_receipt_rules import receipt_key
 from backend.canvas_assistant_operation_schema import AssistantPlan, parse_plan
 
 
@@ -291,7 +292,7 @@ class OperationRouteTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_history_recovers_receipt_after_interrupted_response(self):
         await self.client.post("/api/canvas-assistant/chat", json=self.payload)
-        from backend.canvas_assistant import AssistantStore
+        from backend.canvas_assistant_store import AssistantStore
         store = AssistantStore(lambda: self.temp.name)
         def interrupt(doc):
             turn = doc["sessions"][self.session]["turns"][0]

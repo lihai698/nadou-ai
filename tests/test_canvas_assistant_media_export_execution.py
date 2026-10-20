@@ -11,7 +11,8 @@ from unittest.mock import AsyncMock, patch
 import httpx
 from fastapi import FastAPI, HTTPException
 import main
-from backend.canvas_assistant import AssistantStore, create_assistant_router
+from backend.canvas_assistant import create_assistant_router
+from backend.canvas_assistant_store import AssistantStore
 from backend.canvas_assistant_native import prepare_native_action
 from backend.canvas_clip import CanvasClipManager, find_media_tools
 from tests import test_canvas_assistant_media_export as media_contract

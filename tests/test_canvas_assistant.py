@@ -7,7 +7,8 @@ from pathlib import Path
 import httpx
 from fastapi import FastAPI, HTTPException
 
-from backend.canvas_assistant import AssistantStore, create_assistant_router
+from backend.canvas_assistant import create_assistant_router
+from backend.canvas_assistant_store import AssistantStore
 
 
 class AssistantTests(unittest.IsolatedAsyncioTestCase):

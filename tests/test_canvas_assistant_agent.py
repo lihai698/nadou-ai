@@ -11,9 +11,10 @@ import httpx
 import anyio
 from fastapi import FastAPI, HTTPException, Request
 
-from backend.canvas_assistant import AssistantStore, CancelRequest, TurnRequest, create_assistant_router
+from backend.canvas_assistant import CancelRequest, TurnRequest, create_assistant_router
+from backend.canvas_assistant_store import AssistantStore
 from backend.canvas_assistant_agent import run_agent
-from backend.canvas_assistant_operations import receipt_key
+from backend.canvas_assistant_receipt_rules import receipt_key
 from backend.canvas_assistant_operations import prepare_operations
 from backend.canvas_assistant import reference_kind
 from backend.canvas_assistant_tools import tool_catalog
@@ -1400,7 +1401,7 @@ class AgentRouteTests(unittest.IsolatedAsyncioTestCase):
         turn = next(t for t in session["turns"] if t["id"] == changes.get("requestId", "turn-a"))
         self.assertEqual(self.tasks, {})
         proposal = turn["proposals"][0]
-        from backend.canvas_assistant import AssistantStore
+        from backend.canvas_assistant_store import AssistantStore
         store = AssistantStore(lambda: self.temp.name)
         def submitted(doc):
             stored = next(t for t in doc["sessions"][self.session]["turns"] if t["id"] == turn["id"])
