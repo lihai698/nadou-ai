@@ -26,7 +26,7 @@ class NativeActionTests(unittest.TestCase):
         self.assertIn('视频和其他引擎沿用原入口',smart['smart-image']['limits'])
 
     def test_paused_audio_blocks_writes_until_original_task_has_ended(self):
-        from backend.canvas_assistant_operations import is_busy
+        from backend.canvas_assistant_node_rules import is_busy
         for node_type, kind in [('generator','classic'),('smart-image','smart')]:
             c=self.canvas(node_type);c['kind']=kind;n=c['nodes'][0]
             for status in ('queued','running','query-paused','unknown'):

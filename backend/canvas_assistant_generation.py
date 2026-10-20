@@ -8,6 +8,7 @@ import math
 import re
 
 from fastapi import HTTPException
+from backend.canvas_assistant_node_rules import CreateNode, new_node
 
 
 def digest(value):
@@ -60,7 +61,6 @@ def target_signature(canvas, proposal):
 
 
 def add_image_proposal(canvas, op, *, key, settings, reference_images, x, y):
-    from backend.canvas_assistant_operations import CreateNode, new_node
     kind = canvas.get("kind", "classic")
     proposal_id = "proposal_" + digest([key, op.operationId])[:28]
     prompt_id, target_id = proposal_id + "_prompt", proposal_id + "_image"

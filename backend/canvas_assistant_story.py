@@ -8,6 +8,7 @@ import json
 from typing import Literal
 
 from fastapi import HTTPException
+from backend.canvas_assistant_node_rules import CreateNode, is_busy, new_node
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -204,7 +205,6 @@ def create_story_nodes(candidate, data, *, key, settings, x, y, images=True):
                  promptDraftText=text,promptDraftHtml=html.escape(text),promptDraftTouched=True,shotTableOrigin=origin))
             output_id = image_id
         else:
-            from backend.canvas_assistant_operations import new_node, CreateNode
             image = new_node('classic', CreateNode(op='create', operationId='image', ref='image', type='image_generator', title=f'分镜 {index+1} 配图'), image_id, px+370, py, settings, candidate.get('updated_at'))
             image.update(w=340, h=260, count=1, shotTableOrigin=origin)
             add(image)
@@ -243,7 +243,6 @@ def sync_story_prompt(candidate, prompt, content):
             or image.get('shotTableOrigin', {}).get('tableId') != table_node['id']
             or not any(e['from'] == prompt['id'] and e['to'] == image['id'] for e in candidate['connections'])):
         raise HTTPException(409, '镜头配图链不完整，未修改')
-    from backend.canvas_assistant_operations import is_busy
     if is_busy(image):
         raise HTTPException(409, '对应配图节点正在运行，未修改')
     if row.get('imagePrompt') == content and (image.get('type') == 'generator' or image.get('promptDraftText') == content):

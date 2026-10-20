@@ -5,7 +5,7 @@ import re
 from typing import Any
 
 from fastapi import HTTPException
-from backend.canvas_assistant_operations import audio_task_active
+from backend.canvas_assistant_node_rules import audio_task_active
 
 IDENTITY_FIELDS = ("id", "type", "title", "name")
 SIZE_FIELDS = set("ratio resolution quality customRatio customSize customRatioWidth customRatioHeight customWidth customHeight".split())

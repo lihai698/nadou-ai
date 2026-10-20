@@ -2527,7 +2527,7 @@
         },
         {
           "path": "backend/canvas_assistant_native.py",
-          "sha256": "05001a217ab5c74193c15f9cde45e65fc2e686cd9f2cb8535747a991b5c65cb1",
+          "sha256": "031fe0caacaf2bb6f24dd3c677f98c4109d8e428998f417e696e171c0e14ebfd",
           "evidence": "backend/canvas_assistant_native.py:",
           "symbol": "",
           "line": 21
@@ -3237,7 +3237,7 @@
         },
         {
           "path": "backend/canvas_assistant_native.py",
-          "sha256": "05001a217ab5c74193c15f9cde45e65fc2e686cd9f2cb8535747a991b5c65cb1",
+          "sha256": "031fe0caacaf2bb6f24dd3c677f98c4109d8e428998f417e696e171c0e14ebfd",
           "evidence": "backend/canvas_assistant_native.py:",
           "symbol": "",
           "line": 21
@@ -9189,7 +9189,7 @@
           "symbol": "create_story_nodes",
           "line": 75,
           "evidence": "backend/canvas_assistant_story.py:create_story_nodes",
-          "sha256": "dca5e11d3e9b8c35e2dd89c21dea09bf5e6e088d9d0b957b9546549275d8cc61"
+          "sha256": "178488d858cbbb32aac5d353153819f7f53103f5421e75f899193b8aa65cc218"
         },
         {
           "path": "backend/canvas_assistant_agent.py",
@@ -9217,7 +9217,7 @@
           "symbol": "create_shot_prompts",
           "line": 32,
           "evidence": "backend/canvas_assistant_shot_prompts.py:create_shot_prompts",
-          "sha256": "b96cbd204902194aca83e4da44a51b247ef69a354ccc16ed9696c3d5f2822e3a"
+          "sha256": "48738a20609bbe6fb47d17187e9de09e86921e869fead6a4b509a7a956651bad"
         },
         {
           "path": "backend/canvas_assistant_autonomy.py",
@@ -10551,21 +10551,21 @@
           "symbol": "read_node_state",
           "line": 97,
           "evidence": "backend/canvas_assistant_state.py:read_node_state",
-          "sha256": "cd4d9def60e58348643b8d8187e4d863ee7d506f1b3afb93e7999c51f969476e"
+          "sha256": "356cafb059c39a513a6327d66f2f5dd893e1fdc9659c62f90b56dbbd9bcfd339"
         },
         {
-          "path": "backend/canvas_assistant_operations.py",
+          "path": "backend/canvas_assistant_node_rules.py",
           "symbol": "audio_task_active",
-          "line": 195,
-          "evidence": "backend/canvas_assistant_operations.py:audio_task_active",
-          "sha256": "3ff0f981637c9711800046d99c00a6d1eb96f9ef1e54df1c8b90a611a09f0a44"
+          "line": 67,
+          "evidence": "backend/canvas_assistant_node_rules.py:audio_task_active",
+          "sha256": "daeb0c014ca5c90478825ca025b16bb6adc8817110c575a14cbc6b0ffba2ab15"
         },
         {
           "path": "backend/canvas_assistant_native.py",
           "symbol": "native_catalog",
           "line": 305,
           "evidence": "backend/canvas_assistant_native.py:native_catalog",
-          "sha256": "05001a217ab5c74193c15f9cde45e65fc2e686cd9f2cb8535747a991b5c65cb1"
+          "sha256": "031fe0caacaf2bb6f24dd3c677f98c4109d8e428998f417e696e171c0e14ebfd"
         },
         {
           "path": "static/js/canvas-audio-host.js",
@@ -10625,7 +10625,7 @@
             "symbol": "read_node_state",
             "line": 97,
             "evidence": "backend/canvas_assistant_state.py:read_node_state",
-            "sha256": "cd4d9def60e58348643b8d8187e4d863ee7d506f1b3afb93e7999c51f969476e"
+            "sha256": "356cafb059c39a513a6327d66f2f5dd893e1fdc9659c62f90b56dbbd9bcfd339"
           },
           "verification": "passed"
         },
@@ -10637,11 +10637,11 @@
             "当前画布与原音频任务已核对；助手只读，不提交音频供应商"
           ],
           "source": {
-            "path": "backend/canvas_assistant_operations.py",
+            "path": "backend/canvas_assistant_node_rules.py",
             "symbol": "audio_task_active",
-            "line": 195,
-            "evidence": "backend/canvas_assistant_operations.py:audio_task_active",
-            "sha256": "3ff0f981637c9711800046d99c00a6d1eb96f9ef1e54df1c8b90a611a09f0a44"
+            "line": 67,
+            "evidence": "backend/canvas_assistant_node_rules.py:audio_task_active",
+            "sha256": "daeb0c014ca5c90478825ca025b16bb6adc8817110c575a14cbc6b0ffba2ab15"
           },
           "verification": "passed"
         },
@@ -10657,7 +10657,7 @@
             "symbol": "native_catalog",
             "line": 305,
             "evidence": "backend/canvas_assistant_native.py:native_catalog",
-            "sha256": "05001a217ab5c74193c15f9cde45e65fc2e686cd9f2cb8535747a991b5c65cb1"
+            "sha256": "031fe0caacaf2bb6f24dd3c677f98c4109d8e428998f417e696e171c0e14ebfd"
           },
           "verification": "passed"
         },
@@ -10673,7 +10673,7 @@
             "symbol": "native_catalog",
             "line": 305,
             "evidence": "backend/canvas_assistant_native.py:native_catalog",
-            "sha256": "05001a217ab5c74193c15f9cde45e65fc2e686cd9f2cb8535747a991b5c65cb1"
+            "sha256": "031fe0caacaf2bb6f24dd3c677f98c4109d8e428998f417e696e171c0e14ebfd"
           },
           "verification": "partial"
         },

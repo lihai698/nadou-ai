@@ -5,6 +5,7 @@ import json
 
 from fastapi import HTTPException
 from pydantic import BaseModel, ConfigDict, Field
+from backend.canvas_assistant_node_rules import CreateNode, is_busy, new_node
 from backend.canvas_assistant_story_analysis import StoryAnalysis, create_analysis
 
 
@@ -30,7 +31,6 @@ def shot_input(table,row):
 
 
 def create_shot_prompts(candidate,data,settings,providers):
-    from backend.canvas_assistant_operations import is_busy
     table_node=next((n for n in candidate['nodes'] if n['id']==data.tableId),None)
     if not table_node or table_node.get('type') not in {'shot-table','smart-shot-table'}:
         raise HTTPException(409,'请指定已有原生分镜表')
@@ -101,7 +101,6 @@ def processed_prompt(candidate,table_id,row_id):
         raise HTTPException(409,'该镜文本模型已改变，请重新运行本镜LLM')
     if processor.get('shotPromptOrigin')!={'tableId':table_id,'rowId':row_id,'sourceNodeId':source['id']} or not any(c.get('from')==source['id'] and c.get('to')==processor['id'] and c.get('kind')=='input' for c in candidate['connections']):
         raise HTTPException(409,'逐镜处理节点归属或输入连接已变化')
-    from backend.canvas_assistant_operations import is_busy
     if is_busy(processor) or is_busy(source):raise HTTPException(409,'该镜文本模型尚未完成运行')
     return row,source,processor,output
 
@@ -118,7 +117,6 @@ def validate_shot_image(candidate,node):
 
 
 def create_shot_images(candidate,data,settings,key):
-    from backend.canvas_assistant_operations import CreateNode,new_node,is_busy
     if not settings.get('provider_id') or not settings.get('model'):
         raise HTTPException(409,'请先选择图片平台和模型')
     defaults={'ratio':'square','resolution':'1k','quality':'auto','customRatio':'','customSize':'','customRatioWidth':'','customRatioHeight':'','customWidth':'','customHeight':''}

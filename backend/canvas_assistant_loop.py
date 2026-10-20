@@ -6,7 +6,8 @@ import secrets
 
 from fastapi import HTTPException
 
-from backend.canvas_assistant_operations import content_hash, is_busy
+from backend.canvas_assistant_node_rules import is_busy
+from backend.canvas_assistant_operations import content_hash
 
 
 def reject(message):
