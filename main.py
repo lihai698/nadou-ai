@@ -179,6 +179,7 @@ from backend.task_concurrency import TaskConcurrencyGate, configured_task_limits
 from backend import comfy_task_service
 from backend.extensions import ExtensionError, ExtensionRegistry
 from backend.local_media_extension import LOCAL_MEDIA_EXTENSION
+from backend import asset_media_rules, canvas_asset_rules
 from backend.asset_media_rules import (
     asset_library_media_kind,
     asset_library_safe_extension,
@@ -189,9 +190,6 @@ from backend.asset_media_rules import (
 from backend.canvas_asset_rules import (
     canvas_asset_url_value,
     canvas_asset_downloadable_url,
-    canvas_asset_kind,
-    canvas_asset_name,
-    iter_canvas_asset_values,
     filename_from_media_url,
     sanitize_asset_name,
     sanitize_export_filename,
@@ -2399,91 +2397,10 @@ def list_canvases():
 def list_deleted_canvases():
     return sort_canvas_records(iter_canvas_records(include_deleted=True), include_deleted=True)
 
-def canvas_node_title(node):
-    if not isinstance(node, dict):
-        return ""
-    return str(node.get("title") or node.get("name") or node.get("label") or node.get("type") or "节点")[:120]
-
-def extract_canvas_assets(canvas):
-    record = canvas_record(canvas)
-    canvas_id = str(record.get("id") or "")
-    items = []
-    seen = set()
-    nodes = canvas.get("nodes") if isinstance(canvas.get("nodes"), list) else []
-    for node_index, node in enumerate(nodes):
-        if not isinstance(node, dict):
-            continue
-        node_id = str(node.get("id") or f"node_{node_index}")
-        node_title = canvas_node_title(node)
-        for field_path, raw, url in iter_canvas_asset_values(node):
-            dedupe_key = url
-            if dedupe_key in seen:
-                continue
-            seen.add(dedupe_key)
-            kind = canvas_asset_kind(raw, url)
-            if kind not in {"image", "video", "audio", "text"}:
-                continue
-            fallback = f"{record.get('title') or 'canvas'}-{len(items) + 1}"
-            item = {
-                "id": hashlib.sha1(f"{canvas_id}:{url}".encode("utf-8")).hexdigest()[:24],
-                "url": url,
-                "name": canvas_asset_name(raw, url, fallback),
-                "kind": kind,
-                "canvas_id": canvas_id,
-                "canvas_title": record.get("title") or "未命名画布",
-                "canvas_kind": record.get("kind") or "classic",
-                "canvas_icon": record.get("icon") or "layers",
-                "canvas_owner": record.get("owner") or "",
-                "canvas_color": record.get("color") or "",
-                "canvas_created_at": record.get("created_at") or 0,
-                "canvas_updated_at": record.get("updated_at") or 0,
-                "node_id": node_id,
-                "node_title": node_title,
-                "node_type": str(node.get("type") or ""),
-                "source_path": field_path,
-                "created_at": node.get("created_at") or record.get("updated_at") or record.get("created_at") or 0,
-            }
-            if isinstance(raw, dict):
-                for key in ("natural_w", "natural_h", "width", "height", "size", "duration", "runMs"):
-                    if raw.get(key) is not None:
-                        item[key] = raw.get(key)
-            items.append(item)
-    return items
 
 def canvas_assets_index():
-    canvases = []
-    items = []
-    canvas_counts = {"all": 0, "smart": 0, "classic": 0}
-    item_counts = {"all": 0, "smart": 0, "classic": 0}
-    cleanup_expired_canvas_trash()
-    for filename in os.listdir(CANVAS_DIR):
-        if not filename.endswith(".json"):
-            continue
-        try:
-            with open(os.path.join(CANVAS_DIR, filename), "r", encoding="utf-8") as f:
-                canvas = json.load(f)
-        except Exception:
-            continue
-        if canvas.get("deleted_at"):
-            continue
-        record = canvas_record(canvas)
-        canvas_items = extract_canvas_assets(canvas)
-        record["asset_count"] = len(canvas_items)
-        canvases.append(record)
-        items.extend(canvas_items)
-        kind = record.get("kind") or "classic"
-        canvas_counts["all"] += 1
-        canvas_counts[kind] = canvas_counts.get(kind, 0) + 1
-        item_counts["all"] += len(canvas_items)
-        item_counts[kind] = item_counts.get(kind, 0) + len(canvas_items)
-    canvases.sort(key=lambda item: (0 if item.get("pinned") else 1, -int(item.get("updated_at") or item.get("created_at") or 0)))
-    items.sort(key=lambda item: int(item.get("canvas_updated_at") or item.get("created_at") or 0), reverse=True)
-    categories = [
-        {"id": "all", "name": "全部画布", "count": item_counts.get("all", 0), "canvas_count": canvas_counts.get("all", 0)},
-        {"id": "smart", "name": "智能画布", "count": item_counts.get("smart", 0), "canvas_count": canvas_counts.get("smart", 0)},
-        {"id": "classic", "name": "普通画布", "count": item_counts.get("classic", 0), "canvas_count": canvas_counts.get("classic", 0)},
-    ]
-    return {"categories": categories, "canvases": canvases, "items": items}
+    with _canvas_store() as store:
+        return canvas_asset_rules.summarize_canvas_assets(store.asset_documents())
 
 def display_title(text):
     title = re.sub(r"\s+", " ", text or "").strip()
@@ -3825,105 +3742,16 @@ def save_asset_classification_prompt(text):
     write_text_atomic(ASSET_CLASSIFICATION_PROMPT_FILE, value, encoding="utf-8", newline="")
     return value
 
-ASSET_CLASSIFICATION_DIMENSION_NAMES = {
-    "environment": "环境",
-    "scene": "场景",
-    "space": "空间",
-    "subject": "主体",
-    "model": "模特",
-    "people": "人物",
-    "style": "风格",
-    "lighting": "光影",
-    "color": "色彩",
-    "composition": "构图",
-    "mood": "氛围",
-    "use_case": "用途",
-    "objects": "物体",
-    "materials": "材质",
-    "quality": "质量",
-}
 
 def _local_upload_classification_path(filename):
     return local_asset_service._local_upload_classification_path(filename, LOCAL_UPLOAD_DIR=LOCAL_UPLOAD_DIR)
 
-def _safe_asset_tag(value, limit=24):
-    text = re.sub(r"\s+", " ", str(value or "").strip())
-    text = re.sub(r"^[#＃]+", "", text).strip(" ,，、;；|/")
-    return text[:limit]
-
-def normalize_asset_classification(raw):
-    if not isinstance(raw, dict):
-        raw = {}
-    categories = raw.get("categories") if isinstance(raw.get("categories"), dict) else {}
-    clean_categories = {}
-    flat = []
-    for key, values in categories.items():
-        norm_key = re.sub(r"[^A-Za-z0-9_-]+", "_", str(key or "").strip().lower())[:40]
-        if not norm_key:
-            continue
-        if isinstance(values, str):
-            values = re.split(r"[,，、/|;；\n]+", values)
-        if not isinstance(values, list):
-            continue
-        clean_values = []
-        seen = set()
-        for value in values:
-            tag = _safe_asset_tag(value)
-            if not tag or tag in seen:
-                continue
-            seen.add(tag)
-            clean_values.append(tag)
-            flat.append({"dimension": norm_key, "label": ASSET_CLASSIFICATION_DIMENSION_NAMES.get(norm_key, norm_key), "tag": tag})
-            if len(clean_values) >= 8:
-                break
-        if clean_values:
-            clean_categories[norm_key] = clean_values
-    tags = raw.get("tags") if isinstance(raw.get("tags"), list) else []
-    clean_tags = []
-    seen_tags = set()
-    for value in tags:
-        tag = _safe_asset_tag(value)
-        if not tag or tag in seen_tags:
-            continue
-        seen_tags.add(tag)
-        clean_tags.append(tag)
-        flat.append({"dimension": "tags", "label": "标签", "tag": tag})
-        if len(clean_tags) >= 20:
-            break
-    seen_flat = set()
-    flat_unique = []
-    for item in flat:
-        key = f"{item['dimension']}::{item['tag']}"
-        if key in seen_flat:
-            continue
-        seen_flat.add(key)
-        flat_unique.append(item)
-    return {
-        "summary": str(raw.get("summary") or "").strip()[:240],
-        "categories": clean_categories,
-        "tags": clean_tags,
-        "flat": flat_unique,
-        "updated_at": now_ms(),
-    }
-
-def parse_asset_classification_text(text):
-    value = str(text or "").strip()
-    if not value:
-        return normalize_asset_classification({})
-    value = re.sub(r"^```(?:json)?\s*", "", value, flags=re.IGNORECASE).strip()
-    value = re.sub(r"\s*```$", "", value).strip()
-    try:
-        data = json.loads(value)
-    except Exception:
-        match = re.search(r"\{.*\}", value, re.S)
-        data = json.loads(match.group(0)) if match else {}
-    return normalize_asset_classification(data)
 
 def _read_local_upload_classification(filename):
-    return local_asset_service._read_local_upload_classification(filename, _local_upload_classification_path=_local_upload_classification_path, normalize_asset_classification=normalize_asset_classification)
+    return local_asset_service._read_local_upload_classification(filename, _local_upload_classification_path=_local_upload_classification_path, now_ms=now_ms)
 
 def _write_local_upload_classification(filename, classification):
-    return local_asset_service._write_local_upload_classification(filename, classification, _local_upload_classification_path=_local_upload_classification_path, normalize_asset_classification=normalize_asset_classification, write_json_atomic=write_json_atomic)
+    return local_asset_service._write_local_upload_classification(filename, classification, _local_upload_classification_path=_local_upload_classification_path, now_ms=now_ms, write_json_atomic=write_json_atomic)
 
 def asset_classification_prompt(extra_prompt=""):
     base = load_asset_classification_prompt()
@@ -3940,7 +3768,7 @@ async def classify_image_with_provider(abs_path, provider_id="", model="", ms_mo
         model,
         ms_model,
     )
-    classification = parse_asset_classification_text(text)
+    classification = asset_media_rules.parse_asset_classification_text(text, now_ms=now_ms)
     classification["model"] = resolved_model
     classification["provider"] = provider_id or get_primary_provider_id()
     return classification

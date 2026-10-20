@@ -1,9 +1,11 @@
-"""素材库与本地上传共用的无状态媒体识别规则。
+"""素材库与本地上传共用的无状态媒体识别与分类规则。
 
-这里只处理调用方传入的文件名、Content-Type 或文件头字节；不访问文件和用户数据。
+这里只处理调用方传入的媒体值与分类内容；不访问文件和用户数据。
 素材库与本地上传支持的扩展名不同，分别保持原有判断顺序。
+分类时间由调用方显式注入；本模块不拥有时钟或加载供应商。
 """
 
+import json
 import os
 import re
 
@@ -83,3 +85,98 @@ __all__ = [
     "_local_upload_display_name",
     "_sniff_image_ext_bytes",
 ]
+
+
+ASSET_CLASSIFICATION_DIMENSION_NAMES = {
+    "environment": "环境",
+    "scene": "场景",
+    "space": "空间",
+    "subject": "主体",
+    "model": "模特",
+    "people": "人物",
+    "style": "风格",
+    "lighting": "光影",
+    "color": "色彩",
+    "composition": "构图",
+    "mood": "氛围",
+    "use_case": "用途",
+    "objects": "物体",
+    "materials": "材质",
+    "quality": "质量",
+}
+
+
+def _safe_asset_tag(value, limit=24):
+    text = re.sub(r"\s+", " ", str(value or "").strip())
+    text = re.sub(r"^[#＃]+", "", text).strip(" ,，、;；|/")
+    return text[:limit]
+
+
+def normalize_asset_classification(raw, *, now_ms):
+    if not isinstance(raw, dict):
+        raw = {}
+    categories = raw.get("categories") if isinstance(raw.get("categories"), dict) else {}
+    clean_categories = {}
+    flat = []
+    for key, values in categories.items():
+        norm_key = re.sub(r"[^A-Za-z0-9_-]+", "_", str(key or "").strip().lower())[:40]
+        if not norm_key:
+            continue
+        if isinstance(values, str):
+            values = re.split(r"[,，、/|;；\n]+", values)
+        if not isinstance(values, list):
+            continue
+        clean_values = []
+        seen = set()
+        for value in values:
+            tag = _safe_asset_tag(value)
+            if not tag or tag in seen:
+                continue
+            seen.add(tag)
+            clean_values.append(tag)
+            flat.append({"dimension": norm_key, "label": ASSET_CLASSIFICATION_DIMENSION_NAMES.get(norm_key, norm_key), "tag": tag})
+            if len(clean_values) >= 8:
+                break
+        if clean_values:
+            clean_categories[norm_key] = clean_values
+    tags = raw.get("tags") if isinstance(raw.get("tags"), list) else []
+    clean_tags = []
+    seen_tags = set()
+    for value in tags:
+        tag = _safe_asset_tag(value)
+        if not tag or tag in seen_tags:
+            continue
+        seen_tags.add(tag)
+        clean_tags.append(tag)
+        flat.append({"dimension": "tags", "label": "标签", "tag": tag})
+        if len(clean_tags) >= 20:
+            break
+    seen_flat = set()
+    flat_unique = []
+    for item in flat:
+        key = f"{item['dimension']}::{item['tag']}"
+        if key in seen_flat:
+            continue
+        seen_flat.add(key)
+        flat_unique.append(item)
+    return {
+        "summary": str(raw.get("summary") or "").strip()[:240],
+        "categories": clean_categories,
+        "tags": clean_tags,
+        "flat": flat_unique,
+        "updated_at": now_ms(),
+    }
+
+
+def parse_asset_classification_text(text, *, now_ms):
+    value = str(text or "").strip()
+    if not value:
+        return normalize_asset_classification({}, now_ms=now_ms)
+    value = re.sub(r"^```(?:json)?\s*", "", value, flags=re.IGNORECASE).strip()
+    value = re.sub(r"\s*```$", "", value).strip()
+    try:
+        data = json.loads(value)
+    except Exception:
+        match = re.search(r"\{.*\}", value, re.S)
+        data = json.loads(match.group(0)) if match else {}
+    return normalize_asset_classification(data, now_ms=now_ms)

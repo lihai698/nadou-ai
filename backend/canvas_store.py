@@ -135,6 +135,24 @@ class CanvasStore:
                 except Exception:
                     continue
 
+    def asset_documents(self):
+        """素材索引的只读扫描；保留旧接口跳过坏 JSON、不过滤格式版本的边界。
+
+        回收站清理由同一存储所有者负责；汇总层不直接读取画布目录。
+        """
+        self.cleanup_trash()
+        for filename in os.listdir(self.directory):
+            if not filename.endswith(".json"):
+                continue
+            try:
+                with open(os.path.join(self.directory, filename), "r", encoding="utf-8") as f:
+                    canvas = json.load(f)
+            except Exception:
+                continue
+            if canvas.get("deleted_at"):
+                continue
+            yield canvas
+
     def records(self, include_deleted=False):
         self.cleanup_trash()
         records = []

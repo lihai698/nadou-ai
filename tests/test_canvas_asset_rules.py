@@ -12,7 +12,8 @@ from backend import canvas_asset_rules as rules
 
 class CanvasAssetRuleTests(unittest.TestCase):
     def test_main_uses_the_extracted_public_rules(self):
-        for name in rules.__all__:
+        for name in ("canvas_asset_url_value", "canvas_asset_downloadable_url",
+                     "filename_from_media_url", "sanitize_asset_name", "sanitize_export_filename"):
             self.assertIs(getattr(main, name), getattr(rules, name))
 
     def test_url_value_and_downloadable_prefixes_keep_legacy_boundary(self):

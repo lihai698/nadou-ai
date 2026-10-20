@@ -9,28 +9,30 @@ import base64
 import json
 import urllib.parse
 
+from .asset_media_rules import normalize_asset_classification
+
 def _local_upload_classification_path(filename, *, LOCAL_UPLOAD_DIR):
     return os.path.splitext(os.path.join(LOCAL_UPLOAD_DIR, filename))[0] + ".classification.json"
 
 
-def _read_local_upload_classification(filename, *, _local_upload_classification_path, normalize_asset_classification):
+def _read_local_upload_classification(filename, *, _local_upload_classification_path, now_ms):
     path = _local_upload_classification_path(filename)
     if not os.path.isfile(path):
         return None
     try:
         with open(path, "r", encoding="utf-8") as f:
-            return normalize_asset_classification(json.load(f))
+            return normalize_asset_classification(json.load(f), now_ms=now_ms)
     except Exception:
         return None
 
 
-def _write_local_upload_classification(filename, classification, *, _local_upload_classification_path, normalize_asset_classification, write_json_atomic):
+def _write_local_upload_classification(filename, classification, *, _local_upload_classification_path, now_ms, write_json_atomic):
     path = _local_upload_classification_path(filename)
     # 分类结果是本地素材的旁车 JSON。原子替换避免分类过程中进程退出留下
     # 半截 JSON，列表读取遇到旧文件时仍可按现有规则安全回退。
     write_json_atomic(
         path,
-        normalize_asset_classification(classification),
+        normalize_asset_classification(classification, now_ms=now_ms),
         ensure_ascii=False,
         indent=2,
     )
