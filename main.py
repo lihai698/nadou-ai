@@ -4920,87 +4920,8 @@ async def import_local_ai_reference(payload: LocalImageImportRequest, request: R
     return {"files": [import_local_image_file(normalize_local_image_path(path)) for path in requested]}
 
 
-_RUNNINGHUB_APP_FIELD_KEYS = frozenset({
-    "nodeId", "node_id", "groupId", "fieldName", "inputName", "name", "key",
-    "paramName", "id", "fieldValue", "defaultValue", "value", "default",
-    "fieldType", "type", "valueType", "label", "title", "group", "category",
-    "note", "description", "required", "enabled", "imageOrder", "min", "max",
-    "step", "options", "optionList", "values", "enum", "choices", "items",
-    "list", "selectOptions", "fieldData",
-})
-_RUNNINGHUB_APP_FIELD_SOURCES = (
-    "nodeInfoList", "fields", "inputs", "inputList", "formItems", "forms",
-    "params", "parameters", "apiParams",
-)
-_RUNNINGHUB_APP_PRIVATE_PARTS = frozenset({
-    "token", "secret", "password", "passwd", "authorization", "cookie",
-    "cookies", "credential", "credentials", "raw", "debug", "trace",
-    "request", "response", "headers",
-})
-
-
-def _runninghub_app_private_key(value):
-    # 驼峰字段如 clientSecret/debugInfo 先拆成词，再检查嵌套元数据键。
-    name = re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1_\2", str(value or ""))
-    name = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", name)
-    parts = [part for part in re.split(r"[^a-z0-9]+", name.lower()) if part]
-    if "".join(parts) in {"apikey", "accesstoken", "refreshtoken", "authtoken", "clientsecret", "sessionkey", "debuginfo"}:
-        return True
-    if any(part in _RUNNINGHUB_APP_PRIVATE_PARTS for part in parts):
-        return True
-    return "key" in parts and any(part in {"api", "access", "auth", "client", "session", "private"} for part in parts)
-
-
-def _public_runninghub_app_value(value, depth=0, api_key=""):
-    if depth > 4:
-        return None
-    if isinstance(value, dict):
-        result = {}
-        for key, item in list(value.items())[:80]:
-            name = str(key)[:120]
-            if _runninghub_app_private_key(name):
-                continue
-            result[name] = _public_runninghub_app_value(item, depth + 1, api_key)
-        return result
-    if isinstance(value, (list, tuple)):
-        return [_public_runninghub_app_value(item, depth + 1, api_key) for item in value[:80]]
-    if isinstance(value, str):
-        text = _UPSTREAM_SECRET_JSON_RE.sub(r"\1<redacted>", value)
-        if api_key:
-            text = text.replace(api_key, "<redacted>")
-        return redact_log_text(text)[:16000]
-    if isinstance(value, (int, float, bool)) or value is None:
-        return value
-    return None
-
-
 def public_runninghub_app_info(data, api_key=""):
-    """只返回应用参数，避免上游成功回包的调试字段进入本地画布。"""
-    if not isinstance(data, dict):
-        return {"nodeInfoList": []}
-    candidates = [data.get(key) for key in _RUNNINGHUB_APP_FIELD_SOURCES]
-    config = data.get("config") if isinstance(data.get("config"), dict) else {}
-    webapp = data.get("webapp") if isinstance(data.get("webapp"), dict) else {}
-    candidates.extend((config.get("fields"), webapp.get("fields"), webapp.get("inputs")))
-    selected = next((item for item in candidates if isinstance(item, (list, dict)) and item), [])
-    if isinstance(selected, dict):
-        selected = [
-            {"fieldName": key, "fieldValue": value}
-            for key, value in selected.items()
-        ]
-    fields = []
-    for field in selected[:256]:
-        if not isinstance(field, dict):
-            continue
-        field_name = str(field.get("fieldName") or field.get("inputName") or field.get("name") or field.get("key") or field.get("paramName") or "")
-        if _runninghub_app_private_key(field_name):
-            continue
-        fields.append({
-            key: _public_runninghub_app_value(value, api_key=api_key)
-            for key, value in field.items()
-            if key in _RUNNINGHUB_APP_FIELD_KEYS
-        })
-    return {"nodeInfoList": fields}
+    return upstream_public_policy.public_runninghub_app_info(data, api_key, _UPSTREAM_SECRET_JSON_RE=_UPSTREAM_SECRET_JSON_RE, redact_log_text=redact_log_text)
 
 @app.get("/api/runninghub/app-info")
 async def runninghub_app_info(webappId: str = ""):
