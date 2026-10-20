@@ -17,7 +17,7 @@ from backend.canvas_assistant_store import AssistantStore
 from backend.canvas_assistant_agent import run_agent
 from backend.canvas_assistant_receipt_rules import receipt_key
 from backend.canvas_assistant_operations import prepare_operations
-from backend.canvas_assistant import reference_kind
+from backend.canvas_assistant_canvas_rules import reference_kind
 from backend.canvas_assistant_tools import tool_catalog
 
 
@@ -395,7 +395,7 @@ class AgentRouteTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_result_review_uses_real_pixels_and_persists_unknown_unconfirmed_requirements(self):
         from PIL import Image
-        from backend.canvas_assistant import node_reference_assets
+        from backend.canvas_assistant_canvas_rules import node_reference_assets
         Image.new('RGB',(72,48),'white').save(Path(self.temp.name)/'review.png')
         self.canvas['nodes']=[{'id':'image','type':'image','url':'/output/review.png'}]
         asset=node_reference_assets(self.canvas)[0]['id']
@@ -414,7 +414,7 @@ class AgentRouteTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_result_review_rejects_replaced_file_and_no_image_input(self):
         from PIL import Image
-        from backend.canvas_assistant import node_reference_assets
+        from backend.canvas_assistant_canvas_rules import node_reference_assets
         Image.new('RGB',(72,48)).save(Path(self.temp.name)/'review.png')
         self.canvas['nodes']=[{'id':'image','type':'image','url':'/output/review.png'}]
         asset=node_reference_assets(self.canvas)[0]['id']
@@ -440,7 +440,7 @@ class AgentRouteTests(unittest.IsolatedAsyncioTestCase):
     def video_asset(self, *, smart=False):
         import subprocess
         from backend.canvas_clip import find_media_tools
-        from backend.canvas_assistant import node_reference_assets
+        from backend.canvas_assistant_canvas_rules import node_reference_assets
         video=Path(self.temp.name)/'review.mp4'
         subprocess.run([find_media_tools()[0],'-v','error','-f','lavfi','-i','testsrc=size=80x48:rate=10:duration=1.2',
                         '-f','lavfi','-i','sine=frequency=440:duration=1.2','-c:v','mpeg4','-c:a','aac',
@@ -507,7 +507,7 @@ class AgentRouteTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_smart_video_and_image_inspection_preserves_image_input(self):
         from PIL import Image
-        from backend.canvas_assistant import node_reference_assets
+        from backend.canvas_assistant_canvas_rules import node_reference_assets
         asset,_=self.video_asset(smart=True)
         Image.new('RGB',(20,16),'blue').save(Path(self.temp.name)/'review.png')
         self.canvas['nodes'].append({'id':'image','type':'smart-image','url':'/output/review.png'})
@@ -568,7 +568,7 @@ class AgentRouteTests(unittest.IsolatedAsyncioTestCase):
         inspect.assert_not_called()
 
     async def test_unreadable_video_preserves_hard_failure_without_visual_claim(self):
-        from backend.canvas_assistant import node_reference_assets
+        from backend.canvas_assistant_canvas_rules import node_reference_assets
         self.canvas['nodes']=[{'id':'video','type':'image','url':'/output/broken.mp4','mediaKind':'video'}]
         Path(self.temp.name,'broken.mp4').write_bytes(b'not a video')
         asset=node_reference_assets(self.canvas)[0]['id']
@@ -583,7 +583,7 @@ class AgentRouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(review['videos'][0]['errorCode'],'unsupported_video')
 
     async def test_video_sampling_limit_rejects_before_reading_any_file(self):
-        from backend.canvas_assistant import node_reference_assets
+        from backend.canvas_assistant_canvas_rules import node_reference_assets
         self.canvas['nodes']=[{'id':str(i),'type':'image','url':f'/output/{i}.mp4','mediaKind':'video'} for i in range(3)]
         self.responses=[decision('inspect_result',{'assetIds':[a['id'] for a in node_reference_assets(self.canvas)]}),decision()]
         with patch('backend.canvas_assistant_quality.inspect_videos') as inspect:
@@ -614,7 +614,7 @@ class AgentRouteTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_result_review_text_only_model_cannot_record_visual_pass(self):
         from PIL import Image
-        from backend.canvas_assistant import node_reference_assets
+        from backend.canvas_assistant_canvas_rules import node_reference_assets
         Image.new('RGB',(72,48)).save(Path(self.temp.name)/'review.png')
         self.canvas['nodes']=[{'id':'image','type':'image','url':'/output/review.png'}]
         asset=node_reference_assets(self.canvas)[0]['id'];self.providers[0]['supports_vision']=False

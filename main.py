@@ -116,7 +116,8 @@ from backend.tracing import (
 from backend.diagnostics import configure_diagnostics, write_diagnostic
 from backend.atomic_json import write_json_atomic, write_text_atomic
 from backend.process_lock import interprocess_file_lock
-from backend.canvas_assistant import create_assistant_router, canvas_context
+from backend.canvas_assistant import create_assistant_router
+from backend.canvas_assistant_canvas_rules import canvas_context
 from backend.canvas_assistant_generation import validate_snapshot
 from backend.canvas_assistant_operations import prepare_operations
 from backend.realtime import (

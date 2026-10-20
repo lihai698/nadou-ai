@@ -9,7 +9,8 @@ from types import SimpleNamespace
 import httpx
 from fastapi import FastAPI, HTTPException
 from backend import chat_execution_service
-from backend.canvas_assistant import canvas_context, create_assistant_router, node_reference_assets
+from backend.canvas_assistant import create_assistant_router
+from backend.canvas_assistant_canvas_rules import canvas_context, node_reference_assets
 
 
 class ReferenceTests(unittest.TestCase):
