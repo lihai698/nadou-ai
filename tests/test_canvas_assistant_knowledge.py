@@ -29,7 +29,7 @@ class ProjectKnowledgeTests(unittest.TestCase):
         self.assertIn('视频和其他引擎沿用原入口',image['coverageEvidence']['actionable'])
 
     def test_model_receives_evidence_as_context_not_as_instruction(self):
-        from backend.canvas_assistant import TurnRequest
+        from backend.canvas_assistant_request_schema import TurnRequest
         from backend.canvas_assistant_agent import initial_agent,model_fields
         payload=TurnRequest(canvasId='c',sessionId='s',requestId='r',expectedUpdatedAt=1,provider='p',model='m',message='整理素材')
         agent=initial_agent(payload,[],{'kind':'smart'},knowledge_snapshot=ProjectKnowledge().snapshot())

@@ -174,7 +174,7 @@ class AssistantTests(unittest.IsolatedAsyncioTestCase):
     async def test_interrupted_turn_recovers_after_restart(self):
         session = await self.create()
         store = AssistantStore(lambda: self.temp.name, owner="old-process")
-        from backend.canvas_assistant import TurnRequest
+        from backend.canvas_assistant_request_schema import TurnRequest
         store.start("user-a", TurnRequest(**self.payload(session)))
         saved = await self.history(session)
         self.assertEqual(saved["turns"][0]["state"], "interrupted")

@@ -11,9 +11,10 @@ import uuid
 
 from fastapi import APIRouter, Header, HTTPException, Request
 from fastapi.responses import StreamingResponse, JSONResponse
-from pydantic import BaseModel, Field, PrivateAttr
 
 from backend.canvas_assistant_store import AssistantStore, checked_id
+from backend.canvas_assistant_request_schema import SessionRequest, TurnRequest, ProposalAction, CancelRequest, ContinueRequest, PlanBudgetRequest, AuthorizationRequest, NativeActionRequest
+from backend.canvas_assistant_session_views import public_skill_usage, public_native, final_event
 from backend.canvas_assistant_operation_schema import AssistantPlan
 from backend.canvas_assistant_canvas_rules import content_hash
 from backend.canvas_assistant_plan import create_plan as create_persistent_plan
@@ -21,7 +22,7 @@ from backend import canvas_assistant_plan as persistent_plan
 from backend.canvas_assistant_tools import validate_tool
 from backend.canvas_assistant_generation import bind_snapshot, target_signature, validate_snapshot, validate_image_request
 from backend.canvas_assistant_agent import initial_agent, run_agent, model_image_identity
-from backend.canvas_assistant_skills import BUILTINS, SkillCatalog
+from backend.canvas_assistant_skills import SkillCatalog
 from backend.canvas_assistant_knowledge import ProjectKnowledge
 from backend.canvas_assistant_state import canvas_overview, read_node_state
 from backend.canvas_assistant_native import native_catalog, prepare_native_action, validate_native_snapshot, native_effect, native_run_result, native_task_reference, native_task_binding, public_native_task, public_workflow_fields, native_run_input_hash, native_comfy_foreign_busy, native_smart_group_foreign_busy, validate_video_run_provider
@@ -29,85 +30,6 @@ from backend.canvas_assistant_loop import loop_foreign_busy, loop_plan
 from backend.canvas_assistant_lora import read_lora_catalog
 from backend.canvas_assistant_autonomy import authorize as authorize_autonomy, reserve as reserve_autonomy, safe_action
 from backend.diagnostics import write_diagnostic
-
-
-class SessionRequest(BaseModel):
-    canvasId: str
-    title: str = Field(default="新对话", max_length=80)
-
-
-class TurnRequest(BaseModel):
-    _execution_id: str = PrivateAttr(default="")
-    canvasId: str
-    sessionId: str
-    requestId: str
-    message: str = Field(min_length=1, max_length=12000)
-    provider: str
-    model: str
-    selectedNodeIds: list[str] = Field(default_factory=list, max_length=30)
-    referencedNodeIds: list[str] = Field(default_factory=list, max_length=20)
-    referencedAssetIds: list[str] = Field(default_factory=list, max_length=20)
-    expectedUpdatedAt: int
-    creationSettings: dict[str, str | int | float | bool] = Field(default_factory=dict, max_length=30)
-    imageModelConfirmed: bool = False
-    skillId: str = Field(default="auto", pattern=rf"^(auto|{'|'.join(re.escape(value) for value in BUILTINS)})$")
-
-
-class ProposalAction(BaseModel):
-    canvasId: str
-    sessionId: str
-    turnId: str
-    proposalId: str
-    action: str = Field(pattern=r"^(confirm|dismiss|retry|query)$")
-    expectedUpdatedAt: int = 0
-    imageProvider: str = ""
-    imageModel: str = ""
-    imageRequest: dict = Field(default_factory=dict)
-    automatic: bool = False
-
-
-class CancelRequest(BaseModel):
-    canvasId: str
-    sessionId: str
-    requestId: str
-
-
-class ContinueRequest(CancelRequest):
-    wait: bool = False
-
-
-class PlanBudgetRequest(CancelRequest):
-    model_config = {'extra':'forbid'}
-    total: int = Field(strict=True,ge=0,le=100)
-
-
-class AuthorizationModel(BaseModel):
-    model_config={'extra':'forbid'}
-    provider:str=Field(min_length=1,max_length=200)
-    model:str=Field(min_length=1,max_length=200)
-
-
-class AuthorizationRequest(CancelRequest):
-    model_config={'extra':'forbid'}
-    total:int=Field(strict=True,ge=1,le=100)
-    models:list[AuthorizationModel]=Field(min_length=1,max_length=8)
-
-
-class NativeActionRequest(BaseModel):
-    canvasId: str
-    sessionId: str
-    turnId: str
-    actionId: str
-    action: str = Field(pattern=r'^(confirm|check|query|finish|retry|resume|dismiss|abandon)$')
-    expectedUpdatedAt: int | None = None
-    automatic: bool = False
-
-
-def public_skill_usage(turn):
-    """仅公开该回合保存的实际 Skill 记录，不暴露正文或客户端当前选择。"""
-    used = (turn.get("agent") or {}).get("skillsUsed") or []
-    return [{key: str(item.get(key, ""))[:300] for key in ("id", "name", "version")}
-            for item in used if isinstance(item, dict) and item.get("id") and item.get("name")]
 
 
 def reference_kind(item):
@@ -669,9 +591,6 @@ def create_assistant_router(*, root, load_canvas, providers, user_id, call_model
         return await run_agent(payload=payload, previous=previous, agent=agent, checkpoint=checkpoint,
                                execute=execute, call_model=call_model, emit=queue.put, budget=budget)
 
-    def public_native(proposal):
-        return {k:copy.deepcopy(v) for k,v in proposal.items() if k not in {'beforeClipData','baselineNodeIds','baselineGenerationMap','mediaExportPlan'}}
-
     @router.post('/native/action')
     async def native_action(payload: NativeActionRequest, request: Request, x_user_id: str = Header(default='')):
         user,_=identity(request,x_user_id,payload.canvasId)
@@ -889,12 +808,6 @@ def create_assistant_router(*, root, load_canvas, providers, user_id, call_model
             record_plan(turn,p)
             return {'proposal':public_native(p),'canExecute':False}
         return await asyncio.to_thread(store.transact,user,payload.canvasId,record)
-
-    def final_event(final, request_id):
-        return {"type": "turn_end", "state": final["state"], "error": final.get("error", ""),
-                "turnId": request_id, "change": final.get("change"), "proposals": final.get("proposals") or [],
-                "media": final.get("media") or [], "reply": final.get("reply", ""), "steps": final.get("steps", []),
-                "skillsUsed": public_skill_usage(final)}
 
     def stream_response(queue, task):
         async def events():

@@ -11,7 +11,8 @@ import httpx
 import anyio
 from fastapi import FastAPI, HTTPException, Request
 
-from backend.canvas_assistant import CancelRequest, TurnRequest, create_assistant_router
+from backend.canvas_assistant import create_assistant_router
+from backend.canvas_assistant_request_schema import CancelRequest, TurnRequest
 from backend.canvas_assistant_store import AssistantStore
 from backend.canvas_assistant_agent import run_agent
 from backend.canvas_assistant_receipt_rules import receipt_key
