@@ -50,7 +50,7 @@ function renderNode(deps, node){
     })() : '';
     const submissionWarningHtml = node.submissionWarning
         ? `<button type="button" class="node-run-status failed node-submission-warning" style="border:0;cursor:pointer;font-family:inherit" title="${deps.escapeAttr(node.submissionWarning)}"><span class="dot"></span>${node.submissionUnknown ? '提交状态未知' : '部分受理'}</button>` : '';
-    el.innerHTML = `<div class="node-head"><span class="node-title">${displayTitle}</span><div style="display:flex;align-items:center;gap:8px">${statusHtml}${submissionWarningHtml}<button onclick="deleteNodeFromButton('${node.id}', event)" class="text-gray-300 hover:text-red-500"><i data-lucide="x" class="w-4 h-4"></i></button></div></div>`;
+    el.innerHTML = `<div class="node-head"><span class="node-title">${displayTitle}</span><div style="display:flex;align-items:center;gap:8px">${statusHtml}${submissionWarningHtml}<button type="button" onclick="deleteNodeFromButton('${node.id}', event)" class="node-delete"><i data-lucide="x" class="w-4 h-4"></i></button></div></div>`;
     el.querySelector('.node-submission-warning')?.addEventListener('click', e => {
         e.stopPropagation();
         deps.showErrorModal(node.submissionWarning, deps.tr('canvas.apiFailed'));

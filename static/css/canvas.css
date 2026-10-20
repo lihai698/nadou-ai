@@ -200,6 +200,10 @@ body.canvas-board-pan * { cursor:grabbing !important; user-select:none !importan
 .node.sized { display:flex; flex-direction:column; }
 .node.selected { outline:2px solid var(--strong); outline-offset:2px; }
 .node-head { height:42px; flex:0 0 42px; display:flex; align-items:center; justify-content:space-between; gap:10px; padding:0 12px; border-bottom:1px solid var(--line); border-radius:21px 21px 0 0; overflow:hidden; cursor:move; }
+.node-head .node-delete { width:26px; height:26px; padding:0; display:inline-flex; align-items:center; justify-content:center; flex:0 0 auto; border-radius:10px; background:#fff; color:#475569; border:1px solid #cbd5e1; cursor:pointer; }
+.node-head .node-delete:is(:hover,:focus-visible,:active) { background:#fee2e2; color:#b91c1c; border-color:#fca5a5; }
+.theme-dark .node-head .node-delete { background:#1e293b; color:#f8fafc; border-color:#64748b; }
+.theme-dark .node-head .node-delete:is(:hover,:focus-visible,:active) { background:#7f1d1d; color:#fff; border-color:#f87171; }
 .node-title { font-size:11px; font-weight:800; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); }
 /* 一键运行级联状态徽章 */
 .node-run-status { display:inline-flex; align-items:center; gap:4px; padding:2px 7px; border-radius:6px; font-size:10px; font-weight:800; letter-spacing:.04em; }
