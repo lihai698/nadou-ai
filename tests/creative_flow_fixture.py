@@ -12,7 +12,8 @@ from fastapi.staticfiles import StaticFiles
 from PIL import Image
 
 from backend.canvas_assistant import create_assistant_router
-from backend.canvas_assistant_operations import AssistantPlan, prepare_operations
+from backend.canvas_assistant_operations import prepare_operations
+from backend.canvas_assistant_operation_schema import AssistantPlan
 from tests.test_canvas_assistant_story import story_fixture
 
 

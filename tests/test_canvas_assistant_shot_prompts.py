@@ -2,7 +2,8 @@ import copy
 import unittest
 
 from fastapi import HTTPException
-from backend.canvas_assistant_operations import AssistantPlan, prepare_operations
+from backend.canvas_assistant_operations import prepare_operations
+from backend.canvas_assistant_operation_schema import AssistantPlan
 
 
 class ShotPromptTests(unittest.TestCase):

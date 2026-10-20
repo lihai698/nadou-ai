@@ -6874,7 +6874,7 @@ async def control_canvas_assistant_media_export(proposal,*,submit=False):
     node=next((n for n in canvas['nodes'] if n['id']==plan['nodeId']),None)
     if not node or canvas.get('readOnly') or canvas.get('readonly'):raise HTTPException(409,'原导出画布或节点不可写')
     from backend.canvas_assistant_native import _related_task_busy
-    from backend.canvas_assistant_operations import is_busy
+    from backend.canvas_assistant_node_rules import is_busy
     if submit and (is_busy(node) or _related_task_busy(canvas,node)):raise HTTPException(409,'原节点仍有其它任务，未开始媒体导出')
     roots=[OUTPUT_DIR,ASSETS_DIR,*_current_storage_dirs().values()]
     _,ffprobe=find_media_tools(DATA_DIR)

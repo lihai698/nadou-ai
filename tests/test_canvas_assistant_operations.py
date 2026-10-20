@@ -9,7 +9,8 @@ import httpx
 from fastapi import FastAPI, HTTPException
 
 from backend.canvas_assistant import create_assistant_router
-from backend.canvas_assistant_operations import AssistantPlan, parse_plan, prepare_operations, receipt_key
+from backend.canvas_assistant_operations import prepare_operations, receipt_key
+from backend.canvas_assistant_operation_schema import AssistantPlan, parse_plan
 
 
 def plan(*operations):

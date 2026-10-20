@@ -8,7 +8,8 @@ import httpx
 from fastapi import FastAPI, HTTPException
 
 from backend.canvas_assistant import create_assistant_router
-from backend.canvas_assistant_operations import parse_plan, prepare_operations
+from backend.canvas_assistant_operations import prepare_operations
+from backend.canvas_assistant_operation_schema import parse_plan
 
 
 class ImageProposalTests(unittest.IsolatedAsyncioTestCase):

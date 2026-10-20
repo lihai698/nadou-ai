@@ -8,7 +8,7 @@ from typing import Literal
 from fastapi import HTTPException
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from backend.canvas_assistant_operations import AssistantPlan, parse_plan
+from backend.canvas_assistant_operation_schema import AssistantPlan, parse_plan
 from backend.canvas_assistant_story import StoryWorkflow
 from backend.canvas_assistant_story_analysis import StoryAnalysis, StoryAnalysisResult
 from backend.canvas_assistant_shot_prompts import ShotPrompts, ShotImages
