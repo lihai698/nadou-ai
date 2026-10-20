@@ -466,3 +466,28 @@ async def upload_local_video_to_cloud(ref_url, service='auto', *, HTTPException,
     raise HTTPException(status_code=502, detail="云端上传失败：" + "；".join(errors))
 
 
+def runninghub_local_asset_path(url, *, urllib, OUTPUT_INPUT_DIR, OUTPUT_OUTPUT_DIR, output_file_from_url):
+    text = str(url or "").strip()
+    if not text:
+        return None
+    if text.startswith("/assets/input/") or text.startswith("/input/"):
+        clean = urllib.parse.unquote(text.split("?", 1)[0]).replace("\\", "/")
+        rel = clean[len("/assets/input/"):] if clean.startswith("/assets/input/") else clean[len("/input/"):]
+        root = OUTPUT_INPUT_DIR
+    elif text.startswith("/assets/output/"):
+        clean = urllib.parse.unquote(text.split("?", 1)[0]).replace("\\", "/")
+        rel = clean[len("/assets/output/"):]
+        root = OUTPUT_OUTPUT_DIR
+    elif text.startswith("/output/") or text.startswith("/assets/"):
+        return output_file_from_url(text)
+    else:
+        return None
+    rel = rel.lstrip("/")
+    if not rel:
+        return None
+    path = os.path.abspath(os.path.join(root, rel))
+    root_abs = os.path.abspath(root)
+    if os.path.commonpath([root_abs, path]) != root_abs or not os.path.exists(path):
+        return None
+    return path
+

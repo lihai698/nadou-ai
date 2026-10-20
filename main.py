@@ -4375,103 +4375,19 @@ def runninghub_app_headers(json_body=True, use_wallet=False, provider=None):
     return headers
 
 def runninghub_local_asset_path(url):
-    text = str(url or "").strip()
-    if not text:
-        return None
-    if text.startswith("/assets/input/") or text.startswith("/input/"):
-        clean = urllib.parse.unquote(text.split("?", 1)[0]).replace("\\", "/")
-        rel = clean[len("/assets/input/"):] if clean.startswith("/assets/input/") else clean[len("/input/"):]
-        root = OUTPUT_INPUT_DIR
-    elif text.startswith("/assets/output/"):
-        clean = urllib.parse.unquote(text.split("?", 1)[0]).replace("\\", "/")
-        rel = clean[len("/assets/output/"):]
-        root = OUTPUT_OUTPUT_DIR
-    elif text.startswith("/output/") or text.startswith("/assets/"):
-        return output_file_from_url(text)
-    else:
-        return None
-    rel = rel.lstrip("/")
-    if not rel:
-        return None
-    path = os.path.abspath(os.path.join(root, rel))
-    root_abs = os.path.abspath(root)
-    if os.path.commonpath([root_abs, path]) != root_abs or not os.path.exists(path):
-        return None
-    return path
+    return provider_media_transfer.runninghub_local_asset_path(url, urllib=urllib, OUTPUT_INPUT_DIR=OUTPUT_INPUT_DIR, OUTPUT_OUTPUT_DIR=OUTPUT_OUTPUT_DIR, output_file_from_url=output_file_from_url)
 
 def runninghub_output_ext(remote, content_type=""):
-    tail = str(remote or "").split("?", 1)[0].split("#", 1)[0]
-    ext = os.path.splitext(tail)[1].lower().strip(".")
-    allowed = {"png","jpg","jpeg","webp","gif","bmp","mp4","webm","mov","m4v","mkv","mp3","wav","ogg","m4a","flac","aac"}
-    if ext in allowed:
-        return ext
-    ct = str(content_type or "").lower()
-    if "mp4" in ct:
-        return "mp4"
-    if "webm" in ct:
-        return "webm"
-    if "quicktime" in ct:
-        return "mov"
-    if "mpeg" in ct:
-        return "mp3"
-    if "wav" in ct:
-        return "wav"
-    if "ogg" in ct:
-        return "ogg"
-    if "webp" in ct:
-        return "webp"
-    if "jpeg" in ct:
-        return "jpg"
-    return "png"
+    return runninghub_protocol.runninghub_output_ext(remote, content_type)
 
 def rewrite_runninghub_file_url(url):
-    text = str(url or "")
-    if not text:
-        return text
-    try:
-        parsed = urllib.parse.urlsplit(text)
-    except Exception:
-        return text
-    target = RUNNINGHUB_FILE_HOST_REWRITES.get((parsed.netloc or "").lower())
-    return parsed._replace(netloc=target).geturl() if target else text
+    return runninghub_protocol.rewrite_runninghub_file_url(url, urllib=urllib, RUNNINGHUB_FILE_HOST_REWRITES=RUNNINGHUB_FILE_HOST_REWRITES)
 
 def runninghub_extract_outputs(data):
-    arr = []
-    if isinstance(data, list):
-        arr = data
-    elif isinstance(data, dict):
-        for key in ("outputs", "results", "files", "data"):
-            value = data.get(key)
-            if isinstance(value, list):
-                arr = value
-                break
-        if not arr and (data.get("fileUrl") or data.get("url")):
-            arr = [data]
-    outputs = []
-    for item in arr:
-        if isinstance(item, str):
-            outputs.append(rewrite_runninghub_file_url(item))
-        elif isinstance(item, dict):
-            url = item.get("fileUrl") or item.get("file_url") or item.get("url") or item.get("downloadUrl") or item.get("download_url")
-            if isinstance(url, list):
-                outputs.extend([rewrite_runninghub_file_url(u) for u in url if u])
-            elif url:
-                outputs.append(rewrite_runninghub_file_url(url))
-    return outputs
+    return runninghub_protocol.runninghub_extract_outputs(data, rewrite_runninghub_file_url=rewrite_runninghub_file_url)
 
 async def runninghub_store_remote_output(client, remote):
-    remote = rewrite_runninghub_file_url(remote)
-    if not str(remote or "").startswith(("http://", "https://")):
-        return remote
-    response = await client.get(remote, follow_redirects=True)
-    if not response.is_success:
-        return remote
-    ext = runninghub_output_ext(remote, response.headers.get("content-type", ""))
-    filename = f"rh_{uuid.uuid4().hex[:12]}.{ext}"
-    path = output_path_for(filename, "output")
-    with open(path, "wb") as f:
-        f.write(response.content)
-    return output_url_for(filename, "output")
+    return await generation_output_service.runninghub_store_remote_output(client, remote, rewrite_runninghub_file_url=rewrite_runninghub_file_url, runninghub_output_ext=runninghub_output_ext, uuid=uuid, output_path_for=output_path_for, output_url_for=output_url_for)
 
 def runninghub_fail_reason(raw):
     return upstream_public_policy.runninghub_fail_reason(raw, _safe_upstream_text=_safe_upstream_text, upstream_error_summary=upstream_error_summary)

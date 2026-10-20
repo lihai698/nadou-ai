@@ -5,6 +5,7 @@
 """
 
 import math
+import os
 import re
 
 from typing import Any
@@ -191,3 +192,66 @@ def runninghub_endpoint_alias_for_model(model, *, RUNNINGHUB_MODEL_ENDPOINT_ALIA
         if "/edit-" in lowered or lowered.endswith("/edit"):
             return "rhart-image-v1/edit"
     return ""
+
+
+def runninghub_output_ext(remote, content_type=""):
+    tail = str(remote or "").split("?", 1)[0].split("#", 1)[0]
+    ext = os.path.splitext(tail)[1].lower().strip(".")
+    allowed = {"png","jpg","jpeg","webp","gif","bmp","mp4","webm","mov","m4v","mkv","mp3","wav","ogg","m4a","flac","aac"}
+    if ext in allowed:
+        return ext
+    ct = str(content_type or "").lower()
+    if "mp4" in ct:
+        return "mp4"
+    if "webm" in ct:
+        return "webm"
+    if "quicktime" in ct:
+        return "mov"
+    if "mpeg" in ct:
+        return "mp3"
+    if "wav" in ct:
+        return "wav"
+    if "ogg" in ct:
+        return "ogg"
+    if "webp" in ct:
+        return "webp"
+    if "jpeg" in ct:
+        return "jpg"
+    return "png"
+
+
+def rewrite_runninghub_file_url(url, *, urllib, RUNNINGHUB_FILE_HOST_REWRITES):
+    text = str(url or "")
+    if not text:
+        return text
+    try:
+        parsed = urllib.parse.urlsplit(text)
+    except Exception:
+        return text
+    target = RUNNINGHUB_FILE_HOST_REWRITES.get((parsed.netloc or "").lower())
+    return parsed._replace(netloc=target).geturl() if target else text
+
+
+def runninghub_extract_outputs(data, *, rewrite_runninghub_file_url):
+    arr = []
+    if isinstance(data, list):
+        arr = data
+    elif isinstance(data, dict):
+        for key in ("outputs", "results", "files", "data"):
+            value = data.get(key)
+            if isinstance(value, list):
+                arr = value
+                break
+        if not arr and (data.get("fileUrl") or data.get("url")):
+            arr = [data]
+    outputs = []
+    for item in arr:
+        if isinstance(item, str):
+            outputs.append(rewrite_runninghub_file_url(item))
+        elif isinstance(item, dict):
+            url = item.get("fileUrl") or item.get("file_url") or item.get("url") or item.get("downloadUrl") or item.get("download_url")
+            if isinstance(url, list):
+                outputs.extend([rewrite_runninghub_file_url(u) for u in url if u])
+            elif url:
+                outputs.append(rewrite_runninghub_file_url(url))
+    return outputs

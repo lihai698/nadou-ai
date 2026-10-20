@@ -145,3 +145,17 @@ async def save_video_bytes_to_output(data, prefix='video_', ext='.mp4', *, HTTPE
     return output_url_for(filename, "output")
 
 
+async def runninghub_store_remote_output(client, remote, *, rewrite_runninghub_file_url, runninghub_output_ext, uuid, output_path_for, output_url_for):
+    remote = rewrite_runninghub_file_url(remote)
+    if not str(remote or "").startswith(("http://", "https://")):
+        return remote
+    response = await client.get(remote, follow_redirects=True)
+    if not response.is_success:
+        return remote
+    ext = runninghub_output_ext(remote, response.headers.get("content-type", ""))
+    filename = f"rh_{uuid.uuid4().hex[:12]}.{ext}"
+    path = output_path_for(filename, "output")
+    with open(path, "wb") as f:
+        f.write(response.content)
+    return output_url_for(filename, "output")
+
