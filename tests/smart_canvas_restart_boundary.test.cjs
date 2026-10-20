@@ -1,3 +1,4 @@
+const {createTaskContext}=require('./canvas_task_test_helpers.cjs');
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -19,7 +20,7 @@ test('a saved image task queried after backend restart ends without false output
         pendingTasks:[{taskId:'canvas_img_before_restart', kind:'image', querying:true}],
     };
     const requests = [], notices = [], saves = [];
-    const ctx = vm.createContext({
+    const ctx = createTaskContext({
         nodes:[node], activeSmartTaskPolls:new Map(),
         fetch:async(url, options) => {
             requests.push({url, method:options?.method || 'GET'});

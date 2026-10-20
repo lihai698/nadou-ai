@@ -1,3 +1,4 @@
+const {createTaskContext}=require('./canvas_task_test_helpers.cjs');
 const {test} = require('node:test');
 const assert = require('node:assert/strict');
 const vm = require('node:vm');
@@ -17,7 +18,7 @@ function harness(reply, saveAllowed=true){
     const calls = [];
     let disk = null;
     const persist = () => {disk = JSON.parse(JSON.stringify(node));};
-    const context = vm.createContext({
+    const context = createTaskContext({
         node, settings, runState, transientSmartCloudLinks:[],
         render:()=>{}, scheduleSave:persist,
         saveCanvas:async()=>{calls.push('PUT'); if(saveAllowed) persist(); return saveAllowed;},
@@ -88,7 +89,7 @@ test('a video timeout stops a parallel cascade before it claims later rounds', a
     const start = source.indexOf('async function runSmartCascadeRoundsWithLimit(');
     const stop = source.indexOf('async function runSmartCascade(', start);
     assert.ok(start >= 0 && stop > start);
-    const context = vm.createContext({smartUnknownResubmissionNotice:()=> '状态未知，一键运行已停止'});
+    const context = createTaskContext({smartUnknownResubmissionNotice:()=> '状态未知，一键运行已停止'});
     vm.runInContext(source.slice(start, stop), context);
     const started = [];
     let releaseSecond;
@@ -113,7 +114,7 @@ test('a reloaded video warning requires confirmation before another manual run',
     await assert.rejects(h.run(), /HTTP 503/);
     const refreshed = JSON.parse(JSON.stringify(h.disk));
     let confirmations = 0;
-    const context = vm.createContext({
+    const context = createTaskContext({
         nodes:[refreshed], canvas:{connections:[]},
         window:{confirm:()=>{confirmations++;return false;}}
     });

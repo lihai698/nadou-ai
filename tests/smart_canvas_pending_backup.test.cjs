@@ -1,3 +1,4 @@
+const {createTaskContext}=require('./canvas_task_test_helpers.cjs');
 const {test} = require('node:test');
 const assert = require('node:assert/strict');
 const vm = require('node:vm');
@@ -15,7 +16,7 @@ function section(begin, end){
 function harness(saveResult=false){
     const values = new Map();
     const node = {id:'node-1', pendingTasks:[]};
-    const context = vm.createContext({
+    const context = createTaskContext({
         canvasId:'canvas-1',
         SMART_UNSAVED_ACCEPTED_TASKS_PREFIX:'smart_canvas_unsaved_accepted_tasks:',
         nodes:[node],

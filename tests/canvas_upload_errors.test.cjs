@@ -1,3 +1,4 @@
+const {createTaskContext}=require('./canvas_task_test_helpers.cjs');
 const {test} = require('node:test');
 const assert = require('node:assert/strict');
 const {readFileSync} = require('node:fs');
@@ -18,7 +19,9 @@ function page(name){
     const calls = [];
     const errors = [];
     const responses = [];
-    const context = vm.createContext({
+    const context = createTaskContext({
+        canvas:{id:'fixture'},canvasOpenGeneration:0,cropState:{nodeId:'source',imageIndex:0},imageEditMode:'crop',gridOperationMode:'split',
+        nodes:[{id:'source',url:'old.png',images:[{url:'old.png'}]}],imageForDisplay:x=>x,currentEditImage:()=>({image:{url:'old.png'}}),
         FormData:class {append(){}},
         fetch(url){
             calls.push(url);

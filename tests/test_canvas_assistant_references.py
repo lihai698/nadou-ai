@@ -8,6 +8,7 @@ from types import SimpleNamespace
 
 import httpx
 from fastapi import FastAPI, HTTPException
+from backend import chat_execution_service
 from backend.canvas_assistant import canvas_context, create_assistant_router, node_reference_assets
 
 
@@ -87,6 +88,7 @@ class ReferenceRouteTests(unittest.IsolatedAsyncioTestCase):
             received.append(payload)
             return {"text": "ok"}
         scope = {"asyncio": asyncio, "HTTPException": HTTPException, "CanvasLLMRequest": lambda **fields: fields, "canvas_llm": model, "output_file_from_url": lambda _: "fixture.png", "reference_to_data_url": lambda ref, size: "data:image/png;base64,fixture"}
+        scope["chat_execution_service"] = chat_execution_service
         exec(compile(ast.Module(body=[fn], type_ignores=[]), "main.py", "exec"), scope)
         await scope["call_canvas_assistant_model"]({"images": ["/api/storage-files/local/a.png"]})
         self.assertEqual(received[0]["images"], ["data:image/png;base64,fixture"])

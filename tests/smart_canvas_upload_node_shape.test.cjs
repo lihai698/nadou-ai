@@ -1,4 +1,5 @@
 const {test} = require('node:test');
+const {createTaskContext}=require('./canvas_task_test_helpers.cjs');
 const assert = require('node:assert/strict');
 const {readFileSync} = require('node:fs');
 const path = require('node:path');
@@ -8,7 +9,8 @@ const source = readFileSync(path.join(__dirname, '../static/js/smart-canvas.js')
 const append = source.match(/function appendImagesToSmartNode\(uploaded, targetId='', opts=\{\}\)\{[\s\S]*?(?=\nasync function handleFiles)/)[0];
 
 function createUi(selected) {
-    const scope = vm.createContext({
+    const scope = createTaskContext({
+        File:class {},
         nodes: selected ? [selected] : [],
         selectedId: selected?.id || '',
         selectedIds: [],

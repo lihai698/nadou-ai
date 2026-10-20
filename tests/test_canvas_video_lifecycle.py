@@ -11,9 +11,43 @@ import httpx
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import main
+from backend import canvas_video_task_service as video_service
 
 
 class CanvasVideoLifecycleTests(unittest.IsolatedAsyncioTestCase):
+    async def test_real_video_routes_and_worker_delegate_to_service(self):
+        async def generate(payload):
+            return {'videos': ['/assets/output/service-test.mp4'], 'task_id': 'remote-service'}
+        with patch.object(main, 'canvas_video', side_effect=generate), \
+             patch.object(video_service, 'create_task', wraps=video_service.create_task) as create, \
+             patch.object(video_service, 'get_task', wraps=video_service.get_task) as get, \
+             patch.object(video_service, 'run_video_worker', wraps=video_service.run_video_worker) as worker:
+            response = await self.client.post('/api/canvas-video-tasks', json=self.body)
+            self.assertEqual(response.status_code, 200)
+            finished = await self.wait_status('succeeded')
+            self.assertEqual(finished['result']['videos'], ['/assets/output/service-test.mp4'])
+            create.assert_awaited_once()
+            worker.assert_awaited_once()
+            self.assertGreater(get.call_count, 0)
+
+    async def test_real_refresh_route_delegates_without_submitting(self):
+        main.write_canvas_video_task({
+            'id': self.task_id, 'type': 'video', 'status': 'unknown', 'provider_id': 'runninghub',
+            'remote': {'task_id': 'remote-service', 'query_supported': True, 'query_mode': 'runninghub_openapi'},
+        })
+        observation = main.observe_remote_task({'status': 'SUCCESS', 'task_id': 'remote-service',
+                                                'videos': ['/output/service-test.mp4']}, operation='query')
+        with patch.object(main, 'get_api_provider_exact', return_value={'id': 'runninghub'}), \
+             patch.object(main, 'is_runninghub_provider', return_value=True), \
+             patch.object(main, 'query_runninghub_video_task_once', return_value=(observation, ['/output/service-test.mp4'])), \
+             patch.object(main, 'canvas_video') as generate, \
+             patch.object(video_service, 'refresh_task', wraps=video_service.refresh_task) as refresh:
+            response = await self.client.post('/api/canvas-video-tasks/' + self.task_id + '/refresh')
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.json()['status'], 'succeeded')
+            refresh.assert_awaited_once()
+            generate.assert_not_called()
+
     async def asyncSetUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)

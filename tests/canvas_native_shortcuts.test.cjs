@@ -1,3 +1,4 @@
+const {createTaskContext}=require('./canvas_task_test_helpers.cjs');
 const {test} = require('node:test');
 const assert = require('node:assert/strict');
 const vm = require('node:vm');
@@ -8,9 +9,7 @@ function loadClassicEditor(initialNodes, initialConnections, selectedIds) {
     const source = readFileSync(path.join(__dirname, '../static/js/canvas.js'), 'utf8');
     const fnStart = source.indexOf('function pushUndo(){');
     const fnEnd = source.indexOf('function selectedWorkflowPayload(){', fnStart);
-    const keyStart = source.indexOf("window.addEventListener('keydown', e => {");
-    const keyEnd = source.indexOf("\n});", keyStart) + 3;
-    assert.ok(fnStart >= 0 && fnEnd > fnStart && keyStart >= 0 && keyEnd > keyStart);
+    assert.ok(fnStart >= 0 && fnEnd > fnStart);
 
     let serial = 0;
     const nodes = structuredClone(initialNodes);
@@ -18,8 +17,9 @@ function loadClassicEditor(initialNodes, initialConnections, selectedIds) {
     const handlers = {};
     const body = {tagName: 'BODY', isContentEditable: false};
     const classes = {contains: () => false};
-    const context = vm.createContext({
+    const context = createTaskContext({
         canvas: {id: 'classic-shortcut-test'},
+        canvasOpenGeneration: 1,
         nodes,
         connections,
         selected: new Set(selectedIds),
@@ -61,12 +61,15 @@ function loadClassicEditor(initialNodes, initialConnections, selectedIds) {
         },
         window: {
             addEventListener: (type, handler) => { handlers[type] = handler; },
+            removeEventListener: () => {},
             getSelection: () => ({toString: () => ''}),
         },
         setTimeout,
+        clearTimeout,
     });
     vm.runInContext(readFileSync(path.join(__dirname, '../static/js/canvas-audio.js'), 'utf8'), context);
-    vm.runInContext(source.slice(fnStart, fnEnd) + source.slice(keyStart, keyEnd), context);
+    vm.runInContext(source.slice(fnStart, fnEnd), context);
+    vm.runInContext('var classicKeyboardController=CanvasKeyboardEvents.create(classicKeyboardHost);classicKeyboardController.mount();', context);
 
     const dispatch = (key, options = {}) => {
         let prevented = false;
@@ -99,12 +102,12 @@ function loadSmartEditor(initialNodes, initialConnections, selectedIds) {
 
     let serial = 0;
     const nodes = structuredClone(initialNodes);
-    const canvas = {connections: structuredClone(initialConnections)};
+    const canvas = {id: 'shortcut-canvas', connections: structuredClone(initialConnections)};
     const handlers = {};
     const body = {tagName: 'BODY', isContentEditable: false};
     const classes = {contains: () => false};
     const undoSnapshots = [];
-    const context = vm.createContext({
+    const context = createTaskContext({
         canvas,
         nodes,
         nodeClipboard: null,
@@ -144,12 +147,15 @@ function loadSmartEditor(initialNodes, initialConnections, selectedIds) {
         ungroupNode: () => false,
         window: {
             addEventListener: (type, handler) => { handlers[type] = handler; },
+            removeEventListener: (type) => { delete handlers[type]; },
             getSelection: () => ({toString: () => ''}),
         },
         document: {activeElement: body},
         setTimeout,
+        clearTimeout,
     });
     vm.runInContext(readFileSync(path.join(__dirname, '../static/js/canvas-audio.js'), 'utf8'), context);
+    vm.runInContext('smartDeferredActions.mount();', context);
     vm.runInContext(
         source.slice(source.indexOf('function isSmartGroupNode('), source.indexOf('function isSmartRunnableNode('))
         + source.slice(fnStart, fnEnd)

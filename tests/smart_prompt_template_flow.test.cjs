@@ -4,7 +4,12 @@ const fs=require('node:fs');
 const vm=require('node:vm');
 const source=fs.readFileSync(require.resolve('../static/js/smart-canvas.js'),'utf8');
 function fn(name){const start=source.indexOf('function '+name+'('),begin=source.lastIndexOf('\n',start)+1,end=source.indexOf('\n}',start)+2;assert.ok(start>=0);return source.slice(begin,end);}
-function templates(enabled){const node={id:'n',type:'smart-prompt',llmEnabled:enabled,text:'旧正文或旧结果',llmInstruction:'旧规则'};let saved=0;const ctx=vm.createContext({nodes:[node],promptTemplateSelectedId:'t',promptTemplateItems:()=>[{id:'t',sourceId:'template'}],promptTemplatePanel:{dataset:{nodeId:'n'}},promptTemplateText:()=> '按照上游写分镜，只输出JSON',closePromptTemplatePanel:()=>{},render:()=>{},scheduleSave:()=>saved++});vm.runInContext(fn('setPromptTemplateText'),ctx);vm.runInContext(fn('applyPromptTemplateToNode'),ctx);return {node,ctx,saves:()=>saved};}
+function templates(enabled){
+ const node={id:'n',type:'smart-prompt',llmEnabled:enabled,text:'旧正文或旧结果',llmInstruction:'旧规则'};let saved=0;
+ const {createTaskContext}=require('./canvas_task_test_helpers.cjs');
+ const ctx=createTaskContext({nodes:[node],activePromptLibraryId:'user',promptLibraries:[{id:'user',items:[{id:'t',positive:'按照上游写分镜，只输出JSON'}]}],promptTemplateSelectedId:'t',canvasAssistantTemplateCallback:null,composerTemplateBtn:null,promptTemplatePanel:{dataset:{nodeId:'n'},classList:{remove(){}}},render:()=>{},scheduleSave:()=>saved++});
+ vm.runInContext(fn('setPromptTemplateText'),ctx);vm.runInContext(fn('applyPromptTemplateToNode'),ctx);return {node,ctx,saves:()=>saved};
+}
 test('LLM模式引用模板只写规则，保留旧结果并标记待重新生成',()=>{const {node,ctx,saves}=templates(true);ctx.applyPromptTemplateToNode();assert.equal(node.text,'旧正文或旧结果');assert.equal(node.llmInstruction,'按照上游写分镜，只输出JSON');assert.equal(node.llmOutputStale,true);assert.equal(saves(),1);});
 test('普通提示词引用模板仍写正文',()=>{const {node,ctx}=templates(false);ctx.applyPromptTemplateToNode();assert.equal(node.text,'按照上游写分镜，只输出JSON');assert.equal(node.llmInstruction,'旧规则');});
 test('LLM输入只有上游原文，规则和旧输出不能拼进去',()=>{const ctx=vm.createContext({smartLoopContext:null,promptNodeUpstreamPromptText:()=> '上游故事',promptNodePromptItems:n=>[n.text]});vm.runInContext(fn('promptNodeLLMInputText'),ctx);assert.equal(ctx.promptNodeLLMInputText({text:'旧输出',llmInstruction:'只输出JSON'}),'上游故事');});

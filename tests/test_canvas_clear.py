@@ -105,3 +105,18 @@ class CanvasClearTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(raised.exception.status_code, 409)
         saved = json.loads((self.canvases / "stale.json").read_text(encoding="utf-8"))
         self.assertEqual(saved["updated_at"], 30)
+
+    async def test_history_cleanup_failure_commits_empty_canvas_but_preserves_media(self):
+        media, url = self.generated_file("retained.png")
+        self.write_canvas("partial", [{"id": "image", "url": url}], [])
+        with patch.object(main, "prune_generation_history_for_media", side_effect=main.HistoryPruneError("injected")):
+            with self.assertRaises(main.HTTPException) as raised:
+                await main.clear_canvas("partial", main.ClearCanvasRequest(base_updated_at=12))
+        self.assertEqual(raised.exception.status_code, 500)
+        self.assertIn("画布已清空", raised.exception.detail)
+        saved = json.loads((self.canvases / "partial.json").read_text(encoding="utf-8"))
+        for field in ("nodes", "connections", "logs"):
+            self.assertEqual(saved[field], [])
+        self.assertEqual(saved["settings"], {})
+        self.assertGreater(saved["updated_at"], 12)
+        self.assertTrue(media.exists())

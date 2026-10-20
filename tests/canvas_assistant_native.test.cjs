@@ -1,3 +1,4 @@
+const {createTaskContext}=require('./canvas_task_test_helpers.cjs');
 const test=require('node:test');
 const assert=require('node:assert/strict');
 const native=require('../static/js/canvas-assistant-native.js');
@@ -11,7 +12,8 @@ test('两种画布逐镜处理使用真实LLM入口并保存本次结果来源',
  for(const smart of [false,true]){
   const node={id:'llm',type:smart?'smart-prompt':'llm',text:'',outputText:'',llmEnabled:true,llmProvider:'chosen',model:'text',llmModel:'text',llmInstruction:'处理上游',shotPromptOrigin:{tableId:'table',rowId:'one',sourceNodeId:'source'}};
   let calls=0;
-  const ctx=vm.createContext({nodes:[node,{id:'source',text:'本镜素材'}],connections:[],cascadeTargetIdFromOptions:()=>'',llmInputText:()=> '本镜素材',llmInputAudios:()=>[],refreshNodes:()=>{},callCanvasLLM:async(n,input,refs,opts)=>{calls++;opts.onModelSelected({provider:'chosen',model:'text'});return '模型处理的本镜提示词';},scheduleGeneratorInputSync:()=>{},scheduleSave:()=>{},isCascadeAbortError:()=>false,alert:()=>{},promptNodeLLMInputText:()=> '本镜素材',render:()=>{},resolveChatProviderId:x=>x,resolveChatModel:x=>x,promptNodeInputMediaForLLM:()=>[],imageRefsOnly:()=>[],videoRefsOnly:()=>[],toast:()=>{},tr:x=>x,fetch:async()=>{calls++;return {ok:true,json:async()=>({text:'模型处理的本镜提示词'})};}});
+  const ctx=createTaskContext({nodes:[node,{id:'source',text:'本镜素材'}],connections:[],cascadeTargetIdFromOptions:()=>'',llmInputText:()=> '本镜素材',llmInputAudios:()=>[],refreshNodes:()=>{},callCanvasLLM:async(n,input,refs,opts)=>{calls++;opts.onModelSelected({provider:'chosen',model:'text'});return '模型处理的本镜提示词';},scheduleGeneratorInputSync:()=>{},scheduleSave:()=>{},isCascadeAbortError:()=>false,alert:()=>{},promptNodeLLMInputText:()=> '本镜素材',render:()=>{},resolveChatProviderId:x=>x,resolveChatModel:x=>x,promptNodeInputMediaForLLM:()=>[],imageRefsOnly:()=>[],videoRefsOnly:()=>[],toast:()=>{},tr:x=>x,fetch:async()=>{calls++;return {ok:true,json:async()=>({text:'模型处理的本镜提示词'})};}});
+  if(!smart)Object.assign(ctx,{llmInputImages:()=>[],llmInputVideos:()=>[],cascadeFetch:ctx.fetch});
   const name=smart?'runPromptLLMNode':'runLLMNode',source=fs.readFileSync(require.resolve(smart?'../static/js/smart-canvas.js':'../static/js/canvas.js'),'utf8');
   vm.runInContext(nativeFunction(source,name),ctx);
   if(smart)node.assistantNativeRun={};
@@ -32,7 +34,7 @@ function smartImageRunSetup(){
  const node={id:'im',type:'smart-image',images:[],runSettings:{engine:'api',apiKind:'image',provider_id:'manual',model:'selected',count:2}};
  const s=editorSetup(node),submitted=[];let saves=0,queries=0;
  const source=fs.readFileSync(require.resolve('../static/js/smart-canvas.js'),'utf8');
- const ctx=vm.createContext({nodes:s.state.nodes,smartNodeInFlight:()=>false,smartSettingsForNode:n=>({...n.runSettings}),smartApiAudioMode:()=>false,buildPromptRequestForNode:()=>({prompt:'原生正文',refs:[{url:'/output/ref.png',kind:'image'}]}),smartLoopContext:null,cloneSmartSettings:x=>JSON.parse(JSON.stringify(x)),sizeForRun:()=> '1536x1024',API_RATIO_VALUES:{},imageRefsOnly:x=>x.filter(v=>v.kind==='image'),SMART_REFERENCE_IMAGE_MAX:8,fetch:async(url,opts)=>{submitted.push(JSON.parse(opts.body));const id='original-'+submitted.length;return {ok:true,json:async()=>({task_id:id})};},recordSmartTaskSubmission:()=>'',saveSmartAcceptedTasksBeforeQuery:async()=>{saves++;return true;},resumeSmartPendingNode:async n=>{queries++;n.images=n.pendingTasks.map(t=>({url:'/output/'+t.taskId+'.png',kind:'image'}));n.pendingTasks=[];n.pending=0;},render:()=>{},scheduleSave:()=>{},nowMs:()=>10});
+ const ctx=createTaskContext({nodes:s.state.nodes,smartNodeInFlight:()=>false,smartSettingsForNode:n=>({...n.runSettings}),smartApiAudioMode:()=>false,buildPromptRequestForNode:()=>({prompt:'原生正文',refs:[{url:'/output/ref.png',kind:'image'}]}),smartLoopContext:null,cloneSmartSettings:x=>JSON.parse(JSON.stringify(x)),sizeForRun:()=> '1536x1024',API_RATIO_VALUES:{},imageRefsOnly:x=>x.filter(v=>v.kind==='image'),SMART_REFERENCE_IMAGE_MAX:8,fetch:async(url,opts)=>{submitted.push(JSON.parse(opts.body));const id='original-'+submitted.length;return {ok:true,json:async()=>({task_id:id})};},recordSmartTaskSubmission:()=>'',saveSmartAcceptedTasksBeforeQuery:async()=>{saves++;return true;},resumeSmartPendingNode:async n=>{queries++;n.images=n.pendingTasks.map(t=>({url:'/output/'+t.taskId+'.png',kind:'image'}));n.pendingTasks=[];n.pending=0;},render:()=>{},scheduleSave:()=>{},nowMs:()=>10});
  for(const name of ['runApiGeneration','runSmartAssistantNativeImage','runGeneration'])vm.runInContext(nativeFunction(source,name),ctx);
  ctx.rememberSmartAcceptedTasks=()=>true;
  s.adapter.runNode=(n,opts)=>ctx.runGeneration({...opts,assistantNativeNodeId:n.id});
@@ -43,7 +45,7 @@ function smartGroupRunSetup(){
  const s=smartImageRunSetup(),events=[],source=fs.readFileSync(require.resolve('../static/js/smart-canvas.js'),'utf8');
  Object.assign(s.node,{type:'smart-group',items:['member'],images:[{url:'/assets/keep.png'}]});
  s.state.nodes.push({id:'member',type:'smart-prompt',text:'分组正文'});
- Object.assign(s.ctx,{canvasId:'canvas',pushUndo:()=>{},stripRunInputMeta:x=>x,snapshotRunMeta:()=>({}),pendingBoxSize:()=>({w:260,h:180}),nextOutputPositionForSource:()=>({x:300,y:0}),MEDIA_NODE_DEFAULT_SCALE:1,nowMs:()=>10,selectedId:'',selectedImage:null,attachRunMeta:()=>{},addConnection:(from,to,kind)=>s.state.connections.push({from,to,kind}),saveCanvas:async()=>{events.push('branch-save');return true;},rememberSmartAcceptedTasks:(n,tasks)=>{events.push('backup:'+tasks[0].taskId);},saveSmartAcceptedTasksBeforeQuery:async n=>{events.push('accepted-save:'+n.pendingTasks.map(t=>t.taskId));return true;}});
+ Object.assign(s.ctx,{canvasId:'canvas',pushUndo:()=>{},stripRunInputMeta:x=>x,snapshotRunMeta:()=>({}),pendingBoxSize:()=>({w:260,h:180}),nodeRect:n=>({x:n.x||0,y:n.y||0,width:220,height:180}),outgoingConnectionsFor:()=>s.state.connections,isSmartImageNode:n=>n?.type==='smart-image',MEDIA_NODE_DEFAULT_SCALE:1,nowMs:()=>10,selectedId:'',selectedImage:null,attachRunMeta:()=>{},addConnection:(from,to,kind)=>s.state.connections.push({from,to,kind}),saveCanvas:async()=>{events.push('branch-save');return true;},rememberSmartAcceptedTasks:(n,tasks)=>{events.push('backup:'+tasks[0].taskId);},saveSmartAcceptedTasksBeforeQuery:async n=>{events.push('accepted-save:'+n.pendingTasks.map(t=>t.taskId));return true;}});
  vm.runInContext(nativeFunction(source,'createPendingOutputFromSource'),s.ctx);
  s.ctx.fetch=async(url,opts)=>{events.push('post');s.submitted.push(JSON.parse(opts.body));const id='group-'+s.submitted.length;return {ok:true,json:async()=>({task_id:id})};};
  s.p={...s.p,nodeType:'smart-group',outputNodeId:'new-output',runInputHash:'a'.repeat(64),localSignature:s.editor.snapshot()};
@@ -128,8 +130,8 @@ test('智能图片原生 API 执行保存每个受理编号，重复动作不重
 
 test('智能图片真实提示词编译保留输入连接的默认参考图和节点草稿',async()=>{
  const s=smartImageRunSetup(),source=fs.readFileSync(require.resolve('../static/js/smart-canvas.js'),'utf8');
- const input={innerHTML:'原面板'};
- Object.assign(s.ctx,{promptInput:input,loadNodePromptDraftToInput:()=>input.innerHTML='节点草稿',collectPromptParts:()=>[{type:'text',text:input.innerHTML}],originalPromptTextFromParts:parts=>parts.map(p=>p.text).join(''),blockedInputRefKeys:()=>new Set(),defaultReferenceImagesFor:()=>[{url:'/assets/reference.png',kind:'image'}],inputRefKey:ref=>ref.url,uniqueReferenceImages:x=>x,isSmartGroupNode:()=>false,inputPromptTextFor:()=> '上游正文',settings:{engine:'api'}});
+ const input={innerHTML:'原面板',get childNodes(){return [{nodeType:3,textContent:this.innerHTML}];}};
+ Object.assign(s.ctx,{Node:{TEXT_NODE:3,ELEMENT_NODE:1},promptInput:input,loadNodePromptDraftToInput:()=>input.innerHTML='节点草稿',blockedInputRefKeys:()=>new Set(),defaultReferenceImagesFor:()=>[{url:'/assets/reference.png',kind:'image'}],inputRefKey:ref=>ref.url,uniqueReferenceImages:x=>x,isSmartGroupNode:()=>false,inputPromptTextFor:()=> '上游正文',settings:{engine:'api'}});
  for(const name of ['buildPromptRequest','buildPromptRequestForNode'])vm.runInContext(nativeFunction(source,name),s.ctx);
  await s.editor.execute(s.p);
  assert.equal(input.innerHTML,'原面板');assert.equal(s.submitted[0].prompt,'上游正文\n\n节点草稿');
@@ -200,7 +202,7 @@ test('两种画布实际导出入口校验 JSON ZIP 和资源失败，不包含�
   const source=fs.readFileSync(require.resolve('../static/js/'+file),'utf8');
   const nodes=[{id:'p',text:'中文正文',assistantExportReceipts:[{actionId:'old'}]},{id:'im',url:'/static/icon.png'},{id:'other'}],connections=[{id:'e',from:'p',to:'im'},{id:'outside',from:'p',to:'other'}];
   const downloads=[];let requests=0,checks=0,fail=false;
-  const ctx=vm.createContext({canvas:{id:'c'},connections,serializableCanvasNodes:()=>nodes,canvasForStorage:()=>({nodes,connections}),workflowFilename:ext=>'workflow.'+ext,smartWorkflowFilename:ext=>'workflow.'+ext,Blob,Uint8Array,fetch:async(url,options)=>{requests++;const body=JSON.parse(options.body);assert.equal(body.nodes.length,2);assert.equal(body.connections.length,1);return fail?{ok:false}:{ok:true,headers:{get:()=> 'application/zip'},blob:async()=>new Blob(['PKarchive'])};},responseErrorMessage:async()=> '本地资源缺失',downloadBlob:(blob,filename)=>downloads.push({blob,filename})});
+  const ctx=createTaskContext({canvas:{id:'c',title:'workflow'},connections,serializableCanvasNodes:()=>nodes,canvasForStorage:()=>({nodes,connections}),workflowFilename:ext=>'workflow.'+ext,smartWorkflowFilename:ext=>'workflow.'+ext,Blob,Uint8Array,fetch:async(url,options)=>{requests++;const body=JSON.parse(options.body);assert.equal(body.nodes.length,2);assert.equal(body.connections.length,1);return fail?{ok:false}:{ok:true,headers:{get:()=> 'application/zip'},blob:async()=>new Blob(['PKarchive'])};},responseErrorMessage:async()=> '本地资源缺失',downloadBlob:(blob,filename)=>downloads.push({blob,filename})});
   vm.runInContext(nativeFunction(source,name),ctx);
   const options={actionId:'export',nodeId:'p',nodeIds:['im','p'],connectionIds:['e'],includeResources:false,scopeHash:'scope',beforeDownload:()=>checks++};
   const json=await ctx[name](options);const payload=JSON.parse(await downloads[0].blob.text());
@@ -259,8 +261,8 @@ test('普通LLM空响应或报错保留原正文，成功才替换并刷新下�
  for(const mode of ['empty','error','success']){
   const node={id:'llm',type:'llm',outputText:'原有正文',userInput:'输入',llmProvider:'chosen',model:'selected',storyAnalysisOrigin:{sourceNodeId:'story'}};
   const refreshed=[];let calls=0,inputSyncs=0;
-  const ctx=vm.createContext({nodes:[node,{id:'story',text:'实际原文'}],connections:[{from:'llm',to:'g'}],cascadeTargetIdFromOptions:()=>'',llmInputText:()=> '已确认输入',llmInputAudios:()=>[],refreshNodes:ids=>refreshed.push([...ids]),
-   callCanvasLLM:async()=>{calls++;if(mode==='error')throw new Error('模拟失败');if(mode==='success')node.model='changed-during-request';return mode==='empty'?'':'新正文';},scheduleGeneratorInputSync:()=>inputSyncs++,scheduleSave:()=>{},isCascadeAbortError:()=>false,alert:()=>{}});
+  const ctx=createTaskContext({nodes:[node,{id:'story',text:'实际原文'}],connections:[{from:'llm',to:'g'}],cascadeTargetIdFromOptions:()=>'',llmInputText:()=> '已确认输入',llmInputAudios:()=>[],refreshNodes:ids=>refreshed.push([...ids]),
+   resolveChatProviderId:x=>x,resolveChatModel:x=>x,llmInputImages:()=>[],llmInputVideos:()=>[],cascadeFetch:async()=>{calls++;if(mode==='error')throw new Error('模拟失败');if(mode==='success')node.model='changed-during-request';return {ok:true,json:async()=>({text:mode==='empty'?'':'新正文'})};},scheduleGeneratorInputSync:()=>inputSyncs++,scheduleSave:()=>{},isCascadeAbortError:()=>false,alert:()=>{}});
   vm.runInContext(nativeFunction(source,'runLLMNode'),ctx);
   await ctx.runLLMNode(node.id,{assistantNativeActionId:'a',beforeSubmit:async()=>{}});
   assert.equal(calls,1);
@@ -282,7 +284,7 @@ test('最终异步确认等待期间上游改变或切画布均阻止提交',asy
 test('真实runGenerator保存原受理编号和原参数，不再次运行上游',async()=>{
  const source=fs.readFileSync(require.resolve('../static/js/canvas.js'),'utf8');
  const gen={id:'g',type:'generator',apiProvider:'manual',model:'user',count:2,assistantNativeRun:{actionId:'a',taskKind:'image',taskIds:[],submissionStarted:true}};let submitted;
- const ctx=vm.createContext({nodes:[gen],canvasApiAudioMode:()=>false,audioRefsOnly:s=>s.filter(r=>r.kind==='audio'),cascadeTargetIdFromOptions:()=>'',orderedSources:(_n,s)=>s,generatorSources:()=>[{prompt:'原生正文',refs:[]}],imageRefsOnly:s=>s,confirmCanvasUnknownResubmission:()=>true,outputForNode:()=>null,runSnapshot:()=>({}),resolveImageProviderId:v=>v,resolveImageModel:v=>v,generatorSizeForRun:async()=> '1536x1024',normalizedImageQuality:()=>'',CANVAS_REFERENCE_IMAGE_MAX:8,nowMs:()=>0,refreshRunNodes:()=>{},setTimeout:()=>{},rememberCanvasSubmissionWarning:()=>{},submitCanvasImageTaskBatch:async(count,payload,opts)=>{submitted={count,payload,opts};return {taskInfos:[{task_id:'first'},{task_id:'second'}],warning:'',unknownCount:0};},waitCanvasDirectTasks:async()=>['/output/real.png'],mergeGeneratedOutputs:(n,outputs)=>n.generatedOutputs=outputs,addGenerationLog:()=>{},scheduleSave:()=>{}});
+ const ctx=createTaskContext({nodes:[gen],canvasApiAudioMode:()=>false,audioRefsOnly:s=>s.filter(r=>r.kind==='audio'),cascadeTargetIdFromOptions:()=>'',orderedSources:(_n,s)=>s,generatorSources:()=>[{prompt:'原生正文',refs:[]}],imageRefsOnly:s=>s,confirmCanvasUnknownResubmission:()=>true,outputForNode:()=>null,runSnapshot:()=>({}),resolveImageProviderId:v=>v,resolveImageModel:v=>v,generatorSizeForRun:async()=> '1536x1024',normalizedImageQuality:()=>'',CANVAS_REFERENCE_IMAGE_MAX:8,nowMs:()=>0,refreshRunNodes:()=>{},setTimeout:()=>{},rememberCanvasSubmissionWarning:()=>{},submitCanvasImageTaskBatch:async(count,payload,opts)=>{submitted={count,payload,opts};return {taskInfos:[{task_id:'first'},{task_id:'second'}],warning:'',unknownCount:0};},waitCanvasDirectTasks:async()=>['/output/real.png'],mergeGeneratedOutputs:(n,outputs)=>n.generatedOutputs=outputs,addGenerationLog:()=>{},scheduleSave:()=>{}});
  vm.runInContext(nativeFunction(source,'runGenerator'),ctx);await ctx.runGenerator('g',{assistantNativeActionId:'a'});
  assert.equal(gen.runStatus,'done');assert.deepEqual(Array.from(gen.assistantNativeRun.taskIds),['first','second']);assert.equal(submitted.count,2);
  assert.equal(submitted.payload.provider_id,'manual');assert.equal(submitted.payload.model,'user');assert.equal(submitted.payload.prompt,'原生正文');assert.equal(submitted.payload.size,'1536x1024');assert.equal(submitted.opts.assistantNativeActionId,'a');
@@ -297,9 +299,9 @@ test('真实runGenerator保存原受理编号和原参数，不再次运行上�
 test('来源比例编译使用副本且真实提交边界仍允许两项，预检拒绝表示零受理',async()=>{
  const source=fs.readFileSync(require.resolve('../static/js/canvas.js'),'utf8');
  const node={id:'g',type:'generator',apiProvider:'manual',model:'user',count:2,ratio:'source'};const s=editorSetup(node);let posts=0,checks=0;
- const ctx=vm.createContext({nodes:s.state.nodes,canvasApiAudioMode:()=>false,audioRefsOnly:s=>s.filter(r=>r.kind==='audio'),cascadeTargetIdFromOptions:()=>'',cascadeContextFor:()=>null,generatorSources:()=>[{id:'ref',prompt:'正文',refs:[{url:'/output/ref.png'}]}],imageRefsOnly:s=>s,confirmCanvasUnknownResubmission:()=>true,outputForNode:()=>null,runSnapshot:()=>({}),resolveImageProviderId:v=>v,resolveImageModel:v=>v,normalizedImageQuality:()=>'',CANVAS_REFERENCE_IMAGE_MAX:8,nowMs:()=>0,refreshRunNodes:()=>{},setTimeout:()=>{},rememberCanvasSubmissionWarning:(n,_w,unknown)=>n.submissionUnknown=!!unknown,cascadeFetch:async(_url,options)=>{posts++;assert.equal(JSON.parse(options.body).size,'4:3');return {ok:true,json:async()=>({task_id:'original-'+posts})};},getImageDimensions:async()=>({width:400,height:300}),ratioPartsFromDimensions:()=>({width:4,height:3}),apiImageSize:(_ratio,_res,custom)=>custom,defaultApiImageResolution:()=> '4k',waitCanvasDirectTasks:async()=>['/output/real.png'],mergeGeneratedOutputs:(n,images)=>n.generatedOutputs=images,addGenerationLog:()=>{},scheduleSave:()=>{}});
+ const ctx=createTaskContext({nodes:s.state.nodes,canvasApiAudioMode:()=>false,audioRefsOnly:s=>s.filter(r=>r.kind==='audio'),cascadeTargetIdFromOptions:()=>'',cascadeContextFor:()=>null,generatorSources:()=>[{id:'ref',prompt:'正文',refs:[{url:'/output/ref.png'}]}],imageRefsOnly:s=>s,confirmCanvasUnknownResubmission:()=>true,outputForNode:()=>null,runSnapshot:()=>({}),resolveImageProviderId:v=>v,resolveImageModel:v=>v,normalizedImageQuality:()=>'',CANVAS_REFERENCE_IMAGE_MAX:8,nowMs:()=>0,refreshRunNodes:()=>{},setTimeout:()=>{},rememberCanvasSubmissionWarning:(n,_w,unknown)=>n.submissionUnknown=!!unknown,cascadeFetch:async(_url,options)=>{posts++;assert.equal(JSON.parse(options.body).size,'4:3');return {ok:true,json:async()=>({task_id:'original-'+posts})};},getImageDimensions:async()=>({width:400,height:300}),ratioPartsFromDimensions:()=>({width:4,height:3}),apiImageSize:(_ratio,_res,custom)=>custom,defaultApiImageResolution:()=> '4k',waitCanvasDirectTasks:async()=>['/output/real.png'],mergeGeneratedOutputs:(n,images)=>n.generatedOutputs=images,addGenerationLog:()=>{},scheduleSave:()=>{}});
  Object.assign(ctx,{isCascadeAbortError:()=>false,showErrorModal:()=>{},tr:x=>x});
- for(const name of ['orderedSources','generatorSizeForRun','createCanvasImageTask','submitCanvasImageTaskBatch','runGenerator'])vm.runInContext(nativeFunction(source,name),ctx);
+ for(const name of ['isGptImageAutoSizeModel','orderedSources','generatorSizeForRun','createCanvasImageTask','submitCanvasImageTaskBatch','runGenerator'])vm.runInContext(nativeFunction(source,name),ctx);
  s.adapter.runNode=(n,opts)=>ctx.runGenerator(n.id,opts);
  const p={...s.proposal,action:'run',chargeable:true,arguments:{maxCalls:2},runSettings:{taskKind:'image'},check:async()=>{checks++;return true;}};
  const receipt=await s.editor.execute(p);assert.equal(posts,2);assert.equal(checks,2);assert.equal(receipt.taskIds.length,2);assert.equal(node.customRatio,undefined);assert.equal(node.inputs,undefined);
@@ -307,21 +309,21 @@ test('来源比例编译使用副本且真实提交边界仍允许两项，预�
 });
 test('真实API图片提交在请求前复核，已受理恢复跳过新提交，批量任务保留明确拒绝与未知',async()=>{
  const source=fs.readFileSync(require.resolve('../static/js/canvas.js'),'utf8');let checked=0,submitted=0;
- const ctx=vm.createContext({cascadeFetch:async()=>{submitted++;return {ok:true,json:async()=>({task_id:'original'})};},cascadeTargetIdFromOptions:()=>'',cascadeContextFor:()=>null,tr:x=>x});
+ const ctx=createTaskContext({cascadeFetch:async()=>{submitted++;return {ok:true,json:async()=>({task_id:'original'})};},cascadeTargetIdFromOptions:()=>'',cascadeContextFor:()=>null,tr:x=>x});
  for(const name of ['createCanvasImageTask','submitCanvasImageTaskBatch'])vm.runInContext(nativeFunction(source,name),ctx);
  const first=await ctx.createCanvasImageTask({model:'user'},{beforeSubmit:async()=>checked++});assert.equal(first.task_id,'original');assert.equal(checked,1);assert.equal(submitted,1);
  await ctx.createCanvasImageTask({}, {acceptedTask:{task_id:'original'},beforeSubmit:()=>{throw new Error('不应重提交');}});assert.equal(submitted,1);
  await assert.rejects(ctx.createCanvasImageTask({}, {beforeSubmit:()=>{throw new Error('已停止');}}),/停止/);assert.equal(submitted,1);
- ctx.createCanvasImageTask=async()=>{const e=new Error('拒绝');e.submissionKnownRejected=true;throw e;};
+ ctx.responseErrorMessage=async()=> '拒绝';ctx.cascadeFetch=async()=>({ok:false,status:400});
  await assert.rejects(ctx.submitCanvasImageTaskBatch(1,{}),e=>e.submissionUnknown===false);
- ctx.createCanvasImageTask=async()=>{throw new Error('断线');};
+ ctx.cascadeFetch=async()=>{throw new Error('断线');};
  await assert.rejects(ctx.submitCanvasImageTaskBatch(1,{}),e=>e.submissionUnknown===true);
 });
 test('两画布原生复制不继承助手动作与原任务受理归属',()=>{
  for(const kind of ['classic','smart']){
   const source=fs.readFileSync(require.resolve(kind==='classic'?'../static/js/canvas.js':'../static/js/smart-canvas.js'),'utf8');
   const name=kind==='classic'?'remapCanvasDepthCopies':'remapSmartDepthCopies';
-  const ctx=vm.createContext({window:{CanvasVideoDeconstructionModel:{remapCopies:()=>{}}}});vm.runInContext(nativeFunction(source,name),ctx);
+  const ctx=createTaskContext({window:{CanvasVideoDeconstructionModel:{remapCopies:()=>{}}}});vm.runInContext(nativeFunction(source,name),ctx);
   const node={id:'copy',type:'generator',model:'user',assistantNativeRun:{actionId:'old',taskIds:['original']},assistantNativeActionId:'old-create',assistantMediaExportReceipts:[{actionId:'original-download'}]};
   ctx[name]([node],new Map());assert.equal(node.model,'user');assert.equal(node.assistantNativeRun,undefined);assert.equal(node.assistantNativeActionId,undefined);
   assert.equal(node.assistantMediaExportReceipts,undefined);
@@ -332,7 +334,7 @@ function editorSetup(node){
  const state={id:'canvas',updatedAt:7,nodes:[node],connections:[]};let saves=0,undo=0;
  const source=fs.readFileSync(require.resolve('../static/js/smart-canvas.js'),'utf8');
  const setter=source.slice(source.indexOf('function setSmartLoopPromptFieldValues('),source.indexOf('function smartLoopPromptFieldText('));
- const context=vm.createContext({});vm.runInContext(setter,context);
+ const context=createTaskContext({});vm.runInContext(setter,context);
  const adapter={getState:()=>state,getSnapshot:()=>({nodes:state.nodes,connections:state.connections}),save:async()=>{saves++;state.updatedAt++;return true;},pushUndo:()=>undo++,render:()=>{},setLoopPrompts:context.setSmartLoopPromptFieldValues,clipModel};
  const editor=native.createEditor(adapter);
  const proposal={id:'edit',canvasId:'canvas',updatedAt:7,nodeId:node.id,chargeable:false,localSignature:editor.snapshot()};
@@ -342,13 +344,13 @@ function nativeFunction(source,name){const match=source.match(new RegExp('(?:asy
 
 test('上游图片完成先同步下游输入顺序，随后助手复用不被自身渲染误拒绝',async()=>{
  const source=fs.readFileSync(require.resolve('../static/js/canvas.js'),'utf8');
- const generator={id:'first',type:'generator'},out={id:'out',type:'output',images:[],_pending:[{id:'pending',run:{node:{id:'first'}}}]};
+ const generator={id:'first',type:'generator'},out={id:'out',type:'output',images:[],_pending:[{id:'pending',canvasTaskId:'original',run:{node:{id:'first'}}}]};
  const next={id:'next',type:'generator',inputs:[]};const s=editorSetup(next);s.state.nodes.push(generator,out);s.state.connections.push({from:'out',to:'next'});
  let previews=0;
- const ctx=vm.createContext({nodes:s.state.nodes,connections:s.state.connections,CANVAS_GENERATOR_TYPES:['generator'],CANVAS_MEDIA_OUTPUT_TYPES:['generator'],
+ const ctx=createTaskContext({nodes:s.state.nodes,connections:s.state.connections,CANVAS_GENERATOR_TYPES:['generator'],CANVAS_MEDIA_OUTPUT_TYPES:['generator'],
   findPendingTask:()=>({out,pending:out._pending[0]}),nowMs:()=>10,requestMetaFromResult:()=>({}),appendOutputImages:(n,images)=>n.images.push(...images),
   mergeGeneratedOutputs:()=>{},addGenerationLog:()=>{},refreshRunNodes:()=>{},refreshGeneratorInputViews:()=>previews++,scheduleSave:()=>{},
-  outputUrlValue:item=>typeof item==='string'?item:item.url,mediaKindForOutputItem:()=> 'image',generatedImageRefs:()=>[]});
+  outputUrlValue:item=>typeof item==='string'?item:item.url,mediaKindForOutputItem:()=> 'image',outputNodesForSource:()=>[out],generatedImageRefs:()=>[]});
  for(const name of ['generatorSources','orderedSources','syncGeneratorInputs','completeCanvasImageTask'])vm.runInContext(nativeFunction(source,name),ctx);
  ctx.completeCanvasImageTask('original',{images:['/output/original.png']});
  assert.deepEqual(Array.from(next.inputs),['out'],'完成回执前保存真实输入顺序');assert.equal(previews,1);
@@ -399,7 +401,7 @@ test('魔搭及MJ真实原生助手入口先保存受理编号，保存失败保
  const source=fs.readFileSync(require.resolve('../static/js/canvas.js'),'utf8');
  for(const type of ['msgen','midjourney']){
   const node={id:'n',type,count:1,outputEnabled:true,assistantNativeRun:{actionId:'a',taskKind:'image',taskIds:[]}},out={id:'o',type:'output',images:[]};let posts=0,saves=0,polls=0,backups=0;
-  const ctx=vm.createContext({nodes:[node,out],canvas:{id:'c'},connections:[{from:'n',to:'o'}],orderedSources:(_n,s)=>s,generatorSources:()=>[{prompt:'原文',refs:[]}],imageRefsOnly:x=>x,runSnapshot:()=>({node:{id:'n'}}),makePendingForRun:(id,run,_node,_opts,extra)=>({id,run,...extra}),uid:()=> 'pending',saveCanvas:async()=>++saves!==2,createCanvasImageTask:async p=>{posts++;assert.equal(p.native_node_type,type);assert.equal(p.input_hash,'hash');return {task_id:'original'};},rememberUnsavedCanvasAcceptedTasks:()=>backups++,pauseCanvasAcceptedTasksUntilSaved:()=>new Error('原编号尚未保存'),refreshRunNodes:()=>{},pollCanvasImageTask:async()=>polls++});
+  const ctx=createTaskContext({nodes:[node,out],canvas:{id:'c'},connections:[{from:'n',to:'o'}],orderedSources:(_n,s)=>s,generatorSources:()=>[{prompt:'原文',refs:[]}],imageRefsOnly:x=>x,runSnapshot:()=>({node:{id:'n'}}),makePendingForRun:(id,run,_node,_opts,extra)=>({id,run,...extra}),uid:()=> 'pending',saveCanvas:async()=>++saves!==2,createCanvasImageTask:async p=>{posts++;assert.equal(p.native_node_type,type);assert.equal(p.input_hash,'hash');return {task_id:'original'};},rememberUnsavedCanvasAcceptedTasks:()=>backups++,pauseCanvasAcceptedTasksUntilSaved:()=>new Error('原编号尚未保存'),refreshRunNodes:()=>{},pollCanvasImageTask:async()=>polls++});
   vm.runInContext(nativeFunction(source,'runCanvasAssistantCatalogImage'),ctx);
   await assert.rejects(ctx.runCanvasAssistantCatalogImage('n',{assistantNativeActionId:'a',assistantCanvasId:'c',assistantOutputNodeId:'o',assistantRunInputHash:'hash',assistantImageConfig:{provider:'manual',model:'selected',configurationHash:'config'},beforeSubmit:async()=>{node.assistantNativeRun.submissionStarted=true;}}),/原编号尚未保存/);
   assert.equal(posts,1);assert.equal(polls,0);assert.equal(backups,1);assert.deepEqual(Array.from(node.assistantNativeRun.taskIds),['original']);assert.equal(out._pending[0].canvasTaskId,'original');
@@ -413,7 +415,7 @@ test('智能提示词真实 LLM 入口确认后只调用一次，保留文本模
  const node={id:'p',type:'smart-prompt',llmEnabled:true,llmProvider:'codex',llmModel:'gpt-6.1-sol',text:'原文',llmInstruction:'按原文改写'};
  const s=editorSetup(node);let calls=0;const requests=[];
  node.storyAnalysisOrigin={sourceNodeId:'story'};s.state.nodes.push({id:'story',type:'smart-prompt',text:'实际原文'});s.proposal.localSignature=s.editor.snapshot();
- const ctx=vm.createContext({nodes:s.state.nodes,promptNodeLLMInputText:n=>n.text+'\n'+n.llmInstruction,render:()=>{},resolveChatProviderId:x=>x,resolveChatModel:x=>x,promptNodeInputMediaForLLM:()=>[{url:'/output/ref.png',kind:'image'}],imageRefsOnly:items=>items.filter(i=>i.kind==='image'),videoRefsOnly:()=>[],scheduleSave:()=>{},toast:()=>{},tr:x=>x,fetch:async(url,options)=>{calls++;requests.push({url,body:JSON.parse(options.body)});return {ok:true,json:async()=>({text:'已完成智能改写'})};}});
+ const ctx=createTaskContext({nodes:s.state.nodes,promptNodeLLMInputText:n=>n.text+'\n'+n.llmInstruction,render:()=>{},resolveChatProviderId:x=>x,resolveChatModel:x=>x,promptNodeInputMediaForLLM:()=>[{url:'/output/ref.png',kind:'image'}],imageRefsOnly:items=>items.filter(i=>i.kind==='image'),videoRefsOnly:()=>[],scheduleSave:()=>{},toast:()=>{},tr:x=>x,fetch:async(url,options)=>{calls++;requests.push({url,body:JSON.parse(options.body)});return {ok:true,json:async()=>({text:'已完成智能改写'})};}});
  vm.runInContext(nativeFunction(source,'runPromptLLMNode'),ctx);
  s.adapter.runLLMNode=(n,options)=>ctx.runPromptLLMNode(n.id,options);
  const p={...s.proposal,action:'run',chargeable:true,arguments:{maxCalls:1},runSettings:{taskKind:'llm',provider:'codex',model:'gpt-6.1-sol'},check:async()=>true};
@@ -432,7 +434,7 @@ test('智能提示词异步确认拒绝、空返回和网络失败均保留原�
  const source=fs.readFileSync(require.resolve('../static/js/smart-canvas.js'),'utf8');
  for(const failure of ['check','empty','network']){
   const node={id:'p',type:'smart-prompt',llmEnabled:true,llmProvider:'codex',llmModel:'gpt-6.1-sol',text:'保留原文'},s=editorSetup(node);let calls=0;
-  const ctx=vm.createContext({nodes:s.state.nodes,promptNodeLLMInputText:n=>n.text,render:()=>{},resolveChatProviderId:x=>x,resolveChatModel:x=>x,promptNodeInputMediaForLLM:()=>[],imageRefsOnly:()=>[],videoRefsOnly:()=>[],scheduleSave:()=>{},toast:()=>{},tr:x=>x,fetch:async()=>{calls++;if(failure==='network')throw new TypeError('断线');return {ok:true,json:async()=>({text:''})};}});
+  const ctx=createTaskContext({nodes:s.state.nodes,promptNodeLLMInputText:n=>n.text,render:()=>{},resolveChatProviderId:x=>x,resolveChatModel:x=>x,promptNodeInputMediaForLLM:()=>[],imageRefsOnly:()=>[],videoRefsOnly:()=>[],scheduleSave:()=>{},toast:()=>{},tr:x=>x,fetch:async()=>{calls++;if(failure==='network')throw new TypeError('断线');return {ok:true,json:async()=>({text:''})};}});
   vm.runInContext(nativeFunction(source,'runPromptLLMNode'),ctx);s.adapter.runLLMNode=(n,opts)=>ctx.runPromptLLMNode(n.id,opts);
   const p={...s.proposal,action:'run',chargeable:true,arguments:{maxCalls:1},runSettings:{taskKind:'llm'},check:async()=>failure!=='check'};
   await assert.rejects(s.editor.execute(p));await s.editor.execute(p);
@@ -444,7 +446,7 @@ test('原任务回填复用两画布深度处理器，保留原编号/来源并�
   const name=kind==='classic'?'updateCanvasDepthCapture':'updateSmartDepthCapture';
   const source=fs.readFileSync(require.resolve(kind==='classic'?'../static/js/canvas.js':'../static/js/smart-canvas.js'),'utf8');
   const node={id:'depth',type:kind==='classic'?'image':'smart-image',pending:1,running:true,depthCapture:{taskId:'old',operationId:'operation',sourceUrl:'/output/source.mp4',status:'running',role:'depth'}};
-  const s=editorSetup(node);const ctx=vm.createContext({refreshNodes:()=>{},render:()=>{},CanvasDepthCapture:{update:()=>{}},scheduleSave:()=>{}});
+  const s=editorSetup(node);const ctx=createTaskContext({refreshNodes:()=>{},render:()=>{},CanvasDepthCapture:{update:()=>{}},scheduleSave:()=>{}});
   vm.runInContext(nativeFunction(source,name),ctx);
   s.adapter.applyTask=(n,task,taskKind)=>{assert.equal(taskKind,'depth');ctx[name]([n],task,n.depthCapture.operationId);};
   const p={canvasId:'canvas',nodeId:'depth',arguments:{taskId:'old',taskKind:'depth'},receipt:{task:{id:'old',status:'cancelled',operation_id:'operation',source_url:'/output/source.mp4'}}};
@@ -460,20 +462,20 @@ test('普通画布真实挂载和完成函数回填直接任务，空处理不�
  const source=fs.readFileSync(require.resolve('../static/js/canvas.js'),'utf8');
  const node={id:'g',type:'generator',x:0,y:0,_directPending:[{id:'p',canvasTaskId:'original',canvasTaskType:'online-image',run:{node:{id:'g'}}}]};
  const s=editorSetup(node);let mounted,seq=0;
- const ctx=vm.createContext({nodes:s.state.nodes,connections:s.state.connections,window:{CanvasAssistantNative:{createEditor:a=>{mounted=a;}}},setCanvasGroupMembers:()=>{},setCanvasWorkflowParameters:()=>{},resultMediaUrls:t=>t.images||[],uid:()=> 'new-'+(++seq),render:()=>{},scheduleSave:()=>{},nowMs:()=>0,requestMetaFromResult:()=>({}),appendOutputImages:(out,images)=>out.images.push(...images),mergeGeneratedOutputs:(n,images)=>n.generatedOutputs=images,addGenerationLog:()=>{},refreshRunNodes:()=>{}});
- Object.assign(ctx,{syncGeneratorInputs:()=>{},refreshGeneratorInputViews:()=>{}});
+ const ctx=createTaskContext({nodes:s.state.nodes,connections:s.state.connections,window:{CanvasAssistantNative:{createEditor:a=>{mounted=a;}}},setCanvasGroupMembers:()=>{},setCanvasWorkflowParameters:()=>{},resultMediaUrls:t=>t.images||[],uid:()=> 'new-'+(++seq),render:()=>{},scheduleSave:()=>{},nowMs:()=>0,requestMetaFromResult:()=>({}),appendOutputImages:(out,images)=>out.images.push(...images),mergeGeneratedOutputs:(n,images)=>n.generatedOutputs=images,addGenerationLog:()=>{},refreshRunNodes:()=>{}});
+ Object.assign(ctx,{syncGeneratorInputs:()=>{},refreshGeneratorInputViews:()=>{},outputUrlValue:x=>typeof x==='string'?x:x.url,mediaKindForOutputItem:()=> 'image',outputNodesForSource:()=>s.state.nodes.filter(n=>n.type==='output'),CANVAS_MEDIA_OUTPUT_TYPES:['generator']});
  for(const name of ['findPendingTask','materializeCanvasDirectTasks','completeCanvasImageTask'])vm.runInContext(nativeFunction(source,name),ctx);
  const start=source.lastIndexOf('const nativeEditor=window.CanvasAssistantNative');vm.runInContext(source.slice(start,source.indexOf('window.CanvasAssistant?.mount',start)),ctx);
  s.adapter.applyTask=mounted.applyTask;
  const p={canvasId:'canvas',nodeId:'g',arguments:{taskId:'original',taskKind:'image'},receipt:{task:{task_id:'original',status:'succeeded',images:['/output/real.png']}}};
- assert.equal(await s.editor.syncTask(p),true);assert.equal(node._directPending?.length||0,0);assert.deepEqual(node.generatedOutputs,['/output/real.png']);assert.equal(s.state.nodes.find(n=>n.type==='output').images[0],'/output/real.png');
+ assert.equal(await s.editor.syncTask(p),true);assert.equal(node._directPending?.length||0,0);assert.deepEqual(Array.from(node.generatedOutputs),['/output/real.png']);assert.equal(s.state.nodes.find(n=>n.type==='output').images[0].url,'/output/real.png');
  assert.equal(await s.editor.syncTask(p),false);assert.equal(s.state.nodes.length,2);
  const empty=editorSetup({id:'empty',type:'output',_pending:[{canvasTaskId:'original'}]});empty.adapter.applyTask=()=>false;
  await assert.rejects(empty.editor.syncTask({...p,nodeId:'empty'}),/回填/);assert.equal(empty.saves(),0);
 });
 test('助手图片运行遇到原生音频分支时拒绝提交',async()=>{
  const source=fs.readFileSync(require.resolve('../static/js/canvas.js'),'utf8');let audioCalls=0;
- const ctx=vm.createContext({nodes:[{id:'g',type:'generator'}],canvasApiAudioMode:()=>true,runCanvasApiAudio:async()=>{audioCalls++;}});
+ const ctx=createTaskContext({nodes:[{id:'g',type:'generator'}],canvasApiAudioMode:()=>true,runCanvasApiAudio:async()=>{audioCalls++;}});
  vm.runInContext(nativeFunction(source,'runGenerator'),ctx);
  for(const opts of [{assistantNativeActionId:'confirmed-image'},{assistantProposal:{prompt:'图片',referenceImages:[]}}])await assert.rejects(ctx.runGenerator('g',opts),error=>error.submissionKnownRejected===true && /音频/.test(error.message));
  assert.equal(audioCalls,0);
@@ -481,7 +483,7 @@ test('助手图片运行遇到原生音频分支时拒绝提交',async()=>{
 });
 test('助手图片确认也拒绝上游音频转文字分支，手动执行保留',async()=>{
  const source=fs.readFileSync(require.resolve('../static/js/canvas.js'),'utf8');let audioCalls=0;
- const ctx=vm.createContext({nodes:[{id:'g',type:'generator',apiProvider:'manual',model:'chat'}],canvasApiAudioMode:()=>false,audioRefsOnly:s=>s.filter(r=>r.kind==='audio'),cascadeTargetIdFromOptions:()=>'',orderedSources:(_n,s)=>s,generatorSources:()=>[{prompt:'识别',refs:[{url:'/output/voice.wav',kind:'audio'}]}],audioRefsOnly:s=>s.filter(r=>r.kind==='audio'),providerChatModels:()=>['chat'],runAudioAnalysisGenerator:async()=>{audioCalls++;}});
+ const ctx=createTaskContext({nodes:[{id:'g',type:'generator',apiProvider:'manual',model:'chat'}],canvasApiAudioMode:()=>false,audioRefsOnly:s=>s.filter(r=>r.kind==='audio'),cascadeTargetIdFromOptions:()=>'',orderedSources:(_n,s)=>s,generatorSources:()=>[{prompt:'识别',refs:[{url:'/output/voice.wav',kind:'audio'}]}],audioRefsOnly:s=>s.filter(r=>r.kind==='audio'),providerChatModels:()=>['chat'],runAudioAnalysisGenerator:async()=>{audioCalls++;}});
  vm.runInContext(nativeFunction(source,'runGenerator'),ctx);
  for(const opts of [{assistantNativeActionId:'confirmed-image'},{assistantProposal:{prompt:'图片',referenceImages:[]}}])await assert.rejects(ctx.runGenerator('g',opts),error=>error.submissionKnownRejected===true && /音频/.test(error.message));
  assert.equal(audioCalls,0);await ctx.runGenerator('g',{});assert.equal(audioCalls,1);
@@ -490,7 +492,7 @@ test('ComfyUI真实执行编译使用新参数和上游正文，提交边界拦�
  const source=fs.readFileSync(require.resolve('../static/js/canvas.js'),'utf8');
  const fields=[{id:'steps',node:'1',input:'steps',type:'number',default:20},{id:'enabled',node:'1',input:'enabled',type:'boolean',default:false},{id:'prompt',node:'1',input:'prompt',type:'textarea'}];
  const node={id:'workflow',type:'comfy',mode:'custom',comfyWorkflow:'public.json',model:'user-model',count:8},requests=[];
- const ctx=vm.createContext({nodes:[node],cascadeTargetIdFromOptions:()=>null,generatorSources:()=>[{prompt:'原生上游正文'}],orderedSources:(_n,s)=>s,imageRefsOnly:()=>[],videoRefsOnly:()=>[],audioRefsOnly:()=>[],currentComfyWorkflow:()=>({config:{fields}}),outputForNode:()=>null,uid:()=> 'pending',runSnapshot:()=>({}),comfyRunLabel:()=> 'public',refreshRunNodes:()=>{},validComfyWorkflowName:x=>x,ensureComfyWorkflow:async()=>({config:{fields}}),comfyWorkflows:[],CLIENT_ID:'local-test',runQueuedComfyGenerate:async request=>{requests.push(JSON.parse(JSON.stringify(request)));return {images:['/output/fixture.png']};},requestMetaFromResult:()=>({}),comfyResultOutputs:r=>r.images,collectRunMeta:()=>({}),appendOutputImages:()=>{},mergeGeneratedOutputs:()=>{},addGenerationLog:()=>{},scheduleSave:()=>{},isCascadeAbortError:()=>false});
+ const ctx=createTaskContext({nodes:[node],cascadeTargetIdFromOptions:()=>null,generatorSources:()=>[{prompt:'原生上游正文'}],orderedSources:(_n,s)=>s,imageRefsOnly:()=>[],videoRefsOnly:()=>[],audioRefsOnly:()=>[],currentComfyWorkflow:()=>({config:{fields}}),outputForNode:()=>null,uid:()=> 'pending',runSnapshot:()=>({}),comfyRunLabel:()=> 'public',refreshRunNodes:()=>{},validComfyWorkflowName:x=>x,ensureComfyWorkflow:async()=>({config:{fields}}),comfyWorkflows:[],CLIENT_ID:'local-test',runQueuedComfyGenerate:async request=>{requests.push(JSON.parse(JSON.stringify(request)));return {images:['/output/fixture.png']};},requestMetaFromResult:()=>({}),comfyResultOutputs:r=>r.images,collectRunMeta:()=>({}),appendOutputImages:()=>{},mergeGeneratedOutputs:()=>{},addGenerationLog:()=>{},scheduleSave:()=>{},isCascadeAbortError:()=>false});
  for(const name of ['comfyFieldKind','comfyFields','comfyParamValue','comfyRandomEnabled','comfyRandomActive','setCanvasWorkflowParameters','runComfyNode'])vm.runInContext(nativeFunction(source,name),ctx);
  ctx.setCanvasWorkflowParameters(node,{steps:12,enabled:true});
  await ctx.runComfyNode(node.id,{cascade:true});
@@ -500,7 +502,7 @@ test('工作流动作使用原生参数setter并保留已有字段及上游来�
  for(const type of ['rh','comfy']){
   const node={id:'workflow',type,model:'user-model',rhParams:{'12::steps':{value:'20',sourceFromUpstream:false},keep:{value:'old'}},comfyParams:{keep:'old'}};
   const s=editorSetup(node);const source=fs.readFileSync(require.resolve('../static/js/canvas.js'),'utf8');
-  const context=vm.createContext({});vm.runInContext(nativeFunction(source,'setCanvasWorkflowParameters'),context);
+  const context=createTaskContext({});vm.runInContext(nativeFunction(source,'setCanvasWorkflowParameters'),context);
   s.adapter.setWorkflowParameters=context.setCanvasWorkflowParameters;
   await s.editor.execute({...s.proposal,action:'workflow_parameters',arguments:{patch:{[type==='rh'?'12::steps':'steps']:12}}});
   if(type==='rh'){assert.equal(node.rhParams['12::steps'].value,'12');assert.equal(node.rhParams['12::steps'].sourceFromUpstream,false);assert.equal(node.rhParams.keep.value,'old');}
@@ -513,7 +515,7 @@ test('助手 Comfy 随机参数在编译副本中派生，提交校验不被自�
  const node={id:'wf',type:'comfy',mode:'custom',comfyWorkflow:'public.json',comfyParams:{seed:20}};
  const fields=[{id:'seed',node:'1',input:'seed',type:'number',default:20,random_enabled:true}];
  const s=editorSetup(node);const requests=[];
- const ctx=vm.createContext({nodes:s.state.nodes,cascadeTargetIdFromOptions:()=>null,generatorSources:()=>[],orderedSources:(_n,items)=>items,imageRefsOnly:()=>[],videoRefsOnly:()=>[],audioRefsOnly:()=>[],currentComfyWorkflow:()=>({config:{fields}}),outputForNode:()=>null,uid:()=> 'pending',runSnapshot:()=>({}),comfyRunLabel:()=> 'public',refreshRunNodes:()=>{},validComfyWorkflowName:x=>x,ensureComfyWorkflow:async()=>({config:{fields}}),comfyWorkflows:[],CLIENT_ID:'local',comfyRandomValue:()=>50,runQueuedComfyGenerate:async(request,opts)=>{await opts.beforeSubmit();requests.push(request);opts.onAccepted('accepted');return {images:['/output/random.png']};},requestMetaFromResult:()=>({}),comfyResultOutputs:r=>r.images,collectRunMeta:()=>({}),appendOutputImages:()=>{},mergeGeneratedOutputs:(n,images)=>n.generatedOutputs=images,addGenerationLog:()=>{},scheduleSave:()=>{},isCascadeAbortError:()=>false});
+ const ctx=createTaskContext({nodes:s.state.nodes,cascadeTargetIdFromOptions:()=>null,generatorSources:()=>[],orderedSources:(_n,items)=>items,imageRefsOnly:()=>[],videoRefsOnly:()=>[],audioRefsOnly:()=>[],currentComfyWorkflow:()=>({config:{fields}}),outputForNode:()=>null,uid:()=> 'pending',runSnapshot:()=>({}),comfyRunLabel:()=> 'public',refreshRunNodes:()=>{},validComfyWorkflowName:x=>x,ensureComfyWorkflow:async()=>({config:{fields}}),comfyWorkflows:[],CLIENT_ID:'local',comfyRandomValue:()=>50,runQueuedComfyGenerate:async(request,opts)=>{await opts.beforeSubmit();requests.push(request);opts.onAccepted('accepted');return {images:['/output/random.png']};},requestMetaFromResult:()=>({}),comfyResultOutputs:r=>r.images,collectRunMeta:()=>({}),appendOutputImages:()=>{},mergeGeneratedOutputs:(n,images)=>n.generatedOutputs=images,addGenerationLog:()=>{},scheduleSave:()=>{},isCascadeAbortError:()=>false});
  for(const name of ['comfyFieldKind','comfyFields','comfyParamValue','comfyRandomEnabled','comfyRandomActive','runComfyNode'])vm.runInContext(nativeFunction(source,name),ctx);
  s.adapter.runNode=(n,opts)=>ctx.runComfyNode(n.id,{...opts,cascade:true});
  const result=await s.editor.execute({...s.proposal,nodeId:'wf',action:'run',chargeable:true,arguments:{maxCalls:1},runSettings:{taskKind:'comfy'},check:async()=>true});
@@ -530,7 +532,7 @@ test('连接动作调用原生输入处理器并保存，智能循环复用原�
  const s=editorSetup({id:'loop',type:'smart-loop',imageInput:false,showPrompt:false});
  s.state.nodes.push({id:'p',type:'smart-prompt',text:'正文'});
  const source=fs.readFileSync(require.resolve('../static/js/smart-canvas.js'),'utf8');
- const ctx=vm.createContext({nodes:s.state.nodes,canvas:{connections:s.state.connections},isSmartGroupNode:()=>false,isSmartImageNode:n=>n.type==='smart-image',fitSmartLoopNode:()=>{}});
+ const ctx=createTaskContext({nodes:s.state.nodes,canvas:{connections:s.state.connections},isSmartGroupNode:()=>false,isSmartImageNode:n=>n.type==='smart-image',fitSmartLoopNode:()=>{}});
  for(const name of ['addConnection','connectInputNode'])vm.runInContext(nativeFunction(source,name),ctx);
  s.adapter.connectNodes=ctx.connectInputNode;
  await s.editor.execute({...s.proposal,action:'connect',arguments:{sourceId:'p'},localSignature:s.editor.snapshot()});
@@ -541,12 +543,12 @@ test('连接动作调用原生输入处理器并保存，智能循环复用原�
 test('两画布真实分组处理器保留节点并复用原生输入移交和成员缩放',()=>{
  const classic=fs.readFileSync(require.resolve('../static/js/canvas.js'),'utf8');
  const group={id:'g',type:'group',items:[]},prompt={id:'p',type:'prompt'},gen={id:'gen',type:'generator'};
- const ctx=vm.createContext({nodes:[group,prompt,gen],connections:[{id:'c',from:'p',to:'gen'}],nodeBounds:()=>({x:100,y:100,w:300,h:200}),CANVAS_GENERATOR_TYPES:['generator'],canConnect:()=>true,uid:()=> 'new-c',syncGeneratorInputs:()=>{},refreshGeneratorInputViews:()=>{}});
+ const ctx=createTaskContext({nodes:[group,prompt,gen],connections:[{id:'c',from:'p',to:'gen'}],nodeBounds:()=>({x:100,y:100,w:300,h:200}),CANVAS_GENERATOR_TYPES:['generator'],canConnect:()=>true,uid:()=> 'new-c',syncGeneratorInputs:()=>{},refreshGeneratorInputViews:()=>{}});
  for(const name of ['handoffExistingInputsToGroup','setCanvasGroupMembers'])vm.runInContext(nativeFunction(classic,name),ctx);
  ctx.setCanvasGroupMembers(group,['p']);assert.equal(ctx.nodes.length,3);assert.deepEqual(JSON.parse(JSON.stringify(ctx.connections)),[{id:'new-c',from:'g',to:'gen'}]);assert.equal(group.x,76);assert.equal(group.y,12);
  const smart=fs.readFileSync(require.resolve('../static/js/smart-canvas.js'),'utf8'),sg={id:'sg',type:'smart-group',items:[],images:[{url:'/output/original.png'}]},sp={id:'sp',type:'smart-prompt'},image={id:'im',type:'smart-image',images:[{url:'/output/keep.png'}]};let scaled=0;
  let arranged=0;
- const sc=vm.createContext({nodes:[sg,sp,image],isSmartGroupNode:n=>n?.type==='smart-group',isSmartImageNode:n=>n?.type==='smart-image',smartGroupZoom:()=>1,scaleSmartGroupMemberToZoom:()=>scaled++,arrangeSmartGroupMembers:()=>arranged++});
+ const sc=createTaskContext({nodes:[sg,sp,image],isSmartGroupNode:n=>n?.type==='smart-group',isSmartImageNode:n=>n?.type==='smart-image',smartGroupZoom:()=>1,scaleSmartGroupMemberToZoom:()=>scaled++,arrangeSmartGroupMembers:()=>arranged++});
  for(const name of ['addNodeToSmartGroup','setSmartGroupMemberIds'])vm.runInContext(nativeFunction(smart,name),sc);
  sc.setSmartGroupMemberIds(sg,['sp']);assert.deepEqual(JSON.parse(JSON.stringify(sg.items)),['sp']);assert.equal(scaled,1);assert.equal(arranged,1);assert.throws(()=>sc.setSmartGroupMemberIds(sg,['im']));assert.equal(sc.nodes.length,3);assert.equal(sg.images[0].url,'/output/original.png');assert.equal(image.images[0].url,'/output/keep.png');
 });
@@ -554,8 +556,8 @@ test('两画布真实分组处理器保留节点并复用原生输入移交和�
 test('智能原生setter及真实请求包装器使用新草稿，保留原提交和已有mention',()=>{
  const source=fs.readFileSync(require.resolve('../static/js/smart-canvas.js'),'utf8');
  const node={id:'result',type:'smart-image',runPrompt:'旧提交',runModelPrompt:'旧模型请求',runPromptRefs:[{url:'/output/ref.png'}],images:[{url:'/output/result.png'}],promptDraftHtml:'旧草稿',promptDraftText:'旧草稿'};
- const promptInput={innerHTML:'面板原内容',textContent:'面板原内容',dataset:{}};
- const context=vm.createContext({promptInput,isSmartRunnableNode:()=>true,activeSettingsSubject:()=>node,escapeHtml:t=>String(t).replace(/</g,'&lt;'),promptHtmlWithMentionTokens:t=>t,setPromptText:t=>promptInput.innerHTML=t,smartLoopContext:null,buildPromptRequest:()=>({prompt:promptInput.innerHTML})});
+ const promptInput={innerHTML:'面板原内容',textContent:'面板原内容',dataset:{},get childNodes(){return [{nodeType:3,textContent:this.innerHTML}];}};
+ const context=createTaskContext({promptInput,isSmartRunnableNode:()=>true,activeSettingsSubject:()=>node,escapeHtml:t=>String(t).replace(/</g,'&lt;'),promptHtmlWithMentionTokens:t=>t,setPromptText:t=>promptInput.innerHTML=t,smartLoopContext:null,Node:{TEXT_NODE:3,ELEMENT_NODE:1},blockedInputRefKeys:()=>new Set(),inputRefKey:r=>r.url,uniqueReferenceImages:x=>x,isSmartGroupNode:()=>false,inputPromptTextFor:()=>'',settings:{engine:'api'}});
  for(const name of ['setPromptDraftForNode','loadPromptDraft','loadNodePromptDraftToInput','buildPromptRequestForNode'])vm.runInContext(nativeFunction(source,name),context);
  context.setPromptDraftForNode(node,'新的中文草稿');
  const saved=JSON.parse(JSON.stringify(node));const request=context.buildPromptRequestForNode(saved,[]);
@@ -567,7 +569,7 @@ test('智能原生setter及真实请求包装器使用新草稿，保留原提�
 });
 test('普通图片自定义尺寸setter同步原生关联字段并进入真实尺寸请求',async()=>{
  const source=fs.readFileSync(require.resolve('../static/js/canvas.js'),'utf8');
- const context=vm.createContext({resolveImageModel:m=>m,isGptImageAutoSizeModel:()=>true,defaultApiImageResolution:()=> '4k',apiImageSize:(ratio,resolution,customRatio,customSize)=>resolution==='custom'?customSize:customRatio, getImageDimensions:async()=>({width:4,height:3})});
+ const context=createTaskContext({resolveImageModel:m=>m,isGptImageAutoSizeModel:()=>true,defaultApiImageResolution:()=> '4k',apiImageSize:(ratio,resolution,customRatio,customSize)=>resolution==='custom'?customSize:customRatio, getImageDimensions:async()=>({width:4,height:3})});
  for(const name of ['normalizeApiNodeSizeChoice','setCanvasGeneratorSizeFields','generatorSizeForRun'])vm.runInContext(nativeFunction(source,name),context);
  const node={type:'generator',model:'gpt-image-2',ratio:'story',resolution:'4k',customRatioWidth:'9',customRatioHeight:'16'};
  context.setCanvasGeneratorSizeFields(node,{customWidth:'1536',customHeight:'1024'});
@@ -580,7 +582,7 @@ test('普通图片自定义尺寸setter同步原生关联字段并进入真实�
 });
 test('Modelscope尺寸setter同步原生字段，保存重开后尺寸请求使用新值',()=>{
  const source=fs.readFileSync(require.resolve('../static/js/canvas.js'),'utf8');
- const context=vm.createContext({});vm.runInContext(nativeFunction(source,'setCanvasMsSizeFields'),context);
+ const context=createTaskContext({});vm.runInContext(nativeFunction(source,'setCanvasMsSizeFields'),context);
  const node={type:'msgen',msgenModel:'zimage',msRatio:'story',msResolution:'4k',msCustomSize:'2048x2048'};
  context.setCanvasMsSizeFields(node,{msCustomWidth:'1536',msCustomHeight:'1024'});
  const saved=JSON.parse(JSON.stringify(node));
@@ -652,7 +654,7 @@ test('智能画布实际挂载适配器读取canvas.connections，不依赖普�
  const start=source.lastIndexOf('const nativeEditor=window.CanvasAssistantNative');
  const adapterBlock=source.slice(start,source.indexOf('window.CanvasAssistant?.mount',start));
  const canvas={nodes:[{id:'p'}],connections:[{from:'a',to:'p'}]};let captured;
- const context=vm.createContext({window:{CanvasAssistantNative:{createEditor:a=>{captured=a;return {};}}},canvas,canvasId:'canvas',nodes:canvas.nodes,canvasForStorage:()=>canvas,setSmartLoopPromptFieldValues:()=>{},connectInputNode:()=>{}});
+ const context=createTaskContext({window:{CanvasAssistantNative:{createEditor:a=>{captured=a;return {};}}},canvas,canvasId:'canvas',nodes:canvas.nodes,canvasForStorage:()=>canvas,setSmartLoopPromptFieldValues:()=>{},connectInputNode:()=>{}});
  vm.runInContext(nativeFunction(source,'setSmartGroupMemberIds'),context);
  vm.runInContext(adapterBlock,context);
  assert.deepEqual(JSON.parse(JSON.stringify(captured.getSnapshot())),{nodes:canvas.nodes,connections:canvas.connections});
@@ -663,7 +665,7 @@ function rhNativeRunSetup(){
  const s=editorSetup(node),out={id:'out',type:'output',images:[]};s.state.nodes.push(out);s.state.connections.push({from:'rh',to:'out'});
  let submissions=0,queries=0;const backups=[],payloads=[];
  const source=fs.readFileSync(require.resolve('../static/js/canvas.js'),'utf8');
- const ctx=vm.createContext({nodes:s.state.nodes,connections:s.state.connections,rhSelectedEntryRef:()=>({kind:'model',id:'selected'}),cascadeTargetIdFromOptions:()=>'',rhMediaSources:()=>({prompt:'原生中文',refs:[{url:'/output/ref.png',kind:'image'}]}),imageRefsOnly:x=>x,confirmCanvasUnknownResubmission:()=>true,outputForNode:()=>out,runSnapshot:n=>({node:{id:n.id}}),generatorSizeForRun:async n=>{n.ratio='derived';return '1024x1024';},normalizedImageQuality:()=>'',CANVAS_REFERENCE_IMAGE_MAX:8,nowMs:()=>10,refreshRunNodes:()=>{},setTimeout:()=>{},rememberCanvasSubmissionWarning:()=>{},cascadeContextFor:()=>null,cascadeFetch:async(url,opts)=>{submissions++;payloads.push(JSON.parse(opts.body));return {ok:true,json:async()=>({task_id:'rh-original'})};},tr:x=>x,uid:()=> 'pending',makePendingForRun:(id,run,n,opts,extra)=>({id,run,...extra}),rememberUnsavedCanvasAcceptedTasks:(n,tasks)=>{backups.push(JSON.parse(JSON.stringify({run:n.assistantNativeRun,tasks})));return true;},scheduleSave:()=>{},saveCanvas:async()=>true,pollCanvasImageTask:async id=>{queries++;out.images=[{url:'/output/rh.png'}];out._pending=[];return 'succeeded';},pendingById:(o,id)=>o?._pending?.find(p=>p.id===id),showErrorModal:()=>{},isCascadeAbortError:()=>false});
+ const ctx=createTaskContext({nodes:s.state.nodes,connections:s.state.connections,canvas:{id:'fixture'},CANVAS_UNSAVED_ACCEPTED_TASKS_PREFIX:'accepted:',localStorage:{getItem:()=>null,setItem:()=>{}},rhSelectedEntryRef:()=>({kind:'model',id:'selected'}),cascadeTargetIdFromOptions:()=>'',rhMediaSources:()=>({prompt:'原生中文',refs:[{url:'/output/ref.png',kind:'image'}]}),imageRefsOnly:x=>x,confirmCanvasUnknownResubmission:()=>true,outputForNode:()=>out,runSnapshot:n=>({node:{id:n.id}}),generatorSizeForRun:async n=>{n.ratio='derived';return '1024x1024';},normalizedImageQuality:()=>'',CANVAS_REFERENCE_IMAGE_MAX:8,nowMs:()=>10,refreshRunNodes:()=>{},setTimeout:()=>{},rememberCanvasSubmissionWarning:()=>{},cascadeContextFor:()=>null,cascadeFetch:async(url,opts)=>{submissions++;payloads.push(JSON.parse(opts.body));return {ok:true,json:async()=>({task_id:'rh-original'})};},tr:x=>x,uid:()=> 'pending',makePendingForRun:(id,run,n,opts,extra)=>({id,run,...extra}),rememberUnsavedCanvasAcceptedTasks:(n,tasks)=>{backups.push(JSON.parse(JSON.stringify({run:n.assistantNativeRun,tasks})));return true;},scheduleSave:()=>{},saveCanvas:async()=>true,pollCanvasImageTask:async id=>{queries++;out.images=[{url:'/output/rh.png'}];out._pending=[];return 'succeeded';},pendingById:(o,id)=>o?._pending?.find(p=>p.id===id),showErrorModal:()=>{},isCascadeAbortError:()=>false});
  for(const name of ['createCanvasImageTask','submitCanvasImageTaskBatch','pauseCanvasAcceptedTasksUntilSaved','runRhModelNode'])vm.runInContext(nativeFunction(source,name),ctx);
  s.adapter.runNode=(n,opts)=>ctx.runRhModelNode(n,opts);
  const p={...s.proposal,localSignature:undefined,nodeId:'rh',action:'run',chargeable:true,arguments:{maxCalls:1},runSettings:{taskKind:'image',maxCalls:1},check:async()=>true};
@@ -689,7 +691,7 @@ test('RH 受理后保存失败刷新用本地备份重建原动作，重复备�
  const source=fs.readFileSync(require.resolve('../static/js/canvas.js'),'utf8');let storage='[]';
  const node={id:'rh',type:'rh',assistantNativeRun:{actionId:'action',taskKind:'image',taskIds:['original']}};
  const out={id:'out',type:'output',images:[]};const nodes=[node,out],connections=[{from:'rh',to:'out'}];
- const ctx=vm.createContext({nodes,connections,unsavedCanvasAcceptedTasksKey:()=> 'backup',readUnsavedCanvasAcceptedTasks:()=>JSON.parse(storage),localStorage:{setItem:(_k,v)=>storage=v},nowMs:()=>10,findPendingTask:id=>{const pending=out._pending?.find(p=>p.canvasTaskId===id);return pending?{out,pending}:null;},uid:()=> 'pending',scheduleSave:()=>{}});
+ const ctx=createTaskContext({nodes,connections,canvas:{id:'fixture'},CANVAS_UNSAVED_ACCEPTED_TASKS_PREFIX:'accepted:',localStorage:{getItem:()=>storage,setItem:(_k,v)=>storage=v},nowMs:()=>10,findPendingTask:id=>{const pending=out._pending?.find(p=>p.canvasTaskId===id);return pending?{out,pending}:null;},uid:()=> 'pending',scheduleSave:()=>{}});
  for(const name of ['rememberUnsavedCanvasAcceptedTasks','restoreUnsavedCanvasAcceptedTasks'])vm.runInContext(nativeFunction(source,name),ctx);
  const task={canvasTaskId:'original',canvasTaskType:'online-image',providerId:'runninghub',model:'selected'};
  assert.equal(ctx.rememberUnsavedCanvasAcceptedTasks(node,[task],out),true);
@@ -713,18 +715,18 @@ test('RH 新受理备份恢复覆盖旧完成动作但不覆盖时间更新的�
  const source=fs.readFileSync(require.resolve('../static/js/canvas.js'),'utf8');
  for(const newer of [false,true]){
   const node={id:'rh',type:'rh',runStatus:'done',assistantNativeRun:{actionId:'old',taskKind:'image',taskIds:['old-task'],...(newer?{startedAt:30}:{})}};
-  const out={id:'out',type:'output',images:[]};const ctx=vm.createContext({nodes:[node,out],connections:[{from:'rh',to:'out'}],readUnsavedCanvasAcceptedTasks:()=>[{taskId:'new-task',nodeId:'rh',outputId:'out',taskType:'online-image',assistantNativeActionId:'new',assistantPreviousActionId:'old',assistantTaskKind:'image',assistantRunStartedAt:20,startedAt:20}],findPendingTask:()=>null,uid:()=> 'pending',scheduleSave:()=>{},nowMs:()=>40});
+  const out={id:'out',type:'output',images:[]};const ctx=createTaskContext({nodes:[node,out],connections:[{from:'rh',to:'out'}],canvas:{id:'fixture'},CANVAS_UNSAVED_ACCEPTED_TASKS_PREFIX:'accepted:',localStorage:{getItem:()=>JSON.stringify([{taskId:'new-task',nodeId:'rh',outputId:'out',taskType:'online-image',assistantNativeActionId:'new',assistantPreviousActionId:'old',assistantTaskKind:'image',assistantRunStartedAt:20,startedAt:20}])},findPendingTask:()=>null,uid:()=> 'pending',scheduleSave:()=>{},nowMs:()=>40});
   vm.runInContext(nativeFunction(source,'restoreUnsavedCanvasAcceptedTasks'),ctx);ctx.restoreUnsavedCanvasAcceptedTasks();
   assert.equal(node.assistantNativeRun.actionId,newer?'old':'new');assert.equal(out._pending[0].canvasTaskId,'new-task');
  }
 });
 
 test('RH 真实保存删除运行状态后，备份以明确前序动作绑定恢复新动作',()=>{
- const source=fs.readFileSync(require.resolve('../static/js/canvas.js'),'utf8');const ctx=vm.createContext({});
+ const source=fs.readFileSync(require.resolve('../static/js/canvas.js'),'utf8');const ctx=createTaskContext({});
  vm.runInContext(nativeFunction(source,'serializableCanvasNode'),ctx);
  const node=ctx.serializableCanvasNode({id:'rh',type:'rh',runStatus:'done',assistantNativeRun:{actionId:'old',taskKind:'image',taskIds:['old-task']}});
  assert.equal(node.runStatus,undefined);
- const out={id:'out',type:'output',images:[]};Object.assign(ctx,{nodes:[node,out],connections:[{from:'rh',to:'out'}],readUnsavedCanvasAcceptedTasks:()=>[{taskId:'new-task',nodeId:'rh',outputId:'out',taskType:'online-image',assistantNativeActionId:'new',assistantPreviousActionId:'old',assistantTaskKind:'image',assistantRunStartedAt:20}],findPendingTask:()=>null,uid:()=> 'pending',scheduleSave:()=>{},nowMs:()=>40});
+ const out={id:'out',type:'output',images:[]};Object.assign(ctx,{nodes:[node,out],connections:[{from:'rh',to:'out'}],canvas:{id:'fixture'},CANVAS_UNSAVED_ACCEPTED_TASKS_PREFIX:'accepted:',localStorage:{getItem:()=>JSON.stringify([{taskId:'new-task',nodeId:'rh',outputId:'out',taskType:'online-image',assistantNativeActionId:'new',assistantPreviousActionId:'old',assistantTaskKind:'image',assistantRunStartedAt:20}])},findPendingTask:()=>null,uid:()=> 'pending',scheduleSave:()=>{},nowMs:()=>40});
  vm.runInContext(nativeFunction(source,'restoreUnsavedCanvasAcceptedTasks'),ctx);ctx.restoreUnsavedCanvasAcceptedTasks();
  assert.equal(node.assistantNativeRun.actionId,'new');assert.deepEqual(Array.from(node.assistantNativeRun.taskIds),['new-task']);
  const s=rhNativeRunSetup();s.node.assistantNativeRun={actionId:'previous',taskKind:'image',taskIds:['old']};
@@ -738,7 +740,7 @@ test('RH workflow/app 确认后只提交一次并保存原任务后查询',async
   const out={id:'out',type:'output',images:[]},nodes=[node,out],connections=[{from:'rh',to:'out'}];
   let submits=0,queries=0,saves=0,checks=0;const backups=[];
   const source=fs.readFileSync(require.resolve('../static/js/canvas.js'),'utf8');
-  const ctx=vm.createContext({nodes,connections,canvas:{id:'canvas'},cascadeTargetIdFromOptions:()=>'',ensureRhNodeSelection:()=>{},rhCurrentKind:()=>mode,rhSelectedEntryRef:()=>({kind:mode,id,entry:{id}}),ensureRunningHubWorkflowConfigForNode:async()=>{},rhActiveFields:()=>[{nodeId:'12',fieldName:'steps'}],rhMediaSources:()=>({prompt:'原生中文',refs:[]}),outputForNode:()=>out,uid:x=>x+'-1',runSnapshot:n=>({node:{id:n.id}}),makePendingForRun:(pid,run,n,opts)=>({id:pid,run,startedAt:1,...opts}),refreshRunNodes:()=>{},rhBuildNodeInfoList:async()=>[{nodeId:'12',fieldName:'steps',fieldValue:20}],rhBuildWorkflowRequestExtras:async()=>({}),rhUseWallet:()=>false,cascadeFetch:async(url,opts)=>{if(url.includes('/query')){queries++;return {ok:true,json:async()=>({success:true,data:{status:'SUCCESS',urls:['/output/rh.png']}})}}submits++;return {ok:true,json:async()=>({success:true,data:{taskId:'rh-original'}})};},sleep:async()=>{},collectRunMeta:()=>({runMs:1}),appendOutputImages:(o,urls)=>o.images.push(...urls.map(url=>({url}))),mergeGeneratedOutputs:(n,urls)=>n.generatedOutputs=urls,addGenerationLog:()=>{},scheduleSave:()=>{},rememberUnsavedCanvasAcceptedTasks:(n,tasks)=>{backups.push(JSON.parse(JSON.stringify({run:n.assistantNativeRun,tasks})));return true;},saveCanvas:async()=>{saves++;return true;},pendingById:(o,pid)=>o._pending.find(p=>p.id===pid),pauseCanvasAcceptedTasksUntilSaved:()=>new Error('save failed'),isCascadeAbortError:()=>false,alert:()=>{},tr:x=>x});
+  const ctx=createTaskContext({nodes,connections,canvas:{id:'canvas'},cascadeTargetIdFromOptions:()=>'',ensureRhNodeSelection:()=>{},rhCurrentKind:()=>mode,rhSelectedEntryRef:()=>({kind:mode,id,entry:{id}}),ensureRunningHubWorkflowConfigForNode:async()=>{},rhActiveFields:()=>[{nodeId:'12',fieldName:'steps'}],rhMediaSources:()=>({prompt:'原生中文',refs:[]}),outputForNode:()=>out,uid:x=>x+'-1',runSnapshot:n=>({node:{id:n.id}}),makePendingForRun:(pid,run,n,opts)=>({id:pid,run,startedAt:1,...opts}),refreshRunNodes:()=>{},rhBuildNodeInfoList:async()=>[{nodeId:'12',fieldName:'steps',fieldValue:20}],rhBuildWorkflowRequestExtras:async()=>({}),rhUseWallet:()=>false,cascadeFetch:async(url,opts)=>{if(url.includes('/query')){queries++;return {ok:true,json:async()=>({success:true,data:{status:'SUCCESS',urls:['/output/rh.png']}})}}submits++;return {ok:true,json:async()=>({success:true,data:{taskId:'rh-original'}})};},sleep:async()=>{},collectRunMeta:()=>({runMs:1}),appendOutputImages:(o,urls)=>o.images.push(...urls.map(url=>({url}))),mergeGeneratedOutputs:(n,urls)=>n.generatedOutputs=urls,addGenerationLog:()=>{},scheduleSave:()=>{},rememberUnsavedCanvasAcceptedTasks:(n,tasks)=>{backups.push(JSON.parse(JSON.stringify({run:n.assistantNativeRun,tasks})));return true;},saveCanvas:async()=>{saves++;return true;},pendingById:(o,pid)=>o._pending.find(p=>p.id===pid),pauseCanvasAcceptedTasksUntilSaved:()=>new Error('save failed'),isCascadeAbortError:()=>false,alert:()=>{},tr:x=>x});
   vm.runInContext(nativeFunction(source,'runRhNode'),ctx);
   await ctx.runRhNode('rh',{assistantNativeActionId:`action-${mode}`,assistantCanvasId:'canvas',assistantOutputNodeId:'out',assistantRunInputHash:'a'.repeat(64),beforeSubmit:async()=>checks++});
   assert.equal(submits,1,mode);assert.equal(queries,1,mode);assert.equal(checks,1,mode);assert.ok(saves>=1,mode);
@@ -750,7 +752,7 @@ test('RH workflow/app 确认后只提交一次并保存原任务后查询',async
 test('RH workflow/app 刷新后只恢复查询原任务，不重新提交',async()=>{
  const source=fs.readFileSync(require.resolve('../static/js/canvas.js'),'utf8');
  const calls=[];const pending={canvasTaskId:'rh-original',canvasTaskType:'runninghub',useWallet:true,savePending:false};
- const ctx=vm.createContext({pollCanvasComfyTask:()=>calls.push('comfy'),pollCanvasVideoTask:()=>calls.push('video'),pollCanvasImageTask:()=>calls.push('image'),pollCanvasRunningHubTask:(id,opts)=>{calls.push(['runninghub',id,opts.useWallet]);return 'running';},saveCanvas:async()=>true,scheduleSave:()=>{},showErrorModal:()=>{},tr:x=>x});
+ const ctx=createTaskContext({pollCanvasComfyTask:()=>calls.push('comfy'),pollCanvasVideoTask:()=>calls.push('video'),pollCanvasImageTask:()=>calls.push('image'),pollCanvasRunningHubTask:(id,opts)=>{calls.push(['runninghub',id,opts.useWallet]);return 'running';},saveCanvas:async()=>true,scheduleSave:()=>{},showErrorModal:()=>{},tr:x=>x});
  vm.runInContext(nativeFunction(source,'saveAndQueryCanvasPendingTask'),ctx);
  assert.equal(await ctx.saveAndQueryCanvasPendingTask(pending),'running');
  assert.deepEqual(calls,[['runninghub','rh-original',true]]);
@@ -762,7 +764,7 @@ test('RH 原编号恢复保存本轮结果，旧动作轮询不覆盖新动作�
   const node={id:'rh',assistantNativeRun:{actionId:currentAction,taskIds:['rh-original'],inputHash:'input',outputNodeId:'out'}};
   const pending={id:'p',run:{node:{id:'rh'}},assistantNativeActionId:'original-action',assistantInputHash:'input'};
   const out={id:'out',images:[{url:'/output/old.png'}],_pending:[pending]};let queries=0;
-  const ctx=vm.createContext({nodes:[node,out],activeCanvasTaskPolls:new Set(),findPendingTask:()=>({pending,out}),fetch:async()=>{queries++;return {ok:true,json:async()=>({success:true,data:{status:'SUCCESS',urls:['/output/current.png']}})}},collectRunMeta:()=>({runMs:1}),appendOutputImages:(o,urls)=>o.images.push(...urls.map(url=>({url}))),mergeGeneratedOutputs:()=>{},addGenerationLog:()=>{},refreshRunNodes:()=>{},scheduleSave:()=>{},tr:x=>x});
+  const ctx=createTaskContext({nodes:[node,out],activeCanvasTaskPolls:new Set(),findPendingTask:()=>({pending,out}),fetch:async()=>{queries++;return {ok:true,json:async()=>({success:true,data:{status:'SUCCESS',urls:['/output/current.png']}})}},collectRunMeta:()=>({runMs:1}),appendOutputImages:(o,urls)=>o.images.push(...urls.map(url=>({url}))),mergeGeneratedOutputs:()=>{},addGenerationLog:()=>{},refreshRunNodes:()=>{},scheduleSave:()=>{},tr:x=>x});
   vm.runInContext(nativeFunction(source,'pollCanvasRunningHubTask'),ctx);
   assert.equal(await ctx.pollCanvasRunningHubTask('rh-original'),'succeeded');assert.equal(queries,1);assert.equal(out.images[1].url,'/output/current.png');
   if(currentAction==='original-action'){assert.deepEqual(Array.from(node.assistantNativeRun.resultUrls),['/output/current.png']);assert.equal(node.assistantNativeRun.status,'succeeded');}

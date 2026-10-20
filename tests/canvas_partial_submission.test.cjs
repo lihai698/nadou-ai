@@ -1,6 +1,8 @@
+const {createTaskContext}=require('./canvas_task_test_helpers.cjs');
 const {test} = require('node:test');
 const assert = require('node:assert/strict');
 const vm = require('node:vm');
+const {attachSaveState}=require('./canvas_save_test_helpers.cjs');
 const {readFileSync, mkdtempSync, writeFileSync, rmSync} = require('node:fs');
 const {createServer} = require('node:http');
 const {tmpdir} = require('node:os');
@@ -20,7 +22,7 @@ function taskResponse(status, data={}){
 function submissionHarness(responses){
     const calls=[];
     const cascadeContext={};
-    const context = vm.createContext({
+    const context = createTaskContext({
         cascadeFetch:async(url, init)=>{
             calls.push({url, init});
             const next = responses.shift();
@@ -95,7 +97,7 @@ test('local HTTP ambiguity requires confirmation and preserves the old warning a
         try {
             await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
             const base=`http://127.0.0.1:${server.address().port}`;
-            const submissionContext=vm.createContext({
+            const submissionContext=createTaskContext({
                 cascadeFetch:(url,init)=>fetch(base+url,init),
                 responseErrorMessage:async res=>`HTTP ${res.status}`,
                 tr:key=>key,
@@ -142,8 +144,8 @@ function generatorHarness(kind, submissionResult, confirmResult=true){
     const nodes=[generator, output];
     const saves=[], queries=[], notices=[];
     let nextId=0, submissions=0, confirmations=0, saveAllowed=true;
-    const context=vm.createContext({
-        nodes, CANVAS_REFERENCE_IMAGE_MAX:10,
+    const context=createTaskContext({
+        nodes, canvas:{id:'fixture'},CANVAS_UNSAVED_ACCEPTED_TASKS_PREFIX:'accepted:',CANVAS_UNKNOWN_SUBMISSION_PREFIX:'unknown:',localStorage:{getItem:()=>null,setItem:()=>{}},CANVAS_REFERENCE_IMAGE_MAX:10,
         window:{addEventListener:()=>{},confirm:()=>{confirmations++;return typeof confirmResult==='function' ? confirmResult() : confirmResult;}},
         document:{addEventListener:()=>{}},
         rhSelectedEntryRef:()=>({id:'mock-model'}), rhMediaSources:()=>({prompt:'sample',refs:[]}),
@@ -273,7 +275,7 @@ test('recovery retries canvas save before querying the original accepted task',a
     let saveAllowed=false;
     const calls=[];
     const notices=[];
-    const context=vm.createContext({
+    const context=createTaskContext({
         saveCanvas:async()=>{calls.push('save');return saveAllowed;},
         pollCanvasImageTask:async id=>{calls.push(`query:${id}`);return 'succeeded';},
         scheduleSave:()=>calls.push('schedule'),
@@ -295,8 +297,8 @@ test('direct tasks create a recovery card when accepted IDs cannot be saved',asy
     const node={id:'gen',type:'generator',x:10,y:20};
     const nodes=[node], connections=[], notices=[];
     let queries=0;
-    const context=vm.createContext({
-        nodes,connections,uid:(()=>{let n=0;return prefix=>`${prefix}-${++n}`;})(),
+    const context=createTaskContext({
+        nodes,connections,canvas:{id:'fixture'},CANVAS_UNSAVED_ACCEPTED_TASKS_PREFIX:'accepted:',localStorage:{getItem:()=>null,setItem:()=>{}},nowMs:()=>1,uid:(()=>{let n=0;return prefix=>`${prefix}-${++n}`;})(),
         makePendingForRun:(id,run,source,options,task)=>({id,run,...task}),
         scheduleSave:()=>{},saveCanvas:async()=>false,render:()=>{},
         showErrorModal:message=>notices.push(message),tr:key=>key,
@@ -327,7 +329,7 @@ test('unsaved task IDs restore as paused cards in the same browser without query
     };
     const sourceNode={id:'gen',type:'generator',x:10,y:20};
     const outputNode={id:'out',type:'output',_pending:[]};
-    const context=vm.createContext({
+    const context=createTaskContext({
         canvas:{id:'isolated-canvas'}, nodes:[sourceNode,outputNode], connections:[],
         CANVAS_UNSAVED_ACCEPTED_TASKS_PREFIX:'canvas_unsaved_accepted_tasks_v1:',
         localStorage:storage, nowMs:()=>100,
@@ -368,19 +370,21 @@ test('unsaved task IDs restore as paused cards in the same browser without query
 test('canvas save failure retains the local backup and successful PUT clears it',async()=>{
     const clears=[], statuses=[];
     let responseStatus=503;
-    const context=vm.createContext({
+    const context=createTaskContext({
         canvas:{id:'isolated-canvas',title:'demo',updated_at:1},nodes:[],connections:[],
-        viewport:{x:0,y:0,scale:1},applyingRemoteCanvas:false,savingCanvasNow:false,
-        saveCanvasAgain:false,localCanvasDirty:true,lastCanvasUpdatedAt:1,
+        viewport:{x:0,y:0,scale:1},applyingRemoteCanvas:false,
+        localCanvasDirty:true,lastCanvasUpdatedAt:1,
         CLIENT_ID:'isolated-test',currentCanvasTime:null,currentCanvasTitle:null,
         sanitizeConnections:()=>{},setStatus:value=>statuses.push(value),
         clearUnsavedCanvasAcceptedTasks:id=>clears.push(id),
         clearUnsavedCanvasUnknownWarnings:()=>{},
-        gateCanvasList:null,loadCanvasList:()=>{},setTimeout:()=>{},clearTimeout(){},saveTimer:null,
+        gateCanvasList:null,loadCanvasList:()=>{},setTimeout:()=>{},clearTimeout(){},
         fetch:async()=>({ok:responseStatus===200,status:responseStatus,
             json:async()=>({canvas:{id:'isolated-canvas',updated_at:2,nodes:[]}})}),
         console:{error:()=>{}},
     });
+    attachSaveState(context,'classic');
+    vm.runInContext(readFileSync(require('node:path').join(__dirname,'../static/js/canvas-save-transport.js'),'utf8'),context);
     vm.runInContext(section('function serializableCanvasNode(', 'async function loadConfig('),context);
     assert.equal(await vm.runInContext('saveCanvas()',context),false);
     assert.deepEqual(clears,[]);
@@ -394,7 +398,7 @@ test('a prior save cannot clear a newer accepted-task backup',()=>{
     const values=new Map();
     const key='canvas_unsaved_accepted_tasks_v1:isolated-canvas';
     values.set(key,JSON.stringify([{taskId:'newer-task',nodeId:'gen'}]));
-    const context=vm.createContext({
+    const context=createTaskContext({
         canvas:{id:'isolated-canvas'},
         CANVAS_UNSAVED_ACCEPTED_TASKS_PREFIX:'canvas_unsaved_accepted_tasks_v1:',
         localStorage:{getItem:k=>values.get(k) || null,setItem:(k,v)=>values.set(k,v),removeItem:k=>values.delete(k)},
@@ -413,7 +417,7 @@ test('an unknown no-ID submission survives reload and guards a missing source no
     const values=new Map();
     const storage={getItem:key=>values.get(key) || null,setItem:(key,value)=>values.set(key,value),removeItem:key=>values.delete(key)};
     const sourceNode={id:'gen',submissionWarning:'请求可能已受理',submissionUnknown:true};
-    const context=vm.createContext({
+    const context=createTaskContext({
         canvas:{id:'isolated-canvas'}, nodes:[sourceNode],
         CANVAS_UNKNOWN_SUBMISSION_PREFIX:'canvas_unknown_submission_v1:',
         localStorage:storage,scheduleSave:()=>{},
@@ -436,7 +440,7 @@ test('an unknown no-ID submission survives reload and guards a missing source no
 
 test('reload does not automatically query a locally restored unsaved task',()=>{
     const queries=[];
-    const context=vm.createContext({
+    const context=createTaskContext({
         nodes:[{type:'output',_pending:[
             {canvasTaskType:'online-image',canvasTaskId:'unsaved-1',savePending:true},
             {canvasTaskType:'online-image',canvasTaskId:'saved-2'},
@@ -452,17 +456,18 @@ test('reload does not automatically query a locally restored unsaved task',()=>{
 });
 
 test('submission warning remains in serialized node data and visible node heading',()=>{
-    const serialize=vm.createContext({});
+    const serialize=createTaskContext({});
     vm.runInContext(section('function serializableCanvasNode(', 'async function saveCanvas('),serialize);
     const serialized=vm.runInContext("serializableCanvasNode({id:'gen',submissionWarning:'1 项未收到可靠响应',submissionUnknown:true,runError:'old'})",serialize);
     assert.equal(serialized.submissionWarning,'1 项未收到可靠响应');
     assert.equal(serialized.submissionUnknown,true);
     assert.equal(serialized.runError,undefined);
 
-    const head=section('function renderNode(node){', '    const body = document.createElement(\'div\');')+'    return el;\n}';
+    const nodeView=readFileSync(path.join(__dirname,'../static/js/canvas-node-view.js'),'utf8');
+    const head=nodeView.slice(nodeView.indexOf('function renderNode(deps, node){'),nodeView.indexOf("    const body = deps.document.createElement('div');"))+'    return el;\n}';
     let warningClick;
     const notices=[];
-    const context=vm.createContext({
+    const context=createTaskContext({
         document:{createElement:()=>({style:{},dataset:{},
             querySelector:selector=>selector==='.node-submission-warning'
                 ? {addEventListener:(event, handler)=>{if(event==='click') warningClick=handler;}}
@@ -475,7 +480,7 @@ test('submission warning remains in serialized node data and visible node headin
     });
     vm.runInContext(head,context);
     context.node={id:'gen',type:'generator',x:0,y:0,submissionWarning:'1 项未收到可靠响应',submissionUnknown:true};
-    const el=vm.runInContext('renderNode(node)',context);
+    const el=vm.runInContext('renderNode(classicNodeViewHost(), node)',context);
     assert.match(el.innerHTML,/提交状态未知/);
     assert.match(el.innerHTML,/title="1 项未收到可靠响应"/);
     assert.match(el.innerHTML,/node-submission-warning/);

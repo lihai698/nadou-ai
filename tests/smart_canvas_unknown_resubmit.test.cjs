@@ -1,3 +1,4 @@
+const {createTaskContext}=require('./canvas_task_test_helpers.cjs');
 const {test} = require('node:test');
 const assert = require('node:assert/strict');
 const vm = require('node:vm');
@@ -20,7 +21,7 @@ function smartHarness(base, approve=()=>false){
     const notices=[];
     let confirmations=0, snapshots=0, saved=0, posts=0;
     const settings={engine:'api',provider_id:'mock',model:'mock-image',count:1,ratio:'square',resolution:'1k'};
-    const context=vm.createContext({
+    const context=createTaskContext({
         nodes,canvas,settings,smartLoopContext:null,undoSuppressed:false,
         selectedNode:()=>node,smartNodeInFlight:()=>false,
         inputNodesFor:()=>[],imagesForNode:n=>n.images || [],
@@ -136,17 +137,17 @@ test('cascade steps stop if an unknown status appears after the initial prefligh
     const target={id:'target',type:'smart-image',submissionUnknown:true};
     h.nodes.push(target);
     const stepStart=source.indexOf('async function runCascadeStepIntoNode(');
-    const stepEnd=source.indexOf('    const requestNode =',stepStart);
+    const stepEnd=source.indexOf('\n}',stepStart)+2;
     assert.ok(stepStart>=0 && stepEnd>stepStart);
-    vm.runInContext(source.slice(stepStart,stepEnd)+'    return [];\n}',h.context);
+    vm.runInContext(source.slice(stepStart,stepEnd),h.context);
     h.context.target=target;
     await assert.rejects(vm.runInContext('runCascadeStepIntoNode(nodes[0],target,[])',h.context),/一键运行已停止/);
 
     const loopStart=source.indexOf('async function runLoopRoundIntoSlot(');
-    const loopEnd=source.indexOf('    const previousSettings =',loopStart);
+    const loopEnd=source.indexOf('\n}',loopStart)+2;
     assert.ok(loopStart>=0 && loopEnd>loopStart);
     h.context.liveSmartNode=node=>node;
-    vm.runInContext(source.slice(loopStart,loopEnd)+'    return [];\n}',h.context);
+    vm.runInContext(source.slice(loopStart,loopEnd),h.context);
     await assert.rejects(vm.runInContext('runLoopRoundIntoSlot({id:"loop"},nodes[0],target,1,{})',h.context),/一键运行已停止/);
 });
 
@@ -192,7 +193,7 @@ test('a partial HTTP batch propagates the unknown state through cascade image ge
 });
 
 test('parallel cascade workers do not claim another round after one submission becomes unknown',async()=>{
-    const context=vm.createContext({smartUnknownResubmissionNotice:()=> '受理状态未知，一键运行已停止'});
+    const context=createTaskContext({smartUnknownResubmissionNotice:()=> '受理状态未知，一键运行已停止'});
     vm.runInContext(section('async function runSmartCascadeRoundsWithLimit(', 'async function runSmartCascade('),context);
     const started=[],completed=[];
     const runState={submissionUnknown:false};

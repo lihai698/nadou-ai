@@ -49,10 +49,11 @@ def prepare_python_sandbox(target):
         shutil.copy2(ROOT / name, target / name)
     # Agent 功能依赖项目根目录的内置 Skill 文件。核心检查使用临时公开代码副本，
     # 因此必须把 skills 一并复制，否则沙箱里的 Agent 路由会把所有 Skill 读取判定为缺失。
-    for name in ("backend", "tests", "static", "tools", "workflows", "skills"):
+    for name in (".github", "backend", "tests", "static", "tools", "workflows", "skills"):
         source = ROOT / name
         if source.is_dir():
-            shutil.copytree(source, target / name)
+            ignore = shutil.ignore_patterns("custom") if name == "workflows" else None
+            shutil.copytree(source, target / name, ignore=ignore)
     public_knowledge = ROOT / "docs" / "创作助手项目知识"
     if public_knowledge.is_dir():
         (target / "docs").mkdir(exist_ok=True)
@@ -90,7 +91,10 @@ def main():
         print(f"开始：Python 后端与数据回归（完整测试，最多 {python_timeout} 秒）", flush=True)
         python_count = run_check(
             "Python 后端与数据回归（临时公开代码副本）",
-            [sys.executable, "-m", "unittest", "discover", "-s", "tests", "-v"],
+            [sys.executable, "-c",
+             "import runpy,sys;sys.path.insert(0,sys.argv.pop(1));"
+             "runpy.run_module('unittest',run_name='__main__')",
+             str(sandbox), "discover", "-s", "tests", "-v"],
             r"Ran (\d+) tests?", cwd=sandbox, timeout=python_timeout,
         )
 

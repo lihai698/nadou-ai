@@ -1,3 +1,4 @@
+const {createTaskContext}=require('./canvas_task_test_helpers.cjs');
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
@@ -11,7 +12,7 @@ function section(source,start,end){const first=source.indexOf(start),last=source
 const compiled=kind=>({...rules.build(kind,{}),kind});
 function dialogSubmitHarness(kind,onSubmit){
     const createButton={disabled:false,matches:()=>false},closeButton={disabled:false,matches:()=>true},description={disabled:false};
-    const context=vm.createContext({kind,options:{isAlive:()=>true,onSubmit},models:[],modelSelect:{value:''},createButton,status:{textContent:''},p:{smartMode:true},busy:false,submitted:false,imageReady:true,isAngle:kind==='angle',sync:()=>compiled(kind)});
+    const context=createTaskContext({kind,options:{isAlive:()=>true,onSubmit},models:[],modelSelect:{value:''},createButton,status:{textContent:''},p:{smartMode:true},busy:false,submitted:false,imageReady:true,isAngle:kind==='angle',sync:()=>compiled(kind)});
     context.el={querySelectorAll:()=>[createButton,closeButton],querySelector:()=>description,remove:()=>{context.removed=true;}};
     context.dialog=context.el;
     vm.runInContext(section(shared,'function close(){','function dragParams('),context);
@@ -46,7 +47,7 @@ test('failed canvas save keeps its warning without creating again; submission er
 test('classic submit selects and centers an offscreen API card before saving',async()=>{
     const source={id:'source',type:'image',url:'original.png'},target={id:'api',x:50000,y:60000,w:380,h:508};
     let panel,focusPoint,saveCount=0;
-    const context=vm.createContext({nodes:[source],canvas:{id:'canvas'},CanvasViewAdjust:{configuredModels:()=>[],open:options=>{panel=options;}},imageApiProviders:()=>[],mediaKindForNode:()=> 'image',canvasDisplayMediaUrl:x=>x,createCanvasViewAdjustApiNode:()=>target,closeImageEditor:()=>{},nodeRect:n=>n,board:{getBoundingClientRect:()=>({width:1000,height:700})},viewport:{scale:4},safeViewportScale:n=>n,centerViewportOnWorldPoint:point=>{focusPoint=point;},scheduleViewportSave:()=>{},saveCanvas:async()=>{saveCount++;return true;},fetch:()=>assert.fail('must not generate')});
+    const context=createTaskContext({nodes:[source],canvas:{id:'canvas'},CanvasViewAdjust:{configuredModels:()=>[],open:options=>{panel=options;}},imageApiProviders:()=>[],mediaKindForNode:()=> 'image',canvasDisplayMediaUrl:x=>x,createCanvasViewAdjustApiNode:()=>target,closeImageEditor:()=>{},nodeRect:n=>n,board:{getBoundingClientRect:()=>({width:1000,height:700})},viewport:{scale:4},safeViewportScale:n=>n,centerViewportOnWorldPoint:point=>{focusPoint=point;},scheduleViewportSave:()=>{},saveCanvas:async()=>{saveCount++;return true;},fetch:()=>assert.fail('must not generate')});
     vm.runInContext(section(classic,'function openCanvasViewAdjustment(','function clampCrop('),context);
     vm.runInContext("openCanvasViewAdjustment('source','angle')",context);
     const result=await panel.onSubmit(compiled('angle'));
@@ -57,7 +58,7 @@ test('classic submit selects and centers an offscreen API card before saving',as
 test('smart submit centers the new API card and propagates a save failure',async()=>{
     const source={id:'source',images:[{url:'original.png'}]},target={id:'api',x:50000,y:60000,width:316,height:194};
     let panel,focusPoint;
-    const context=vm.createContext({nodes:[source],canvasId:'canvas',CanvasViewAdjust:{configuredModels:()=>[],open:options=>{panel=options;}},smartNodeToolbarImageIndex:()=>0,imageForDisplay:x=>x,mediaKindForItem:()=> 'image',imageProviders:()=>[],createSmartViewAdjustApiNode:()=>target,nodeRect:n=>n,shell:{clientWidth:1000,clientHeight:700},composer:{offsetHeight:300,offsetWidth:540},viewport:{scale:.1},safeScale:n=>n,centerViewportOnWorldPoint:point=>{focusPoint=point;},saveCanvas:async()=>false,fetch:()=>assert.fail('must not generate')});
+    const context=createTaskContext({nodes:[source],canvasId:'canvas',CanvasViewAdjust:{configuredModels:()=>[],open:options=>{panel=options;}},smartNodeToolbarImageIndex:()=>0,imageForDisplay:x=>x,mediaKindForItem:()=> 'image',imageProviders:()=>[],createSmartViewAdjustApiNode:()=>target,nodeRect:n=>n,shell:{clientWidth:1000,clientHeight:700},composer:{offsetHeight:300,offsetWidth:540},viewport:{scale:.1},safeScale:n=>n,centerViewportOnWorldPoint:point=>{focusPoint=point;},saveCanvas:async()=>false,fetch:()=>assert.fail('must not generate')});
     vm.runInContext(section(smart,'function openSmartViewAdjustment(','function duplicateSmartNodeMediaToCanvas('),context);
     vm.runInContext("openSmartViewAdjustment('source','lighting')",context);
     const result=await panel.onSubmit(compiled('lighting'));
@@ -95,7 +96,7 @@ test('scene dragging respects camera/skybox opposite pitch, bounds and wrapped l
     assert.equal(light.azimuth,20);assert.equal(light.elevation,90);
 });
 test('smart workflow import/copy remaps selected-image exclusions onto the new source node',()=>{
-    const context=vm.createContext({});
+    const context=createTaskContext({});
     vm.runInContext(section(smart,'function remapSmartViewAdjustRefs(','function createSmartViewAdjustApiNode('),context);
     context.node={viewAdjust:{sourceNodeId:'original'},blockedInputRefs:['original|0','original|2']};
     context.idMap=new Map([['original','copied']]);
@@ -106,8 +107,8 @@ test('smart workflow import/copy remaps selected-image exclusions onto the new s
 test('smart native request builder sends the selected image and edited prompt, excluding other images in the source node',()=>{
     const selectedPrompt='仅调整指定图片的光照，保留主体';
     const images=['first.png','selected.png','third.png'].map((url,imageIndex)=>({url,imageIndex,nodeId:'source',kind:'image'}));
-    const context=vm.createContext({settings:{engine:'api'},smartLoopContext:null,SMART_REFERENCE_IMAGE_MAX:20,
-        collectPromptParts:()=>[{type:'text',text:selectedPrompt}],originalPromptTextFromParts:()=>selectedPrompt,
+    const context=createTaskContext({settings:{engine:'api'},smartLoopContext:null,SMART_REFERENCE_IMAGE_MAX:20,
+        Node:{TEXT_NODE:3,ELEMENT_NODE:1},promptInput:{childNodes:[{nodeType:3,textContent:selectedPrompt}]},
         defaultReferenceImagesFor:()=>images,uniqueReferenceImages:x=>x,isSmartGroupNode:()=>false,inputPromptTextFor:()=>'',mediaKindForItem:()=> 'image'});
     vm.runInContext(section(smart,'function inputRefKey(','function manualReferenceImagesFor('),context);
     vm.runInContext(section(smart,'function buildPromptRequest(','function outgoingConnectionsFor('),context);
@@ -129,7 +130,7 @@ test('model selector takes only configured native API entries, including custom 
     assert.deepEqual(rules.configuredModels([],()=>assert.fail('no configured providers')),[]);
 });
 test('smart adjustment uses the native Jimeng image-edit exclusions for each provider',()=>{
-    const context=vm.createContext({settings:{provider_id:'another'},jimengImageEditMode:()=>false,isJimengProviderId:id=>id==='jimeng',JIMENG_IMAGE2IMAGE_UNSUPPORTED:['3.0','3.1']});
+    const context=createTaskContext({settings:{provider_id:'another'},jimengImageEditMode:()=>false,isJimengProviderId:id=>id==='jimeng',JIMENG_IMAGE2IMAGE_UNSUPPORTED:['3.0','3.1']});
     vm.runInContext(section(smart,'function filterJimengImageModels(','let _jimengLastEditMode'),context);
     assert.deepEqual([...vm.runInContext("filterJimengImageModels(['3.0','3.1','4.0'],'jimeng',true)",context)],['4.0']);
     assert.deepEqual([...vm.runInContext("filterJimengImageModels(['3.0','4.0'],'another',true)",context)],['3.0','4.0']);
@@ -137,7 +138,7 @@ test('smart adjustment uses the native Jimeng image-edit exclusions for each pro
 test('classic creates one native API node with editable prompt and original image connection, no generation request',()=>{
     const source={id:'source',type:'image',url:'original.png',x:20,y:50};
     let undo=0;
-    const context=vm.createContext({nodes:[source],connections:[],selected:new Set(),uid:prefix=>prefix+'-new',pushUndo:()=>undo++,render:()=>{},scheduleSave:()=>{},defaultApiImageResolution:()=> 'auto',imageApiProviders:()=>[{id:'own-api'}],allImageModels:()=>['own-editor-model'],nodeRect:n=>({x:n.x||0,y:n.y||0,w:320,h:440}),fetch:()=>assert.fail('must not submit a model request')});
+    const context=createTaskContext({nodes:[source],connections:[],selected:new Set(),uid:prefix=>prefix+'-new',pushUndo:()=>undo++,render:()=>{},scheduleSave:()=>{},defaultApiImageResolution:()=> 'auto',imageApiProviders:()=>[{id:'own-api'}],allImageModels:()=>['own-editor-model'],nodeRect:n=>({x:n.x||0,y:n.y||0,w:320,h:440}),fetch:()=>assert.fail('must not submit a model request')});
     vm.runInContext(section(classic,'function createCanvasViewAdjustApiNode(','function openCanvasViewAdjustment('),context);
     for(const kind of ['angle','lighting']){
         context.compiled=compiled(kind);context.source=source;
@@ -154,7 +155,7 @@ test('classic creates one native API node with editable prompt and original imag
 });
 test('classic existing generation input uses the inline edited prompt and original image, and survives serialization',()=>{
     const source={id:'source',type:'image',url:'original.png',name:'原图'},target={id:'api',type:'generator',viewAdjustPrompt:compiled('angle').prompt};
-    const context=vm.createContext({nodes:[source,target],connections:[{from:'source',to:'api'}],CANVAS_MEDIA_OUTPUT_TYPES:[],mediaKindForNode:()=> 'image'});
+    const context=createTaskContext({nodes:[source,target],connections:[{from:'source',to:'api'}],CANVAS_MEDIA_OUTPUT_TYPES:[],mediaKindForNode:()=> 'image'});
     vm.runInContext(section(classic,'function generatorSources(','function orderedSources('),context);
     context.target=JSON.parse(JSON.stringify(target));context.target.viewAdjustPrompt='编辑后的新角度提示词';
     const inputs=vm.runInContext('generatorSources(target)',context);
@@ -163,7 +164,7 @@ test('classic existing generation input uses the inline edited prompt and origin
 });
 test('smart creates a native API image node with selected source image, prompt draft, editable settings and no task',()=>{
     const source={id:'source',type:'smart-image',images:[{url:'first.png'},{url:'selected.png'},{url:'third.png'}]};
-    const context=vm.createContext({nodes:[source],pushUndo:()=>{},nodeRect:()=>({x:0,y:0,width:300,height:200}),imageForDisplay:x=>x,cloneSmartSettings:x=>({...x}),smartSettingsForNode:()=>({engine:'api',apiKind:'video',provider_id:'own-api',model:'own-editor-model',videoModel:'old-video'}),nextOutputPositionForSource:()=>({x:520,y:0}),EMPTY_UPLOAD_NODE_WIDTH:316,EMPTY_UPLOAD_NODE_HEIGHT:194,savePromptDraftForCurrent:()=>{},render:()=>{},scheduleSave:()=>{},selectedId:'source',selectedIds:[],selectedImage:{},activeComposerSubject:source,lastComposerNodeId:'source',fetch:()=>assert.fail('must not generate')});
+    const context=createTaskContext({nodes:[source],pushUndo:()=>{},nodeRect:()=>({x:0,y:0,width:300,height:200}),imageForDisplay:x=>x,cloneSmartSettings:x=>({...x}),smartSettingsForNode:()=>({engine:'api',apiKind:'video',provider_id:'own-api',model:'own-editor-model',videoModel:'old-video'}),nextOutputPositionForSource:()=>({x:520,y:0}),EMPTY_UPLOAD_NODE_WIDTH:316,EMPTY_UPLOAD_NODE_HEIGHT:194,savePromptDraftForCurrent:()=>{},render:()=>{},scheduleSave:()=>{},selectedId:'source',selectedIds:[],selectedImage:{},activeComposerSubject:source,lastComposerNodeId:'source',fetch:()=>assert.fail('must not generate')});
     context.createImageNodeAt=()=>{const node={id:'api',type:'smart-image',images:[]};context.nodes.push(node);return node;};
     context.connectInputNode=(from,to)=>{context.connection={from,to,kind:'input'};return true;};
     context.setPromptDraftForNode=(node,text)=>{node.promptDraftText=text;node.promptDraftHtml=text;};

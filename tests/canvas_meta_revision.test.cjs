@@ -1,8 +1,10 @@
+const {createTaskContext}=require('./canvas_task_test_helpers.cjs');
 const {test} = require('node:test');
 const assert = require('node:assert/strict');
 const {readFileSync} = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
+const {attachSaveState}=require('./canvas_save_test_helpers.cjs');
 
 const source = readFileSync(path.join(__dirname, '../static/js/canvas.js'), 'utf8');
 function section(begin, end){
@@ -16,11 +18,11 @@ test('classic canvas retries a same-time metadata conflict with the server title
     const sent = [];
     const nodes = [{id:'edited',type:'text'}];
     const currentCanvasTitle = {textContent:'旧标题'};
-    const context = vm.createContext({
+    const context = createTaskContext({
         canvas:{id:'isolated',title:'旧标题',icon:'layers',updated_at:2000,meta_revision:0,logs:[]},
         nodes, connections:[], viewport:{x:0,y:0,scale:1},
-        applyingRemoteCanvas:false, savingCanvasNow:false, saveCanvasAgain:false,
-        localCanvasDirty:true, lastCanvasUpdatedAt:2000, saveTimer:null,
+        applyingRemoteCanvas:false,
+        localCanvasDirty:true, lastCanvasUpdatedAt:2000,
         currentCanvasTitle, currentCanvasTime:{textContent:''}, CLIENT_ID:'test',
         window:{},document:{getElementById:()=>null},render(){},
         sanitizeConnections(){}, serializableCanvasNodes(){return nodes;},
@@ -42,6 +44,8 @@ test('classic canvas retries a same-time metadata conflict with the server title
             }})};
         }
     });
+    attachSaveState(context,'classic');
+    vm.runInContext(readFileSync(require('node:path').join(__dirname,'../static/js/canvas-save-transport.js'),'utf8'),context);
     vm.runInContext(readFileSync(path.join(__dirname,'../static/js/canvas-save-recovery.js'),'utf8'),context);
     vm.runInContext(section('let classicSaveBase = null;', 'async function saveCanvas(){'),context);
     vm.runInContext("rememberClassicSaveBase({id:'isolated',nodes:[{id:'original',type:'text'}],connections:[],updated_at:2000})",context);
@@ -58,14 +62,14 @@ test('classic canvas retries a same-time metadata conflict with the server title
     assert.equal(context.canvas.title, '新标题');
 });
 
-test('classic title and icon controls write metadata without sending whole canvas', async()=>{
+test('classic metadata writer updates title and icon without sending whole canvas', async()=>{
     const calls = [];
     const canvases = [{id:'isolated',title:'旧标题',icon:'layers',updated_at:2000}];
-    const context = vm.createContext({
+    const context = createTaskContext({
         canvas:{id:'isolated',title:'旧标题',icon:'layers',updated_at:2000,meta_revision:0},
         canvases,
         currentCanvasTitle:{textContent:'旧标题'},
-        sortCanvasListByUpdated(){}, renderCanvasList(){}, closeCanvasMetaPopover(){},
+        sortCanvasListByUpdated(){},
         updateCanvasListRecord(record){Object.assign(canvases[0],record);},
         setStatus(){}, tr:key=>key, loadCanvasList:async()=>{}, console,
         fetch:async(url, options)=>{
@@ -75,11 +79,9 @@ test('classic title and icon controls write metadata without sending whole canva
                 icon:patch.icon || context.canvas.icon,updated_at:2000,meta_revision:calls.length}})};
         }
     });
-    vm.runInContext(section('async function patchCanvasMeta(', 'function togglePinCanvas('), context);
-    vm.runInContext(section('async function setCanvasIcon(', 'function startTitleEdit('), context);
-    vm.runInContext(section('async function setCanvasTitle(', 'async function openCanvas('), context);
-    await vm.runInContext("setCanvasTitle('isolated','新标题')",context);
-    await vm.runInContext("setCanvasIcon('isolated','star')",context);
+    vm.runInContext(section('async function patchCanvasMeta(', 'function updateCanvasListRecord('), context);
+    await vm.runInContext("patchCanvasMeta('isolated',{title:'新标题'})",context);
+    await vm.runInContext("patchCanvasMeta('isolated',{icon:'star'})",context);
     assert.deepEqual(calls.map(call=>call.method), ['POST','POST']);
     assert.ok(calls.every(call=>call.url==='/api/canvases/isolated/meta'));
     assert.deepEqual(calls.map(call=>call.body), [{title:'新标题'},{icon:'star'}]);

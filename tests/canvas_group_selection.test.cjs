@@ -1,3 +1,4 @@
+const {createTaskContext}=require('./canvas_task_test_helpers.cjs');
 const {test} = require('node:test');
 const assert = require('node:assert/strict');
 const vm = require('node:vm');
@@ -11,7 +12,7 @@ function section(start, end) {
 }
 function editor(initialNodes, initialConnections = [], ids = []) {
     let serial = 0;
-    const context = vm.createContext({
+    const context = createTaskContext({
         nodes:structuredClone(initialNodes), connections:structuredClone(initialConnections),
         selected:new Set(ids), selectDrag:null, undoCount:0,
         ensureCanvas:() => true, uid:prefix => `${prefix}-${++serial}`,

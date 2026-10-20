@@ -1,0 +1,4 @@
+# Windows launchers must work independently of each developer's core.autocrlf.
+/run.bat text eol=crlf
+/安装依赖.bat text eol=crlf
+/检查核心流程.bat text eol=crlf

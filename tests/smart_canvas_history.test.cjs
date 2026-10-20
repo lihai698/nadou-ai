@@ -1,9 +1,11 @@
+const {createTaskContext}=require('./canvas_task_test_helpers.cjs');
 // Execute the production history functions and keyboard handler, without a DOM
 // or network. Browser rendering and persistence are checked separately in UI.
 const assert = require('node:assert/strict');
 const {readFileSync} = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
+const {attachSaveState}=require('./canvas_save_test_helpers.cjs');
 const {test} = require('node:test');
 
 const source = readFileSync(path.join(__dirname, '../static/js/smart-canvas.js'), 'utf8');
@@ -14,12 +16,13 @@ function section(start, end) {
     return source.slice(first, last);
 }
 function editor() {
-    const context = vm.createContext({});
+    const context = createTaskContext({});
+    attachSaveState(context,'smart');
     vm.runInContext(`
         let nodes = [{id:'prompt', type:'smart-prompt', text:'中文'}];
         let canvas = {connections:[]};
         let selectedId = 'prompt', selectedIds = [], selectedImage = {nodeId:'', index:-1};
-        let activeComposerSubject = null, lastComposerNodeId = '', saveTimer = null;
+        let activeComposerSubject = null, lastComposerNodeId = '';
         const imageEditModal = {classList:{contains:() => false}};
         const handlers = {};
         const window = {addEventListener:(name, fn) => {handlers[name] = fn;}};
@@ -30,8 +33,6 @@ function editor() {
         const render = () => {};
         const canvasId = 'test', canvasDefaultSmartSettings = {}, initialSmartSettings = {};
         const viewport = {}, smartClientId = 'test';
-        let canvasSyncInFlight = false;
-        let canvasSaveQueued = false;
         const savePromptDraftForCurrent = () => {};
         const stripImageGenerationMeta = value => value;
         const mediaItemForStorage = value => value;
@@ -49,6 +50,7 @@ function editor() {
     vm.runInContext(section('function invalidateSmartVideoDeconstruction(){', 'function initSmartVideoDeconstructionBridge(){'),context);
     vm.runInContext(section('const UNDO_LIMIT =', 'let comfyWorkflowCache ='), context);
     vm.runInContext(section('function scheduleSave(){', 'async function saveCanvas(){'), context);
+    vm.runInContext(readFileSync(require('node:path').join(__dirname,'../static/js/canvas-save-transport.js'),'utf8'),context);
     vm.runInContext(section('async function saveCanvas(){', 'function imageMetaFromNode('), context);
     vm.runInContext(section("window.addEventListener('keydown', e => {", "window.addEventListener('keyup',"), context);
     return {
@@ -186,13 +188,39 @@ test('a 409 without a usable server canvas stops retrying and keeps local edits'
     assert.equal(e.run('saveError.hidden'), false);
     assert.equal(e.run('nodes[0].text'), '本地文字');
     assert.equal(e.run('canvas.updated_at'), 10);
-    assert.equal(e.run('canvasSaveQueued'), false);
+    assert.equal(e.run('smartSaveSession.queued'), false);
     assert.equal(e.run('putCount'), 1);
     assert.equal(e.run('getCount'), 1);
 });
 function addLoop(e) {
     e.run("pushUndo(); nodes.push({id:'loop',type:'smart-loop',count:3}); selectedId='loop'; scheduleSave();");
 }
+
+test('smart retains the new edit draft until its queued snapshot is saved',async()=>{
+    const e=editor();
+    e.run(`
+        const draftEvents=[];
+        const SMART_LOG_PREVIEW_NODE_ID='log-preview';
+        const serializableSmartNode=node=>node;
+        window.CanvasSaveRecovery={
+            draftSnapshot:(doc,list)=>({...doc,nodes:list}),
+            saveDraft:(_kind,_id,_base,snapshot)=>draftEvents.push(['backup',snapshot.nodes[0].text]),
+            clearDraft:(kind,id)=>draftEvents.push(['clear',kind,id])
+        };
+        let completeDraftSave;
+        fetch=()=>new Promise(resolve=>{completeDraftSave=resolve;});
+    `);
+    const first=e.run('saveCanvas()');
+    e.run("nodes[0].text='保存期间的新草稿';scheduleSave();");
+    e.run('completeDraftSave({ok:true,json:async()=>({canvas:{updated_at:2,nodes:[]}})})');
+    assert.equal(await first,true);
+    assert.equal(e.run("draftEvents.filter(event=>event[0]==='clear').length"),0);
+    assert.equal(e.run("draftEvents.at(-1)[1]"),'保存期间的新草稿');
+    e.run('fetch=async()=>({ok:true,json:async()=>({canvas:{updated_at:3,nodes}})})');
+    assert.equal(await e.run('saveCanvas()'),true);
+    assert.equal(e.run("draftEvents.filter(event=>event[0]==='clear').length"),1);
+    assert.equal(e.run('nodes[0].text'),'保存期间的新草稿');
+});
 function connect(e) {
     e.run("pushUndo(); canvas.connections.push({from:'prompt',to:'loop'}); scheduleSave();");
 }

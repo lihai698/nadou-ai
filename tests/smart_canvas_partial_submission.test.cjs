@@ -1,3 +1,4 @@
+const {createTaskContext}=require('./canvas_task_test_helpers.cjs');
 const {test} = require('node:test');
 const assert = require('node:assert/strict');
 const vm = require('node:vm');
@@ -11,7 +12,7 @@ assert.ok(start >= 0 && end > start);
 
 function submission(responses){
     const calls = [];
-    const context = vm.createContext({
+    const context = createTaskContext({
         settings:{provider_id:'mock',model:'mock-image',count:responses.length,ratio:'square',resolution:'1k'},
         tr:key=>key,
         sizeForRun:()=> '1024x1024',
@@ -74,7 +75,7 @@ function taskState(saveResult){
     const node={id:'output',pendingTasks:[]};
     const notices=[];
     let saves=0, renders=0, scheduled=0, queries=0;
-    const context=vm.createContext({
+    const context=createTaskContext({
         saveCanvas:async()=>{saves++;return saveResult;},
         smartPendingTasks:node=>(node.pendingTasks || []).filter(task=>task.taskId),
         render:()=>{renders++;}, scheduleSave:()=>{scheduled++;},
@@ -153,7 +154,7 @@ test('manual query waits for a successful save when a task ID is not yet persist
     const task={taskId:'accepted-1',queryPaused:true,savePending:true};
     const node={id:'output',pendingTasks:[task]};
     let saved=false, queried=0, saves=0;
-    const context=vm.createContext({
+    const context=createTaskContext({
         nodes:[node], smartPendingTasks:node=>node.pendingTasks,
         smartRecoverableImageTask:()=>task,
         saveCanvas:async()=>{saves++;return saved;},

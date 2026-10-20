@@ -1,3 +1,4 @@
+const {createTaskContext}=require('./canvas_task_test_helpers.cjs');
 const {test} = require('node:test');
 const assert = require('node:assert/strict');
 const vm = require('node:vm');
@@ -12,7 +13,7 @@ function editor(responses){
     const out = {_pending:[pending]};
     const gen = {id:'gen',running:true};
     const calls=[], delays=[], completed=[], failed=[];
-    const context = vm.createContext({
+    const context = createTaskContext({
         activeCanvasTaskPolls:new Set(),nodes:[gen,out],
         findPendingTask:()=>out._pending.length ? {out,pending} : null,
         cascadeFetch:async (url,init)=>{calls.push({url,init}); const r=responses.shift(); if(r instanceof Error) throw r; if(!r) throw new Error('Unexpected extra request'); return {ok:r.status===200,status:r.status,json:async()=>r.data};},
@@ -32,7 +33,7 @@ function imageRefreshEditor(response){
     const out={_pending:[pending]};
     const gen={id:'gen'};
     const calls=[],completed=[];
-    const context=vm.createContext({
+    const context=createTaskContext({
         nodes:[gen,out],findPendingTask:()=>({out,pending}),pendingById:()=>out._pending.find(item=>item.id==='p'),
         cascadeTargetIdFromOptions:o=>o?.cascadeTargetId || '',cascadeFetch:async(url,init)=>{calls.push({url,init});return {ok:true,status:200,json:async()=>response};},
         responseErrorMessage:async()=> 'refresh failed',refreshRunNodes:()=>{},scheduleSave:()=>{},
@@ -61,7 +62,7 @@ function directBatch(results){
     const gen={id:'gen',type:'generator',x:100,y:100},next={id:'next',type:'generator'};
     const nodes=[gen,next],connections=[{from:'gen',to:'next'}],saved=[],completed=[];
     let serial=0;
-    const ctx=vm.createContext({nodes,connections,
+    const ctx=createTaskContext({nodes,connections,
         uid:prefix=>prefix+(++serial),makePendingForRun:(id,run,node,options,task)=>({id,run,...task}),
         saveCanvas:async()=>saved.push(JSON.parse(JSON.stringify(nodes))),scheduleSave:()=>{},render:()=>{},refreshRunNodes:()=>{},
         isCascadeAbortError:e=>e.name==='CascadeAbort',tr:x=>x,
@@ -109,9 +110,9 @@ test('a terminal-only direct batch clears its saved records without creating a r
     assert.equal(e.nodes.length,2);assert.equal(e.gen._directPending?.length || 0,0);
 });
 test('upstream recovery switches a direct recovery card away from local-query pause',()=>{
-    const pending={id:'p',queryPaused:true,run:{node:{id:'gen'}}};
-    const gen={id:'gen'},out={_pending:[pending]};
-    const ctx=vm.createContext({nodes:[gen,out],findPendingTask:()=>({out,pending}),
+    const pending={id:'p',canvasTaskId:'one',queryPaused:true,run:{node:{id:'gen'}}};
+    const gen={id:'gen'},out={type:'output',_pending:[pending]};
+    const ctx=createTaskContext({nodes:[gen,out],findPendingTask:()=>({out,pending}),
         nowMs:()=>1,extractUpstreamTaskId:()=>'',providerIdForPending:()=> 'mock',
         addGenerationLog:()=>{},refreshRunNodes:()=>{},scheduleSave:()=>{},tr:x=>x});
     const begin=source.indexOf('function failCanvasImageTask(');
@@ -124,7 +125,7 @@ test('upstream recovery switches a direct recovery card away from local-query pa
 function directWait(responses){
     const calls=[],delays=[];
     let cancelled=false;
-    const context=vm.createContext({
+    const context=createTaskContext({
         cascadeTargetIdFromOptions:o=>o.cascadeTargetId || '',
         ensureCascadeActive:()=>{if(cancelled){const error=new Error('cancelled');error.name='CascadeAbort';throw error;}},
         isCascadeAbortError:e=>e.name==='CascadeAbort',
@@ -193,10 +194,10 @@ test('persistent outage pauses without discarding pending; manual query can reco
     assert.equal(await e.run(),'succeeded'); assert.equal(e.completed.length,1);
 });
 test('a resumed query remains protected from the older batch catch cleanup',()=>{
-    const filters=source.match(/remainingPending\.filter\(p => [^\n]+/g);
+    const filters=(source+'\n'+readFileSync(path.join(__dirname,'../static/js/canvas-media-runner.js'),'utf8')+'\n'+readFileSync(path.join(__dirname,'../static/js/canvas-provider-runner.js'),'utf8')).match(/remainingPending\.filter\(p => [^\n]+/g);
     assert.equal(filters.length,2);
     for(const filter of filters){
-        const context=vm.createContext({remainingPending:[
+        const context=createTaskContext({remainingPending:[
             {id:'resume',canvasTaskId:'accepted',queryPaused:false,queryRecoverable:true},
             {id:'ordinary'},
         ]});

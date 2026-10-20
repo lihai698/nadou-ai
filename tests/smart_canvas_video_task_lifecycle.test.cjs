@@ -1,3 +1,4 @@
+const {createTaskContext}=require('./canvas_task_test_helpers.cjs');
 const {test} = require('node:test');
 const assert = require('node:assert/strict');
 const vm = require('node:vm');
@@ -18,7 +19,7 @@ function harness(replies){
     const runState = {submissionUnknown:false};
     const calls = [];
     let disk = null;
-    const context = vm.createContext({
+    const context = createTaskContext({
         node, settings, runState, nodes:[node], transientSmartCloudLinks:[],
         render:()=>{}, scheduleSave:()=>{disk = JSON.parse(JSON.stringify(node));},
         saveCanvas:async()=>{calls.push('PUT'); disk = JSON.parse(JSON.stringify(node)); return true;},

@@ -1,3 +1,4 @@
+const {createTaskContext}=require('./canvas_task_test_helpers.cjs');
 const {test} = require('node:test');
 const assert = require('node:assert/strict');
 const vm = require('node:vm');
@@ -13,7 +14,7 @@ const videoQueryCode = source.slice(begin, end);
 function harness(replies){
     const calls = [];
     const delays = [];
-    const context = vm.createContext({
+    const context = createTaskContext({
         findPendingTask:()=>null,
         cascadeTargetIdFromOptions:options => options?.cascadeTargetId || '',
         cascadeFetch:async (url, init={}) => {

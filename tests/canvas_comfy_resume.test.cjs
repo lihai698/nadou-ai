@@ -1,3 +1,4 @@
+const {createTaskContext}=require('./canvas_task_test_helpers.cjs');
 const {test} = require('node:test');
 const assert = require('node:assert/strict');
 const vm = require('node:vm');
@@ -20,8 +21,8 @@ function classicEditor(saved, replies, saveOk=true){
         {id:'output', type:'output', images:[], _pending:[{id:'pending', startedAt:1, run:{node:{id:'generator'}, refs:[]}}]},
     ];
     let disk = saved ? clone(saved) : null;
-    const context = vm.createContext({
-        nodes, activeCanvasComfyTaskPolls:new Set(),
+    const context = createTaskContext({
+        nodes, activeCanvasComfyTaskPolls:new Set(),outputUrlValue:x=>typeof x==='string'?x:x.url,mediaKindForOutputItem:()=> 'image',outputNodesForSource:()=>[nodes[1]],CANVAS_MEDIA_OUTPUT_TYPES:['comfy'],
         cascadeFetch:async url=>{
             calls.push(url);
             if(url === '/api/canvas-comfy-tasks') return {ok:true, status:200, json:async()=>({task_id:'accepted'})};
@@ -68,7 +69,7 @@ test('classic: accepted ComfyUI ID survives reload and resumes only GET', async(
     const reloaded = classicEditor(initial.saved(), [{status:200, data:{status:'succeeded', result:{images:['done.png']}}}]);
     await reloaded.resume();
     assert.deepEqual(reloaded.calls, ['/api/canvas-comfy-tasks/accepted']);
-    assert.deepEqual(reloaded.nodes[1].images, ['done.png']);
+    assert.deepEqual(Array.from(reloaded.nodes[1].images,x=>x.url), ['done.png']);
     assert.equal(reloaded.nodes[1]._pending.length, 0);
 });
 
@@ -120,7 +121,7 @@ function smartEditor(saved, replies, saveOk=true){
     const calls = [];
     const nodes = saved ? clone(saved.nodes) : [{id:'output',type:'smart-image',images:[]}];
     let disk = saved ? clone(saved) : null;
-    const context = vm.createContext({
+    const context = createTaskContext({
         nodes, activeSmartComfyTaskPolls:new Set(),
         fetch:async url=>{
             calls.push(url);
@@ -130,8 +131,8 @@ function smartEditor(saved, replies, saveOk=true){
             return {ok:reply.status === 200, status:reply.status, json:async()=>reply.data || {}, text:async()=>reply.message || ''};
         },
         smartPendingTasks:node=>(node?.pendingTasks || []).filter(item=>item?.taskId),
-        saveSmartAcceptedTasksBeforeQuery:async(node)=>{
-            if(!saveOk){node.pendingTasks[0].savePending = true; return false;}
+        saveCanvas:async()=>{
+            if(!saveOk) return false;
             disk = {nodes:clone(nodes)};
             return true;
         },

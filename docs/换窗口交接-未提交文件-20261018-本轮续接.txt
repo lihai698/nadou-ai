@@ -1,0 +1,468 @@
+2026-10-18 本轮续接停止开发后的未提交文件清单
+生成时间：2026-10-18T14:17:14
+仓库：F:/nadou-ai-源码-20261017-ddf9c27/nadou-ai-source-20261017/nadou-ai-source-20261017
+HEAD：ddf9c2741702b570754cab4e36a9155cf2b9f9b8
+已跟踪且有改动：69；未跟踪文件：390；合计：459
+原交接379项路径全部仍在未提交清单，缺失0项；这不是字节不变声明，相关源码已继续模块化。
+命令：git -c core.quotepath=false status --porcelain=v1 -z --untracked-files=all
+不包含ignored文件（例如.git/modularization和部分output证据）。不是提交清单，不授权提交上传。
+
+ M .github/workflows/core-checks.yml
+ M backend/canvas_records.py
+ M backend/project_records.py
+ M backend/runninghub_protocol.py
+ M docs/功能地图与数据清单.md
+ M main.py
+ M run.bat
+ M skills/canvas-assistant/project-knowledge/index.json
+ M static/canvas.html
+ M static/js/canvas-save-recovery.js
+ M static/js/canvas.js
+ M static/js/smart-canvas.js
+ M static/smart-canvas.html
+ M tests/canvas_alt_group_copy.test.cjs
+ M tests/canvas_assistant_generation.test.cjs
+ M tests/canvas_assistant_knowledge.test.cjs
+ M tests/canvas_assistant_loop.test.cjs
+ M tests/canvas_assistant_native.test.cjs
+ M tests/canvas_assistant_story.test.cjs
+ M tests/canvas_assistant_video_run.test.cjs
+ M tests/canvas_audio_node.test.cjs
+ M tests/canvas_classic_story.test.cjs
+ M tests/canvas_clip_integration.test.cjs
+ M tests/canvas_comfy_polling.test.cjs
+ M tests/canvas_comfy_resume.test.cjs
+ M tests/canvas_complex_groups.test.cjs
+ M tests/canvas_group_selection.test.cjs
+ M tests/canvas_meta_revision.test.cjs
+ M tests/canvas_multi_page_save.test.cjs
+ M tests/canvas_native_shortcuts.test.cjs
+ M tests/canvas_partial_submission.test.cjs
+ M tests/canvas_save_recovery.test.cjs
+ M tests/canvas_smart_video_deconstruction.test.cjs
+ M tests/canvas_task_polling.test.cjs
+ M tests/canvas_upload_errors.test.cjs
+ M tests/canvas_video_deconstruction_integration.test.cjs
+ M tests/canvas_video_task_refresh.test.cjs
+ M tests/canvas_view_adjust.test.cjs
+ M tests/canvas_workflow_roundtrip.test.cjs
+ M tests/local_asset_delete_status.test.cjs
+ M tests/smart_canvas_history.test.cjs
+ M tests/smart_canvas_partial_submission.test.cjs
+ M tests/smart_canvas_pending_backup.test.cjs
+ M tests/smart_canvas_restart_boundary.test.cjs
+ M tests/smart_canvas_return_save.test.cjs
+ M tests/smart_canvas_task_polling.test.cjs
+ M tests/smart_canvas_unknown_resubmit.test.cjs
+ M tests/smart_canvas_video_recovery.test.cjs
+ M tests/smart_canvas_video_task_lifecycle.test.cjs
+ M tests/smart_canvas_video_unknown.test.cjs
+ M tests/smart_prompt_template_flow.test.cjs
+ M tests/test_audio_model_discovery.py
+ M tests/test_canvas_assistant_midjourney.py
+ M tests/test_canvas_assistant_workflow_fields.py
+ M tests/test_canvas_audio_routes.py
+ M tests/test_canvas_baseline.py
+ M tests/test_canvas_clear.py
+ M tests/test_canvas_concurrent_save.py
+ M tests/test_canvas_log_cleanup.py
+ M tests/test_canvas_meta_route_concurrency.py
+ M tests/test_canvas_records.py
+ M tests/test_canvas_task_lifecycle.py
+ M tests/test_canvas_video_cross_process.py
+ M tests/test_canvas_video_lifecycle.py
+ M tests/test_data_format_migration.py
+ M tests/test_project_records.py
+ M tests/test_task_record_cleanup.py
+ M 安装依赖.bat
+ M 检查核心流程.bat
+?? .gitattributes
+?? PROJECT_STATE-模块化接续.md
+?? backend/asset_library_files.py
+?? backend/asset_library_index.py
+?? backend/asset_library_service.py
+?? backend/avatar_asset_service.py
+?? backend/canvas_audio_service.py
+?? backend/canvas_store.py
+?? backend/canvas_task_service.py
+?? backend/canvas_video_task_service.py
+?? backend/chat_attachment_service.py
+?? backend/chat_execution_service.py
+?? backend/codex_cli_service.py
+?? backend/comfy_generation_service.py
+?? backend/comfy_output_service.py
+?? backend/comfy_workflow_service.py
+?? backend/conversation_service.py
+?? backend/gemini_cli_service.py
+?? backend/generation_output_service.py
+?? backend/image_provider_service.py
+?? backend/image_result_service.py
+?? backend/jimeng_execution_service.py
+?? backend/jimeng_provider_protocol.py
+?? backend/local_asset_service.py
+?? backend/media_cleanup_service.py
+?? backend/media_reference_service.py
+?? backend/media_storage_service.py
+?? backend/midjourney_service.py
+?? backend/project_service.py
+?? backend/project_store.py
+?? backend/prompt_library_service.py
+?? backend/provider_media_transfer.py
+?? backend/provider_probe_service.py
+?? backend/provider_registry_service.py
+?? backend/responses_service.py
+?? backend/runninghub_app_service.py
+?? backend/runninghub_config_service.py
+?? backend/runninghub_fields.py
+?? backend/runninghub_openapi.py
+?? backend/shared_folder_service.py
+?? backend/tudou_provider_service.py
+?? backend/upload_service.py
+?? backend/upstream_public_policy.py
+?? backend/upstream_response_codec.py
+?? backend/video_provider_service.py
+?? backend/workflow_archive_service.py
+?? docs/Codex命令行执行迁移验收-20261018.md
+?? docs/Comfy工作流管理迁移验收-20261018.md
+?? docs/Comfy生成输出迁移验收-20261018.md
+?? docs/Gemini命令行执行迁移验收-20261018.md
+?? docs/Midjourney协议迁移验收-20261018.md
+?? docs/Responses图片协议迁移验收-20261018.md
+?? docs/RunningHub应用与工作流执行迁移验收-20261018.md
+?? docs/RunningHub标准接口迁移验收-20261018.md
+?? docs/RunningHub配置管理迁移验收-20261018.md
+?? docs/superpowers/plans/2026-10-17-baseline-and-canvas-records.md
+?? docs/superpowers/plans/2026-10-17-canvas-draft-state.md
+?? docs/superpowers/plans/2026-10-17-canvas-remote-sync.md
+?? docs/superpowers/plans/2026-10-17-canvas-save-scheduler.md
+?? docs/superpowers/plans/2026-10-17-canvas-save-session.md
+?? docs/superpowers/plans/2026-10-17-canvas-save-transport.md
+?? docs/superpowers/plans/2026-10-17-project-management.md
+?? docs/superpowers/plans/2026-10-17-project-modularization.md
+?? docs/superpowers/plans/2026-10-17-project-store.md
+?? docs/superpowers/plans/2026-10-18-accepted-task-recovery.md
+?? docs/superpowers/plans/2026-10-18-asset-library-files.md
+?? docs/superpowers/plans/2026-10-18-asset-library-index.md
+?? docs/superpowers/plans/2026-10-18-asset-library-service.md
+?? docs/superpowers/plans/2026-10-18-asset-panel-modules.md
+?? docs/superpowers/plans/2026-10-18-avatar-asset-service.md
+?? docs/superpowers/plans/2026-10-18-canvas-log-modules.md
+?? docs/superpowers/plans/2026-10-18-chat-execution-service.md
+?? docs/superpowers/plans/2026-10-18-classic-cascade.md
+?? docs/superpowers/plans/2026-10-18-classic-generation.md
+?? docs/superpowers/plans/2026-10-18-classic-views.md
+?? docs/superpowers/plans/2026-10-18-comfy-generation-service.md
+?? docs/superpowers/plans/2026-10-18-comfy-workflow-service.md
+?? docs/superpowers/plans/2026-10-18-connection-layer.md
+?? docs/superpowers/plans/2026-10-18-conversation-service.md
+?? docs/superpowers/plans/2026-10-18-editor-draw-text.md
+?? docs/superpowers/plans/2026-10-18-editor-grid.md
+?? docs/superpowers/plans/2026-10-18-frontend-prompt-templates.md
+?? docs/superpowers/plans/2026-10-18-gemini-cli-service.md
+?? docs/superpowers/plans/2026-10-18-generator-input.md
+?? docs/superpowers/plans/2026-10-18-graph-rules.md
+?? docs/superpowers/plans/2026-10-18-image-editor.md
+?? docs/superpowers/plans/2026-10-18-image-provider-service.md
+?? docs/superpowers/plans/2026-10-18-image-task-entry.md
+?? docs/superpowers/plans/2026-10-18-jimeng-protocol-execution.md
+?? docs/superpowers/plans/2026-10-18-layout.md
+?? docs/superpowers/plans/2026-10-18-legacy-canvas-list-cleanup.md
+?? docs/superpowers/plans/2026-10-18-local-asset-service.md
+?? docs/superpowers/plans/2026-10-18-media-cleanup-service.md
+?? docs/superpowers/plans/2026-10-18-media-preview.md
+?? docs/superpowers/plans/2026-10-18-media-storage-service.md
+?? docs/superpowers/plans/2026-10-18-midjourney-service.md
+?? docs/superpowers/plans/2026-10-18-navigation-coordinator.md
+?? docs/superpowers/plans/2026-10-18-node-edit.md
+?? docs/superpowers/plans/2026-10-18-node-params.md
+?? docs/superpowers/plans/2026-10-18-open-coordinator.md
+?? docs/superpowers/plans/2026-10-18-output-views.md
+?? docs/superpowers/plans/2026-10-18-prompt-library-service.md
+?? docs/superpowers/plans/2026-10-18-provider-config.md
+?? docs/superpowers/plans/2026-10-18-provider-registry.md
+?? docs/superpowers/plans/2026-10-18-remaining-generation.md
+?? docs/superpowers/plans/2026-10-18-runninghub-config-service.md
+?? docs/superpowers/plans/2026-10-18-save-coordinator.md
+?? docs/superpowers/plans/2026-10-18-shared-folder-service.md
+?? docs/superpowers/plans/2026-10-18-smart-assistant-execution.md
+?? docs/superpowers/plans/2026-10-18-smart-cascade.md
+?? docs/superpowers/plans/2026-10-18-smart-mentions.md
+?? docs/superpowers/plans/2026-10-18-smart-params.md
+?? docs/superpowers/plans/2026-10-18-smart-pointer.md
+?? docs/superpowers/plans/2026-10-18-smart-prompt-presets.md
+?? docs/superpowers/plans/2026-10-18-smart-views.md
+?? docs/superpowers/plans/2026-10-18-task-runtime.md
+?? docs/superpowers/plans/2026-10-18-task-transport.md
+?? docs/superpowers/plans/2026-10-18-text-selection.md
+?? docs/superpowers/plans/2026-10-18-tudou-provider-service.md
+?? docs/superpowers/plans/2026-10-18-upload-service.md
+?? docs/superpowers/plans/2026-10-18-upstream-codec.md
+?? docs/superpowers/plans/2026-10-18-video-provider-service.md
+?? docs/superpowers/plans/2026-10-18-viewport.md
+?? docs/superpowers/plans/2026-10-18-workflow-archive-service.md
+?? docs/superpowers/plans/2026-10-18-workflow-config.md
+?? docs/superpowers/plans/2026-10-18-workflow-params.md
+?? docs/superpowers/plans/2026-10-18-workflow-transfer.md
+?? docs/上传执行服务迁移验收-20261018.md
+?? docs/上游响应解析迁移验收-20261018.md
+?? docs/两画布保存协调迁移验收-20261018.md
+?? docs/两画布打开载入协调迁移验收-20261018.md
+?? docs/两画布提示词模板迁移验收-20261018.md
+?? docs/两画布日志迁移验收-20261018.md
+?? docs/两画布素材面板迁移验收-20261018.md
+?? docs/两画布返回清空协调迁移验收-20261018.md
+?? docs/两画布远端状态应用迁移验收-20261018.md
+?? docs/两画布连线显示迁移验收-20261018.md
+?? docs/任务记录与图片执行模块迁移验收-20261018.md
+?? docs/全景与媒体预览迁移验收-20261018.md
+?? docs/公开错误策略迁移验收-20261018.md
+?? docs/共享目录职责迁移验收-20261018.md
+?? docs/剩余前端生成执行迁移验收-20261018.md
+?? docs/即梦协议与执行迁移验收-20261018.md
+?? docs/图片任务入口恢复迁移验收-20261018.md
+?? docs/图片供应商执行迁移验收-20261018.md
+?? docs/图片结果协调迁移验收-20261018.md
+?? docs/图片编辑基础链路迁移验收-20261018.md
+?? docs/土豆图片视频迁移验收-20261018.md
+?? docs/媒体引用清理迁移验收-20261018.md
+?? docs/媒体引用附件与输出迁移验收-20261018.md
+?? docs/媒体预览存储迁移验收-20261018.md
+?? docs/宫格切分与拼接迁移验收-20261018.md
+?? docs/对话历史存储迁移验收-20261018.md
+?? docs/工作流参数职责迁移验收-20261018.md
+?? docs/工作流导入导出迁移验收-20261018.md
+?? docs/工作流归档迁移验收-20261018.md
+?? docs/工作流配置加载迁移验收-20261018.md
+?? docs/布局与交互职责迁移验收-20261018.md
+?? docs/平台探测模型发现迁移验收-20261018.md
+?? docs/平台注册配置迁移验收-20261018.md
+?? docs/换电脑接续开发说明-20261017.md
+?? docs/换窗口交接-20261018-本轮续接.md
+?? docs/换窗口交接-20261018.md
+?? docs/换窗口交接-未提交文件-20261018-本轮续接.txt
+?? docs/换窗口交接-未提交文件-20261018.txt
+?? docs/提示词库模板迁移验收-20261018.md
+?? docs/文字选择状态与监听生命周期验收-20261018.md
+?? docs/旧画布列表展示清理验收-20261018.md
+?? docs/普通平台模型配置迁移验收-20261018.md
+?? docs/普通画布文档协调迁移验收-20261018.md
+?? docs/普通画布生成输入迁移验收-20261018.md
+?? docs/普通画布直接生成迁移验收-20261018.md
+?? docs/普通画布级联执行迁移验收-20261018.md
+?? docs/普通节点视图迁移验收-20261018.md
+?? docs/普通输出视图迁移验收-20261018.md
+?? docs/智能主鼠标事件迁移验收-20261018.md
+?? docs/智能任务恢复控制迁移验收-20261018.md
+?? docs/智能助手原生执行迁移验收-20261018.md
+?? docs/智能参数面板迁移验收-20261018.md
+?? docs/智能平台模型配置迁移验收-20261018.md
+?? docs/智能引用选择迁移验收-20261018.md
+?? docs/智能画布级联执行迁移验收-20261018.md
+?? docs/智能节点视图迁移验收-20261018.md
+?? docs/智能预设兼容层迁移验收-20261018.md
+?? docs/本地素材职责迁移验收-20261018.md
+?? docs/模块化第七轮草稿状态-20261017.md
+?? docs/模块化第三轮项目管理-20261017.md
+?? docs/模块化第九轮同步生命周期-20261018.md
+?? docs/模块化第二轮项目存储-20261017.md
+?? docs/模块化第五轮保存排队状态-20261017.md
+?? docs/模块化第八轮远端同步-20261018.md
+?? docs/模块化第六轮自动保存调度-20261017.md
+?? docs/模块化第十一轮保存中切换保护-20261018.md
+?? docs/模块化第十三轮视频晚回包-20261018.md
+?? docs/模块化第十二轮清空部分成功恢复-20261018.md
+?? docs/模块化第十轮画布加载归属-20261018.md
+?? docs/模块化第四轮画布保存通信-20261017.md
+?? docs/模块化职责与验收清单-20261018.md
+?? docs/模块化首轮与检查基线-20261017.md
+?? docs/画布任务结果与恢复执行迁移验收-20261018.md
+?? docs/画布任务通信迁移验收-20261018.md
+?? docs/画布图结构规则迁移验收-20261018.md
+?? docs/画布存储模块迁移验收-20261018.md
+?? docs/画布已受理任务恢复迁移验收-20261018.md
+?? docs/画笔文字与历史迁移验收-20261018.md
+?? docs/素材业务协调迁移验收-20261018.md
+?? docs/素材平台注册迁移验收-20261018.md
+?? docs/素材文件基础迁移验收-20261018.md
+?? docs/素材索引迁移验收-20261018.md
+?? docs/聊天执行迁移验收-20261018.md
+?? docs/节点尺寸参数规则迁移验收-20261018.md
+?? docs/节点编辑职责迁移验收-20261018.md
+?? docs/视口与小地图迁移验收-20261018.md
+?? docs/视频任务完整生命周期迁移验收-20261018.md
+?? docs/视频总入口查询迁移验收-20261018.md
+?? docs/输入展示与提示词组装迁移验收-20261018.md
+?? docs/输出回填与历史协调迁移验收-20261018.md
+?? docs/音频任务接入与执行迁移验收-20261018.md
+?? static/js/canvas-accepted-task-recovery.js
+?? static/js/canvas-asset-panel.js
+?? static/js/canvas-cascade-runner.js
+?? static/js/canvas-cascade-state.js
+?? static/js/canvas-comfy-runner.js
+?? static/js/canvas-connection-layer.js
+?? static/js/canvas-direct-tasks.js
+?? static/js/canvas-document-management.js
+?? static/js/canvas-editor-draw.js
+?? static/js/canvas-editor-grid.js
+?? static/js/canvas-editor-text.js
+?? static/js/canvas-generation-view.js
+?? static/js/canvas-generator-input.js
+?? static/js/canvas-graph-rules.js
+?? static/js/canvas-group-edit.js
+?? static/js/canvas-image-editor.js
+?? static/js/canvas-image-params.js
+?? static/js/canvas-input-view.js
+?? static/js/canvas-interaction.js
+?? static/js/canvas-layout.js
+?? static/js/canvas-llm-runner.js
+?? static/js/canvas-log.js
+?? static/js/canvas-media-runner.js
+?? static/js/canvas-midjourney-runner.js
+?? static/js/canvas-navigation.js
+?? static/js/canvas-node-edit.js
+?? static/js/canvas-node-params.js
+?? static/js/canvas-node-view.js
+?? static/js/canvas-open-coordinator.js
+?? static/js/canvas-output-edit.js
+?? static/js/canvas-output-preview.js
+?? static/js/canvas-output-recovery.js
+?? static/js/canvas-output-view.js
+?? static/js/canvas-prompt-template.js
+?? static/js/canvas-provider-config.js
+?? static/js/canvas-provider-runner.js
+?? static/js/canvas-remote-application.js
+?? static/js/canvas-remote-sync.js
+?? static/js/canvas-save-coordinator.js
+?? static/js/canvas-save-scheduler.js
+?? static/js/canvas-save-session.js
+?? static/js/canvas-save-transport.js
+?? static/js/canvas-task-results.js
+?? static/js/canvas-task-runtime.js
+?? static/js/canvas-task-transport.js
+?? static/js/canvas-text-selection.js
+?? static/js/canvas-text-view.js
+?? static/js/canvas-viewport.js
+?? static/js/canvas-workflow-config.js
+?? static/js/canvas-workflow-params.js
+?? static/js/canvas-workflow-transfer.js
+?? static/js/canvas-workflow-view.js
+?? static/js/smart-api-runner.js
+?? static/js/smart-asset-import.js
+?? static/js/smart-asset-model.js
+?? static/js/smart-asset-panel.js
+?? static/js/smart-assistant-execution.js
+?? static/js/smart-cascade-runner.js
+?? static/js/smart-cascade-state.js
+?? static/js/smart-cascade-steps.js
+?? static/js/smart-comfy-runner.js
+?? static/js/smart-connection-edit.js
+?? static/js/smart-connection-layer.js
+?? static/js/smart-direct-tasks.js
+?? static/js/smart-editor-draw.js
+?? static/js/smart-editor-grid.js
+?? static/js/smart-editor-text.js
+?? static/js/smart-generation-runner.js
+?? static/js/smart-group-edit.js
+?? static/js/smart-image-editor.js
+?? static/js/smart-input-thumbs.js
+?? static/js/smart-layout.js
+?? static/js/smart-log.js
+?? static/js/smart-media-preview.js
+?? static/js/smart-mentions.js
+?? static/js/smart-navigation.js
+?? static/js/smart-node-bindings.js
+?? static/js/smart-node-body.js
+?? static/js/smart-node-edit.js
+?? static/js/smart-node-params.js
+?? static/js/smart-node-view.js
+?? static/js/smart-open-coordinator.js
+?? static/js/smart-output-coordination.js
+?? static/js/smart-panorama.js
+?? static/js/smart-param-bindings.js
+?? static/js/smart-param-controls.js
+?? static/js/smart-param-state.js
+?? static/js/smart-param-view.js
+?? static/js/smart-pointer-events.js
+?? static/js/smart-prompt-presets.js
+?? static/js/smart-prompt-request.js
+?? static/js/smart-prompt-template.js
+?? static/js/smart-provider-config.js
+?? static/js/smart-provider-runner.js
+?? static/js/smart-remote-application.js
+?? static/js/smart-save-coordinator.js
+?? static/js/smart-selection.js
+?? static/js/smart-task-recovery-control.js
+?? static/js/smart-viewport.js
+?? static/js/smart-workflow-config.js
+?? static/js/smart-workflow-params.js
+?? static/js/smart-workflow-transfer.js
+?? tests/asset_panel_modules.test.cjs
+?? tests/canvas_accepted_task_recovery.test.cjs
+?? tests/canvas_cascade_modules.test.cjs
+?? tests/canvas_clear_recovery.test.cjs
+?? tests/canvas_connection_layer.test.cjs
+?? tests/canvas_document_management.test.cjs
+?? tests/canvas_draft_state.test.cjs
+?? tests/canvas_generation_modules.test.cjs
+?? tests/canvas_generator_input_module.test.cjs
+?? tests/canvas_graph_rules.test.cjs
+?? tests/canvas_input_presentation.test.cjs
+?? tests/canvas_layout_modules.test.cjs
+?? tests/canvas_log_modules.test.cjs
+?? tests/canvas_node_params.test.cjs
+?? tests/canvas_open_lifecycle.test.cjs
+?? tests/canvas_output_coordination.test.cjs
+?? tests/canvas_output_views.test.cjs
+?? tests/canvas_provider_config.test.cjs
+?? tests/canvas_remote_application.test.cjs
+?? tests/canvas_remote_sync.test.cjs
+?? tests/canvas_save_scheduler.test.cjs
+?? tests/canvas_save_session.test.cjs
+?? tests/canvas_save_test_helpers.cjs
+?? tests/canvas_save_transport.test.cjs
+?? tests/canvas_task_runtime.test.cjs
+?? tests/canvas_task_test_helpers.cjs
+?? tests/canvas_task_transport.test.cjs
+?? tests/canvas_text_selection.test.cjs
+?? tests/canvas_viewport_modules.test.cjs
+?? tests/classic_node_views.test.cjs
+?? tests/editor_draw_text_modules.test.cjs
+?? tests/editor_grid_modules.test.cjs
+?? tests/image_editor_modules.test.cjs
+?? tests/node_edit_modules.test.cjs
+?? tests/prompt_template_modules.test.cjs
+?? tests/remaining_generation_modules.test.cjs
+?? tests/smart_cascade_modules.test.cjs
+?? tests/smart_media_preview_modules.test.cjs
+?? tests/smart_mentions_module.test.cjs
+?? tests/smart_node_views.test.cjs
+?? tests/smart_param_panels.test.cjs
+?? tests/smart_pointer_events.test.cjs
+?? tests/smart_prompt_presets_module.test.cjs
+?? tests/test_asset_library_files.py
+?? tests/test_avatar_asset_service.py
+?? tests/test_canvas_audio_service.py
+?? tests/test_canvas_audio_service_routes.py
+?? tests/test_canvas_list_routes.py
+?? tests/test_canvas_store.py
+?? tests/test_canvas_store_routes.py
+?? tests/test_canvas_task_service.py
+?? tests/test_canvas_video_task_service.py
+?? tests/test_chat_attachment_service.py
+?? tests/test_gemini_cli_service.py
+?? tests/test_generation_output_service.py
+?? tests/test_media_reference_service.py
+?? tests/test_project_management.py
+?? tests/test_project_store.py
+?? tests/test_provider_registry_service.py
+?? tests/test_responses_service.py
+?? tests/test_runninghub_app_entry.py
+?? tests/test_runninghub_app_service.py
+?? tests/test_runninghub_openapi.py
+?? tests/test_runninghub_openapi_entry.py
+?? tests/test_upload_service.py
+?? tests/test_upstream_public_policy.py
+?? tests/test_upstream_response_codec.py
+?? tests/workflow_config_modules.test.cjs
+?? tests/workflow_params_modules.test.cjs
+?? tests/workflow_transfer_modules.test.cjs

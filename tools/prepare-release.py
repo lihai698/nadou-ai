@@ -54,6 +54,8 @@ def included(relative):
         return parts[0] in ROOT_NAMES
     if parts[0] not in PUBLIC_DIRS:
         return False
+    if parts[0] == "workflows" and len(parts) > 1 and parts[1].lower() == "custom":
+        return False
     if parts[0] == "skills" and (len(parts) < 4 or parts[1] != "canvas-assistant"
             or parts[2] not in ASSISTANT_RESOURCE_DIRS or Path(relative).suffix.lower() not in {".md", ".json"}):
         return False

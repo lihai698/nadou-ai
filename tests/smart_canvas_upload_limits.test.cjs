@@ -1,4 +1,5 @@
 const {test} = require('node:test');
+const {createTaskContext}=require('./canvas_task_test_helpers.cjs');
 const assert = require('node:assert/strict');
 const {readFileSync} = require('node:fs');
 const path = require('node:path');
@@ -8,7 +9,7 @@ const upload = source.match(/async function uploadFiles\(files\)\{[\s\S]*?\n\}/)
 
 function context(lang, response){
     const calls = [];
-    const scope = vm.createContext({
+    const scope = createTaskContext({
         window:{StudioI18n:{lang:()=>lang}},
         SMART_UPLOAD_MAX:20,
         SMART_UPLOAD_MAX_FILE_BYTES:100 * 1024 * 1024,

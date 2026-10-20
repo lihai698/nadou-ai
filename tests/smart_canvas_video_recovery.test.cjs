@@ -1,3 +1,4 @@
+const {createTaskContext}=require('./canvas_task_test_helpers.cjs');
 const {test} = require('node:test');
 const assert = require('node:assert/strict');
 const vm = require('node:vm');
@@ -19,7 +20,7 @@ function harness(error){
     const settings = {engine:'api', apiKind:'video', videoProvider:'mock-video', videoModel:'mock-video', count:1};
     const notices = [];
     const calls = {video:0, posts:0, saves:0};
-    const context = vm.createContext({
+    const context = createTaskContext({
         nodes, canvas, settings, window:{}, promptInput:{innerHTML:''}, smartLoopContext:null,
         selectedId:'source', selectedIds:[], selectedImage:{nodeId:'', index:-1}, undoSuppressed:false,
         selectedNode:()=>sourceNode, smartNodeInFlight:()=>false,

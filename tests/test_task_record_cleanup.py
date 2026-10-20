@@ -117,7 +117,7 @@ class TaskRecordCleanupTests(unittest.TestCase):
 
             def fail_second_once(path, *args, **kwargs):
                 nonlocal failed
-                if str(path) == second_path and not failed:
+                if os.path.realpath(path) == os.path.realpath(second_path) and not failed:
                     failed = True
                     raise OSError("simulated second delete failure")
                 return real_unlink(path, *args, **kwargs)
@@ -169,12 +169,12 @@ class TaskRecordCleanupTests(unittest.TestCase):
             real_replace = os.replace
 
             def fail_second(path, *args, **kwargs):
-                if str(path) == second_path:
+                if os.path.realpath(path) == os.path.realpath(second_path):
                     raise OSError("simulated delete failure")
                 return real_unlink(path, *args, **kwargs)
 
             def fail_restore(source, target, *args, **kwargs):
-                if str(target) == first_path:
+                if os.path.realpath(target) == os.path.realpath(first_path):
                     raise OSError("simulated restore failure")
                 return real_replace(source, target, *args, **kwargs)
 

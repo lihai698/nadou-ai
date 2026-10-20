@@ -1,3 +1,4 @@
+const {createTaskContext}=require('./canvas_task_test_helpers.cjs');
 const {test} = require('node:test');
 const assert = require('node:assert/strict');
 const vm = require('node:vm');
@@ -8,7 +9,7 @@ function part(start,end){ return source.slice(source.indexOf(start),source.index
 function editor(responses){
     const node={id:'n',images:[],pending:1,pendingTasks:[{taskId:'original',kind:'image'}]};
     const calls=[], delays=[];
-    const ctx=vm.createContext({nodes:[node],activeSmartTaskPolls:new Map(),window:{},
+    const ctx=createTaskContext({nodes:[node],activeSmartTaskPolls:new Map(),window:{},
         fetch:async(url,options)=>{ calls.push({url,options}); const r=responses.shift(); if(r instanceof Error) throw r; if(!r) throw Error('extra request'); return {ok:r.code===200,status:r.code,text:async()=> 'unavailable',json:async()=>r.data}; },
         setTimeout:(fn,ms)=>{delays.push(ms);fn();},render:()=>{},scheduleSave:()=>{},toast:()=>{},tr:x=>x,
         resultMediaUrls:x=>x,nowMs:()=>1,extractUpstreamTaskId:()=>'',
@@ -30,7 +31,7 @@ function editor(responses){
 }
 const success=()=>({code:200,data:{status:'succeeded',result:{images:['result.png']}}});
 test('partial results keep media and an actionable recovery control together',()=>{
-    const ctx=vm.createContext({window:{},imageForDisplay:x=>x,smartPendingTasks:n=>n.pendingTasks||[],
+    const ctx=createTaskContext({window:{},imageForDisplay:x=>x,smartPendingTasks:n=>n.pendingTasks||[],
         escapeHtml:x=>x,escapeAttr:x=>x,selectedImage:{},MEDIA_GROUP_MAX_VISIBLE_ROWS:4,
         mediaKindForItem:()=> 'image',singleMediaHtml:img=>`<img src="${img.url}">`,
         thumbMediaHtml:img=>`<img src="${img.url}">`,imageNameBadgeHtml:()=>'',imageResolutionBadgeHtml:()=>'',tr:x=>x});

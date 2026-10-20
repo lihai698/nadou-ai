@@ -1,3 +1,4 @@
+const {createTaskContext}=require('./canvas_task_test_helpers.cjs');
 const {test} = require('node:test');
 const assert = require('node:assert/strict');
 const vm = require('node:vm');
@@ -29,7 +30,7 @@ function scenario(kind, responses){
             json:async()=>next.data,
         };
     }
-    const context = vm.createContext({
+    const context = createTaskContext({
         cascadeFetch:request, fetch:request,
         cascadeTargetIdFromOptions:()=>'', ensureCascadeActive:()=>{},
         isCascadeAbortError:error=>error.name === 'CascadeAbort',

@@ -15,6 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 import main
+from backend import project_store
 from backend.data_formats import (
     InvalidDataFormat,
     UnsupportedDataFormat,
@@ -170,14 +171,8 @@ class FormatHttpTests(unittest.IsolatedAsyncioTestCase):
             {"id": "default"}, {"id": "p1"},
         ]}), encoding="utf-8")
         old_projects = self.projects_path.read_bytes()
-        original_write = main.write_json_atomic
-
-        def fail_project_write(path, value, **kwargs):
-            if Path(path) == self.projects_path:
-                raise OSError("isolated project write failure")
-            return original_write(path, value, **kwargs)
-
-        with patch.object(main, "write_json_atomic", side_effect=fail_project_write):
+        # 项目写入已迁入其所有者；只让项目写入失败，画布迁移仍真实执行。
+        with patch.object(project_store, "write_json_atomic", side_effect=OSError("isolated project write failure")):
             failed = await self.client.delete("/api/projects/p1")
         self.assertEqual(failed.status_code, 500)
         self.assertEqual(self.projects_path.read_bytes(), old_projects)

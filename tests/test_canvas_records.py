@@ -1,4 +1,5 @@
 import unittest
+import copy
 import sys
 from pathlib import Path
 
@@ -9,9 +10,46 @@ from backend.canvas_records import (
     normalize_canvas_color,
     normalize_canvas_kind,
 )
+from backend import canvas_records
 
 
 class CanvasRecordsTests(unittest.TestCase):
+    def test_sort_active_records_preserves_priority_fallback_and_stability(self):
+        records = [
+            {"id": "recent", "updated_at": 90},
+            {"id": "pinned-old", "pinned": True, "updated_at": 10},
+            {"id": "created", "updated_at": 0, "created_at": 80},
+            {"id": "same-a", "updated_at": "80"},
+            {"id": "same-b", "created_at": 80},
+            {"id": "pinned-new", "pinned": True, "updated_at": 20},
+            {"id": "no-time"},
+        ]
+        before = copy.deepcopy(records)
+        result = canvas_records.sort_canvas_records(records)
+        self.assertEqual([r["id"] for r in result],
+                         ["pinned-new", "pinned-old", "recent", "created", "same-a", "same-b", "no-time"])
+        self.assertEqual(records, before)
+        self.assertIsNot(result, records)
+        self.assertTrue(all(any(item is original for original in records) for item in result))
+
+    def test_sort_deleted_records_only_uses_deleted_time(self):
+        records = [{"id": "old", "deleted_at": 10, "pinned": True},
+                   {"id": "new-a", "deleted_at": 20},
+                   {"id": "new-b", "deleted_at": 20}]
+        before = copy.deepcopy(records)
+        result = canvas_records.sort_canvas_records(records, include_deleted=True)
+        self.assertEqual([r["id"] for r in result], ["new-a", "new-b", "old"])
+        self.assertEqual(records, before)
+        self.assertIsNot(result, records)
+
+    def test_sort_empty_and_invalid_fields_keep_existing_contract(self):
+        self.assertEqual(canvas_records.sort_canvas_records([]), [])
+        self.assertEqual(canvas_records.sort_canvas_records([], include_deleted=True), [])
+        with self.assertRaises(ValueError):
+            canvas_records.sort_canvas_records([{"updated_at": "invalid"}])
+        with self.assertRaises(KeyError):
+            canvas_records.sort_canvas_records([{}], include_deleted=True)
+
     def test_normalize_kind_and_color_keep_public_values_bounded(self):
         self.assertEqual(normalize_canvas_kind(" SMART "), "smart")
         self.assertEqual(normalize_canvas_kind("unknown"), "classic")

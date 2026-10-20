@@ -92,13 +92,18 @@ class MidjourneyConfigTests(unittest.TestCase):
         source = (root / 'static/js/canvas.js').read_text(encoding='utf-8')
         function = re.search(r'function midjourneyApiProviders\(\)\{.*?\n\}', source, re.S)
         self.assertIsNotNone(function)
+        host = re.search(r'function classicProviderConfigHost\(\)\{.*?\n\}', source, re.S)
+        self.assertIsNotNone(host)
         providers = [{'id': 'manual', 'protocol': protocol, 'base_url': base} for protocol, base in [
             ('apimart', 'https://example.test'), ('openai', 'https://api.apimart.ai/v1'),
             ('openai', 'https://example.test'), ('openai', 'https://not-apimart.ai/v1'),
             ('APIMART', ''), ('openai', 'https://api.apimart.ai.evil.test/v1')]]
         node_binary = os.environ.get('NODE_BINARY') or shutil.which('node')
         self.assertTrue(node_binary, '原生JS联测须可用Node')
-        script = 'let apiProviders=[];' + function.group(0) + ';const cases=' + json.dumps(providers) + ";process.stdout.write(JSON.stringify(cases.map(p=>{apiProviders=[p];return !!midjourneyApiProviders().length;})));"
+        module_path = json.dumps(str(root / 'static/js/canvas-provider-config.js'))
+        script = ('let apiProviders=[];const CanvasProviderConfig=require(' + module_path + ');'
+                  + host.group(0) + '\n' + function.group(0) + ';const cases=' + json.dumps(providers)
+                  + ";process.stdout.write(JSON.stringify(cases.map(p=>{apiProviders=[p];return !!midjourneyApiProviders().length;})));")
         actual = json.loads(subprocess.check_output([node_binary, '-e', script], timeout=30))
         for provider, expected in zip(providers, actual):
             if expected:
@@ -108,12 +113,21 @@ class MidjourneyConfigTests(unittest.TestCase):
                     self.prepare(providers=[provider])
         tree = ast.parse((root / 'main.py').read_text(encoding='utf-8'))
         handler = next(item for item in tree.body if isinstance(item, ast.AsyncFunctionDef) and item.name == 'submit_midjourney')
+        self.assertEqual(len(handler.body), 1)
+        self.assertIsInstance(handler.body[0], ast.Return)
+        self.assertIsInstance(handler.body[0].value, ast.Await)
+        self.assertEqual(ast.unparse(handler.body[0].value.value.func), 'midjourney_service.submit_midjourney')
+        service_tree = ast.parse((root / 'backend/midjourney_service.py').read_text(encoding='utf-8'))
+        handler = next(item for item in service_tree.body if isinstance(item, ast.AsyncFunctionDef) and item.name == 'submit_midjourney')
         strings = {n.value for n in ast.walk(handler) if isinstance(n, ast.Constant) and isinstance(n.value, str)}
         for mode, refs in [('imagine', 0), ('blend', 2), ('edit', 1)]:
             self.assertIn(self.prepare({**self.node, 'mode': mode}, reference_count=refs)['supplierPath'], strings)
         # 已有运行没有count循环，输入count=8不得扩展服务预算。
-        runner = re.search(r'async function runMidjourneyNode\(.*?\n\}', source, re.S).group(0)
-        self.assertEqual(runner.count("midjourneyRequest('/api/midjourney/submit'"), 1)
+        entry = re.search(r'async function runMidjourneyNode\(.*?\n\}', source, re.S).group(0)
+        self.assertIn('CanvasMidjourneyRunner.runMidjourneyNode', entry)
+        runner_source = (root / 'static/js/canvas-midjourney-runner.js').read_text(encoding='utf-8')
+        runner = re.search(r'    async function runMidjourneyNode\(.*?\n    \}', runner_source, re.S).group(0)
+        self.assertEqual(runner.count("midjourneyRequest(deps, '/api/midjourney/submit'"), 1)
         self.assertNotIn('node.count', runner)
 
 

@@ -1,7 +1,9 @@
+const {createTaskContext}=require('./canvas_task_test_helpers.cjs');
 const {test} = require('node:test');
 const assert = require('node:assert/strict');
 const {readFileSync} = require('node:fs');
 const vm = require('node:vm');
+const {attachSaveState}=require('./canvas_save_test_helpers.cjs');
 const source = readFileSync(require('node:path').join(__dirname, '../static/js/canvas.js'), 'utf8');
 function section(begin, end){
     const start = source.indexOf(begin), stop = source.indexOf(end, start);
@@ -10,11 +12,11 @@ function section(begin, end){
 }
 function savingEditor(){
     const requests = [], releases = [];
-    const context = vm.createContext({
+    const context = createTaskContext({
         canvas:{id:'demo', title:'test', updated_at:1}, nodes:[], connections:[],
-        viewport:{x:0,y:0,scale:1}, applyingRemoteCanvas:false, savingCanvasNow:false,
-        saveCanvasAgain:false, localCanvasDirty:true, lastCanvasUpdatedAt:1,
-        saveTimer:null, CLIENT_ID:'test', currentCanvasTitle:null, currentCanvasTime:null,
+        viewport:{x:0,y:0,scale:1}, applyingRemoteCanvas:false,
+         localCanvasDirty:true, lastCanvasUpdatedAt:1,
+         CLIENT_ID:'test', currentCanvasTitle:null, currentCanvasTime:null,
         sanitizeConnections(){}, setStatus(){}, clearUnsavedCanvasAcceptedTasks(){},
         clearUnsavedCanvasUnknownWarnings(){}, gateCanvasList:null, loadCanvasList(){},
         setTimeout(){return 1;}, clearTimeout(){}, console,
@@ -27,18 +29,52 @@ function savingEditor(){
             })));
         }
     });
+    attachSaveState(context,'classic');
+    vm.runInContext(readFileSync(require('node:path').join(__dirname,'../static/js/canvas-save-transport.js'),'utf8'),context);
     vm.runInContext(section('function serializableCanvasNode(', 'async function loadConfig('), context);
     return {context, requests, releases, save:()=>vm.runInContext('saveCanvas()',context)};
 }
+
+function attachOpenEntry(e){
+    const c=e.context,put=c.fetch,gets=[];
+    Object.assign(c,{canvasOpenGeneration:0,openingCanvasId:'',selected:new Set(),
+        window:{CanvasAudio:{migrate:n=>n}},classicRemoteSync:{stop(){}},
+        fetch:(url,init)=>{
+            if(init?.method==='PUT') return put(url,init);
+            gets.push(url);return Promise.resolve({ok:true,json:async()=>({canvas:{id:'next',nodes:[],updated_at:20}})});
+        },
+        touchCanvasOpened:async()=>null,resetCascadeRuntimeState(){},rememberCanvasListProject(){},
+        localViewportForCanvas:(id,v)=>v,resetTransientRunState(){},restoreClassicDraft:()=>false,
+        restoreUnsavedCanvasAcceptedTasks:()=>0,restoreUnsavedCanvasUnknownWarnings:()=>0,
+        pruneMissingComfyWorkflows(){},refreshMissingCanvasAssets:async()=>{},setCanvasMode(){},renderCanvasList(){},render(){},
+        resumeCanvasImageTasks(){},resumeCanvasAudioTasks(){},startCanvasRemotePolling(){},showErrorModal(){}});
+    vm.runInContext(section('async function openCanvas(','function applyRemoteCanvasData('),c);
+    vm.runInContext(section('function scheduleSave(){','function scheduleViewportSave(){'),c);
+    return gets;
+}
+test('real save queue persists newer A edits before openCanvas can load B',async()=>{
+    const e=savingEditor(),gets=attachOpenEntry(e),saving=e.save();
+    const opening=e.context.openCanvas('next');assert.equal(gets.length,0);assert.equal(e.context.canvas.id,'demo');
+    e.context.nodes.push({id:'latest',type:'prompt',text:'保存中新增'});e.context.scheduleSave();
+    e.releases[0](true);await saving;await new Promise(resolve=>setImmediate(resolve));
+    assert.equal(gets.length,0);assert.equal(e.requests.length,2);
+    assert.equal(e.requests[1].body.nodes[0].text,'保存中新增');assert.equal(e.requests[1].url,'/api/canvases/demo');
+    e.releases[1](true);await opening;assert.equal(e.context.canvas.id,'next');assert.deepEqual(gets,['/api/canvases/next']);
+});
+test('real failed save prevents a new canvas GET and preserves dirty A',async()=>{
+    const e=savingEditor(),gets=attachOpenEntry(e),opening=e.context.openCanvas('next');
+    e.releases[0](false);await opening;assert.equal(gets.length,0);assert.equal(e.context.canvas.id,'demo');assert.equal(e.context.localCanvasDirty,true);
+});
 test('return waits for pending save and prevents duplicate navigation', async()=>{
     assert.equal((source.match(/async function returnToCanvasManager\(/g)||[]).length,1);
     let finish;
     const button={disabled:false}, location={href:'editor'}, errors=[];
-    const context=vm.createContext({backToManagerBtn:button,canvas:{project:'current'},
-        localCanvasDirty:true,savingCanvasNow:false,saveTimer:1,saveCanvasAgain:false,
+    const context=createTaskContext({backToManagerBtn:button,canvas:{project:'current'},
+        localCanvasDirty:true,
         saveCanvas:()=>new Promise(resolve=>{finish=()=>{context.localCanvasDirty=false;resolve(true);};}),
         canvasListUrlForProject:p=>`list?project=${p}`,requestedCanvasListProject:()=>'',rememberedCanvasListProject:()=>'',
         window:{location},showErrorModal:m=>errors.push(m)});
+    attachSaveState(context,'classic');
     vm.runInContext(section('async function returnToCanvasManager(', 'clearCurrentCanvasBtn?.addEventListener'),context);
     const leaving=vm.runInContext('returnToCanvasManager()',context);
     assert.equal(location.href,'editor');assert.equal(button.disabled,true);
@@ -49,9 +85,10 @@ test('return waits for pending save and prevents duplicate navigation', async()=
 });
 test('return stays on editor and reports failed saving', async()=>{
     const button={disabled:false}, location={href:'editor'}, errors=[];
-    const context=vm.createContext({backToManagerBtn:button,canvas:{project:'current'},
-        localCanvasDirty:true,savingCanvasNow:false,saveTimer:1,saveCanvasAgain:false,
+    const context=createTaskContext({backToManagerBtn:button,canvas:{project:'current'},
+        localCanvasDirty:true,
         saveCanvas:async()=>false,window:{location},showErrorModal:m=>errors.push(m)});
+    attachSaveState(context,'classic');
     vm.runInContext(section('async function returnToCanvasManager(', 'clearCurrentCanvasBtn?.addEventListener'),context);
     await vm.runInContext('returnToCanvasManager()',context);
     assert.equal(location.href,'editor');assert.equal(button.disabled,false);assert.equal(errors.length,1);
@@ -62,6 +99,24 @@ test('standalone editor save does not refresh removed manager list', async()=>{
     const saving=e.save();e.releases[0](true);assert.equal(await saving,true);assert.equal(listCalls,0);
     e.context.gateCanvasList={};const legacy=e.save();e.releases[1](true);
     assert.equal(await legacy,true);assert.equal(listCalls,1);
+});
+
+test('returning after a completed autosave does not send another PUT for an expired timer',async()=>{
+    const e=savingEditor();let fire;
+    e.context.setTimeout=callback=>{fire=callback;return 7;};
+    e.context.backToManagerBtn={disabled:false};
+    e.context.window={location:{href:'editor'}};
+    e.context.canvasListUrlForProject=()=> 'list';
+    e.context.requestedCanvasListProject=()=>'';
+    e.context.rememberedCanvasListProject=()=>'';
+    e.context.showErrorModal=()=>assert.fail('clean canvas must leave');
+    vm.runInContext(section('function scheduleSave(){','function scheduleViewportSave(){'),e.context);
+    vm.runInContext(section('async function returnToCanvasManager(','clearCurrentCanvasBtn?.addEventListener'),e.context);
+    vm.runInContext('scheduleSave()',e.context);
+    const saving=fire();e.releases[0](true);assert.equal(await saving,true);
+    const leaving=vm.runInContext('returnToCanvasManager()',e.context);
+    assert.equal(e.requests.length,1);
+    await leaving;assert.equal(e.context.window.location.href,'list');
 });
 test('accepted task waits for an earlier autosave and persists its own snapshot', async()=>{
     const e = savingEditor();
@@ -90,6 +145,27 @@ test('an accepted-task save failure still reports failure after waiting', async(
     e.releases[1](false);
     assert.equal(await accepted, false);
 });
+
+test('classic keeps the newer draft while a save is queued and clears it only after the next success',async()=>{
+    const e=savingEditor(),drafts=[],clears=[];
+    e.context.document={getElementById:()=>null};
+    e.context.window={};
+    vm.runInContext(readFileSync(require('node:path').join(__dirname,'../static/js/canvas-save-recovery.js'),'utf8'),e.context);
+    Object.assign(e.context.window.CanvasSaveRecovery,{
+        saveDraft:(kind,id,base,local)=>drafts.push(JSON.parse(JSON.stringify(local))),
+        clearDraft:(kind,id)=>clears.push([kind,id])
+    });
+    vm.runInContext(section('function scheduleSave(){','function scheduleViewportSave(){'),e.context);
+    const first=e.save();
+    e.context.nodes.push({id:'out',type:'output',_pending:[{canvasTaskId:'accepted-new'}]});
+    vm.runInContext('scheduleSave()',e.context);
+    e.releases[0](true);assert.equal(await first,true);
+    assert.equal(e.context.localCanvasDirty,true);assert.deepEqual(clears,[]);
+    assert.equal(drafts.at(-1).nodes[0]._pending[0].canvasTaskId,'accepted-new');
+    const next=e.save();e.releases[1](true);assert.equal(await next,true);
+    assert.equal(e.requests[1].body.nodes[0]._pending[0].canvasTaskId,'accepted-new');
+    assert.deepEqual(clears,[['classic','demo']]);assert.equal(e.context.localCanvasDirty,false);
+});
 test('two simultaneous accepted tasks both survive queued saves', async()=>{
     const e=savingEditor();
     const earlier=e.save();
@@ -111,7 +187,7 @@ test('image recovery button uses the durable original ID and never the legacy su
     const pending={id:'pending',canvasTaskId:'original-task',canvasTaskType:'online-image',savePending:true,queryPaused:true};
     const node={id:'output',_pending:[pending]}, calls=[], button={};
     const wrap={dataset:{pendingId:'pending'},querySelector:selector=>selector==='.output-recover-query' ? button : null,addEventListener(){}};
-    const context=vm.createContext({
+    const context=createTaskContext({
         pendingById:()=>pending, findOutputByPendingId:()=>node,
         saveCanvas:async()=>{calls.push('save');return true;}, scheduleSave(){},
         pollCanvasImageTask:async id=>{calls.push(`query:${id}`);return 'succeeded';},

@@ -9,12 +9,24 @@ permissions:
   contents: write
 
 jobs:
+  core-checks:
+    uses: ./.github/workflows/core-checks.yml
+    permissions:
+      contents: read
   release:
+    needs: core-checks
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: ${{ github.sha }}
+      - name: Require checks for this release commit
+        env:
+          CHECKED_SHA: ${{ needs.core-checks.outputs.checked_sha }}
+          EVENT_SHA: ${{ github.sha }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: python tools/check-release-commit.py --checked-sha "$CHECKED_SHA" --event-sha "$EVENT_SHA" --tag "$RELEASE_TAG"
       - name: Check version and tag
         shell: bash
         run: |

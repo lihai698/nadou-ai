@@ -1,6 +1,7 @@
 """Project record rules and the public project API, using temporary storage only."""
 
 import sys
+import copy
 import tempfile
 import unittest
 from pathlib import Path
@@ -16,9 +17,25 @@ from backend.project_records import (
     project_record,
     project_sort_key,
 )
+from backend.project_store import ProjectStore
+from backend import project_records
 
 
 class ProjectRecordRulesTests(unittest.TestCase):
+    def test_project_list_counts_and_sort_are_pure_and_keep_stable_ties(self):
+        projects = [{"id": "p2", "order": 2, "created_at": 5, "private": "not-public"},
+                    {"id": "default", "order": 0}, {"id": "p1", "order": 2, "created_at": 5},
+                    {"id": "empty", "order": 3}]
+        canvases = [{"project": "p1"}, {"project": "p1"}, {"project": "p2"}, {},
+                    {"project": ""}, {"project": "unknown"}]
+        before = copy.deepcopy((projects, canvases))
+        result = project_records.project_list_records(projects, canvases, default_id="default")
+        self.assertEqual([(p["id"], p["canvas_count"]) for p in result],
+                         [("default", 2), ("p2", 1), ("p1", 2), ("empty", 0)])
+        self.assertEqual((projects, canvases), before)
+        self.assertNotIn("private", result[1])
+        self.assertEqual(project_records.project_list_records([], canvases, default_id="default"), [])
+
     def test_public_record_keeps_existing_fields_and_defaults(self):
         self.assertEqual(project_record({"id": "p1"}), {
             "id": "p1",
@@ -65,7 +82,12 @@ class ProjectRecordApiTests(unittest.IsolatedAsyncioTestCase):
                     transport=httpx.ASGITransport(app=main.app),
                     base_url="http://project-records.test",
                 ) as client:
-                    created = await client.post("/api/projects", json={"name": "  中文项目  "})
+                    with patch.object(ProjectStore, "create", autospec=True,
+                                      side_effect=ProjectStore.create) as create_record:
+                        created = await client.post("/api/projects", json={"name": "  中文项目  "})
+                    create_record.assert_called_once()
+                    self.assertEqual(create_record.call_args.args[0].path, main.PROJECTS_PATH)
+                    self.assertIs(create_record.call_args.args[0].lock, main.CANVAS_LOCK)
                     self.assertEqual(created.status_code, 200, created.text)
                     project = created.json()["project"]
                     self.assertEqual(project["name"], "中文项目")

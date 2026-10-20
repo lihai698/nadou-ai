@@ -1,0 +1,5 @@
+# Comfy生成与输出迁移
+
+11项输出分类/下载/文本规则迁入comfy_output_service；generate完整try/finally迁入comfy_generation_service。NEXT_TASK_ID分配和入队保留main原锁，COMFYUI_INSTANCES/BACKEND_LOCAL_LOAD通过getter动态读取，防设置重赋值后使用旧对象。
+
+验收：helper原AST、生成归一化getter后try/finally等价、计数锁AST一致；Comfy生命周期/归属专项；三项实际ASGI HTTP模拟urllib后端，参数覆盖/空值删除/动态节点/种子/预览和文本过滤/成功失败队列释放/负载表替换释放；完整核心与独立审查。

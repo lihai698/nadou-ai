@@ -5,6 +5,7 @@ import re
 import unittest
 from pathlib import Path
 from fastapi import HTTPException
+from backend import provider_registry_service
 
 
 class WorkflowFieldSourceTests(unittest.TestCase):
@@ -31,7 +32,7 @@ class WorkflowFieldSourceTests(unittest.TestCase):
     def test_selected_entry_and_enabled_fields_match_native_request(self):
         fields=[{'nodeId':'1','fieldName':'steps','enabled':True},{'nodeId':'2','fieldName':'ignored','enabled':False}]
         provider={'rh_apps':[{'appId':'selected','fields':fields},{'appId':'old','fields':[{'fieldName':'wrong'}]}]}
-        namespace={'re':re,'HTTPException':HTTPException,'runninghub_provider':lambda:provider,'runninghub_provider_with_workflow_store':lambda p:p,'load_runninghub_workflow_store':lambda:{},'runninghub_workflow_store_key':lambda x:x}
+        namespace={'re':re,'HTTPException':HTTPException,'provider_registry_service':provider_registry_service,'runninghub_provider':lambda:provider,'runninghub_provider_with_workflow_store':lambda p:p,'load_runninghub_workflow_store':lambda:{},'runninghub_workflow_store_key':lambda x:x}
         exec(compile(self.functions,'main.py','exec'),namespace)
         read=namespace['canvas_assistant_workflow_fields']
         self.assertEqual(read({'type':'rh','rhMode':'app','webappId':'selected','rhConfigKey':'app:selected'}),[fields[0]])

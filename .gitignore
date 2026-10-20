@@ -5,6 +5,7 @@
 /data/
 /assets/
 /output/
+/workflows/custom/
 .nadou-dependencies.ok
 /history.json
 /history.json.*.bak

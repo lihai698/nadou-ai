@@ -1,3 +1,4 @@
+const {createTaskContext}=require('./canvas_task_test_helpers.cjs');
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
 const native=require('../static/js/canvas-assistant-native.js');
 const source=fs.readFileSync(require.resolve('../static/js/smart-canvas.js'),'utf8');
@@ -8,7 +9,7 @@ function setup(rounds=3,mode='serial'){
  const steps=Array.from({length:rounds},(_,i)=>({key:i+':'+i,roundIndex:2+i,roundOffset:i,sourceNodeId:'loop',templateNodeId:'root',requestNodeId:'root',kind:'generate',provider:'user',model:'manual',outputNodeId:'slot-'+i}));
  const plan={version:1,rounds,startIndex:2,batchSize:1,endIndex:rounds+1,mode,direct:true,rootNodeId:'root',scopeNodeIds:['loop','root'],steps,maxCalls:rounds};
  const events=[],storage=new Map();let submits=0,queries=0;
- const ctx=vm.createContext({nodes:state.nodes,canvas,canvasId:'canvas',localStorage:{getItem:k=>storage.get(k),setItem:(k,v)=>storage.set(k,v),removeItem:k=>storage.delete(k)},
+ const ctx=createTaskContext({nodes:state.nodes,canvas,canvasId:'canvas',localStorage:{getItem:k=>storage.get(k),setItem:(k,v)=>storage.set(k,v),removeItem:k=>storage.delete(k)},
   cloneSmartSettings:v=>JSON.parse(JSON.stringify(v||{})),pushUndo:()=>{},render:()=>{},smartCascadeRuns:new Map(),syncSmartCascadeLegacyState:()=>{},smartCascadeIsLoopRunning:()=>false,
   createLoopOutputSlot:(t,index,offset,o)=>{const slot={id:o.outputNodeId,type:'smart-image',images:[],loopSourceId:o.loopNode.id,loopRootId:t.id,loopRoundIndex:index};state.nodes.push(slot);canvas.connections.push({from:t.id,to:slot.id,kind:'flow'});return slot;},
   saveCanvas:async()=>{events.push('save');state.updatedAt++;return true;},saveSmartAcceptedTasksBeforeQuery:async()=>{events.push('accepted-save');return true;},
@@ -89,7 +90,7 @@ test('最后生成后停止，续行仅完成原复制槽且不重复提交',asy
 test('循环备份恢复本轮原编号，不把未提交剩余轮数推断为未知受理',async()=>{
  const s=setup();await s.editor.execute(s.p);const run=s.loop.assistantNativeRun,entry=run.slots['0:0'],slot=s.state.nodes.find(n=>n.id===entry.outputNodeId);
  run.taskIds=[];run.unknownCount=1;run.slots['0:0']={outputNodeId:slot.id,taskIds:[],status:'submitting'};slot.pendingTasks=[];slot.images=[];
- const backup=s.storage.get('original-1');s.ctx.readSmartUnsavedAcceptedTasks=()=>[backup];s.ctx.clearSmartUnsavedAcceptedTasks=()=>{};s.ctx.nowMs=()=>0;
+ const backup=s.storage.get('original-1');Object.assign(s.ctx,{SMART_UNSAVED_ACCEPTED_TASKS_PREFIX:'accepted:',localStorage:{getItem:()=>JSON.stringify([backup]),setItem:()=>{},removeItem:()=>{}},nowMs:()=>0});
  load(s.ctx,'restoreSmartUnsavedAcceptedTasks');assert.equal(s.ctx.restoreSmartUnsavedAcceptedTasks(),1);
  assert.equal(run.unknownCount,0);assert.deepEqual(Array.from(run.slots['0:0'].taskIds),['original-1']);assert.equal(slot.pendingTasks[0].assistantLoopStepKey,'0:0');
  run.actionId='new';slot.pendingTasks=[];assert.equal(s.ctx.restoreSmartUnsavedAcceptedTasks(),0);assert.equal(slot.pendingTasks.length,0);

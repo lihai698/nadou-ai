@@ -1,3 +1,4 @@
+const {createTaskContext}=require('./canvas_task_test_helpers.cjs');
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
@@ -14,7 +15,7 @@ function runtime(){
   let undo=0,serial=0;
   const source={id:'v',type:'smart-image',x:10,y:20,w:316,images:[{id:'result',url:'/assets/v.mp4',kind:'video'}]};
   const state={window:{CanvasVideoDeconstructionHost:require('../static/js/canvas-video-deconstruction-host.js'),CanvasVideoDeconstructionModel:modelApi,CanvasVideoDeconstructionUI:{closeAll(){}}},nodes:[source],canvasId:'A',canvas:{id:'A',connections:[]},viewport:{scale:1},uid:p=>`${p}-${++serial}`,pushUndo:()=>undo++,saveCanvas:async()=>true,render(){},imageForDisplay:v=>v,mediaKindForItem:v=>v.kind,nodeRect:n=>({x:n.x,y:n.y,width:n.w||316}),syncSelectionUi(){},imageProviders:()=>[{id:'p',enabled:true}],providerImageModels:()=>['m'],cloneSmartSettings:v=>({...v}),initialSmartSettings:{},SIZE_MAP:{square:{}},API_RATIO_VALUES:{square:'1:1'},selectedId:'',selectedIds:[],selectedImage:{},runGeneration:async options=>{state.runs.push({id:state.selectedId,options});},runs:[],toast(){},Date,setTimeout};
-  vm.createContext(state);
+  createTaskContext(state);
   vm.runInContext(smart.slice(smart.indexOf('function invalidateSmartVideoDeconstruction(){'),smart.indexOf('window.onload = async')),state);
   state.initSmartVideoDeconstructionBridge();
   state.host=state.window.CanvasVideoDeconstructionBridge;
@@ -93,7 +94,7 @@ test('智能撤销或切画布使旧抽帧上下文失效',()=>{
 
 test('智能缩放接入传递宿主，首屏桥未初始化时不阻断加载',()=>{
   const e=runtime();let scaled;
-  Object.assign(e,{world:{style:{},classList:{toggle(){}}},shell:{style:{}},renderMinimap(){},scheduleSmartImageResolutionSync(){}});
+  Object.assign(e,{world:{style:{},classList:{toggle(){}}},shell:{style:{}},minimapContent:null,minimapViewport:null,scheduleSmartImageResolutionSync(){}});
   e.window.CanvasVideoDeconstructionUI.updateScale=host=>{scaled=host.scale();};
   vm.runInContext(smart.slice(smart.indexOf('function applyViewport(){'),smart.indexOf('function screenToWorld(')),e);
   e.viewport.scale=.3;e.applyViewport();assert.equal(scaled,.3);
@@ -102,7 +103,7 @@ test('智能缩放接入传递宿主，首屏桥未初始化时不阻断加载',
 
 test('智能批量生成不读取其他选中节点的编辑器草稿',async()=>{
   const node={id:'generator'},state={nodes:[node],selectedNode:()=>node,smartNodeInFlight:()=>false,confirmSmartUnknownResubmission:()=>true,smartLoopContext:null,buildPromptRequest:()=>{throw Error('错误读取当前编辑器');},buildPromptRequestForNode:(target,refs)=>{assert.equal(target,node);assert.equal(refs.length,0);throw Error('已读取目标节点草稿');}};
-  vm.createContext(state);
+  createTaskContext(state);
   vm.runInContext(smart.slice(smart.indexOf('async function runGeneration(options={}){'),smart.indexOf('\nasync function ',smart.indexOf('async function runGeneration(options={}){')+20)),state);
   await assert.rejects(state.runGeneration({shotTableRun:true}),/已读取目标节点草稿/);
 });

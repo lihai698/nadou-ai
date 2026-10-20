@@ -3,6 +3,7 @@ import ast
 import re
 import unittest
 from pathlib import Path
+from backend import provider_probe_service
 
 
 class AudioDiscoveryTests(unittest.TestCase):
@@ -10,7 +11,7 @@ class AudioDiscoveryTests(unittest.TestCase):
         tree = ast.parse((Path(__file__).resolve().parents[1] / 'main.py').read_text(encoding='utf-8'))
         functions = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name in
                      {'classify_upstream_model', 'parse_upstream_models'}]
-        scope = {'re': re}
+        scope = {'re': re, 'provider_probe_service': provider_probe_service}
         exec(compile(ast.Module(body=functions, type_ignores=[]), 'main.py', 'exec'), scope)
         ids = ['gpt-image-1', 'sora-2', 'gpt-4o', 'whisper-1', 'gpt-4o-mini-transcribe',
                'FunAudioLLM/SenseVoiceSmall', 'tts-1', 'gpt-4o-mini-tts', 'speech-02-hd',

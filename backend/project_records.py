@@ -33,4 +33,18 @@ def next_project_order(projects: Iterable[Dict[str, Any]]) -> int:
     return max((project_order(project) for project in projects), default=0) + 1
 
 
-__all__ = ["project_order", "project_record", "project_sort_key", "next_project_order"]
+def project_list_records(projects, canvases, *, default_id):
+    """汇总已过滤画布的项目数量；不改变输入或创建缺失项目。"""
+    counts = {}
+    for canvas in canvases:
+        project_id = canvas.get("project") or default_id
+        counts[project_id] = counts.get(project_id, 0) + 1
+    result = []
+    for project in sorted(projects, key=project_sort_key):
+        record = project_record(project)
+        record["canvas_count"] = counts.get(record["id"], 0)
+        result.append(record)
+    return result
+
+
+__all__ = ["project_order", "project_record", "project_sort_key", "next_project_order", "project_list_records"]

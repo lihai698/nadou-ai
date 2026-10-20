@@ -7,7 +7,7 @@ FastAPI 入口负责加载、保存及异常转换；这里集中保持列表接
 
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any, Dict, Iterable, List
 
 
 DEFAULT_PROJECT_ID = "default"
@@ -25,6 +25,22 @@ def normalize_canvas_color(value: Any) -> str:
 
     color = str(value or "").strip().lower()
     return color if color in CANVAS_COLORS else ""
+
+
+def sort_canvas_records(
+    records: Iterable[Dict[str, Any]], *, include_deleted: bool = False
+) -> List[Dict[str, Any]]:
+    """仅排序已筛选的记录；返回新列表，不改写记录或执行回收站清理。"""
+
+    if include_deleted:
+        return sorted(records, key=lambda item: item["deleted_at"], reverse=True)
+    return sorted(
+        records,
+        key=lambda item: (
+            0 if item.get("pinned") else 1,
+            -int(item.get("updated_at") or item.get("created_at") or 0),
+        ),
+    )
 
 
 def canvas_record(data: Dict[str, Any]) -> Dict[str, Any]:
@@ -59,4 +75,5 @@ __all__ = [
     "canvas_record",
     "normalize_canvas_color",
     "normalize_canvas_kind",
+    "sort_canvas_records",
 ]

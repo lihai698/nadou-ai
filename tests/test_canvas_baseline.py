@@ -73,7 +73,7 @@ class CanvasBaselineTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(actual['kind'], kind)
         expected_view = payload['viewport'] if kind == 'smart' else canvas['viewport']
         self.assertEqual(actual['viewport'], expected_view)
-        disk = json.loads(Path(main.canvas_path(canvas['id'])).read_text(encoding='utf-8'))
+        disk = json.loads((Path(main.CANVAS_DIR) / (canvas['id'] + '.json')).read_text(encoding='utf-8'))
         self.assertEqual(actual, disk)
         self.assertEqual(Path(main.local_media_path_from_url(url)), media)
         self.assertEqual(media.read_bytes(), before)
@@ -89,10 +89,10 @@ class CanvasBaselineTests(unittest.IsolatedAsyncioTestCase):
         endpoint = '/api/canvases/' + canvas['id']
         payload = {'title': '新标题', 'base_updated_at': canvas['updated_at']}
         self.assertEqual((await self.client.put(endpoint, json=payload)).status_code, 200)
-        before = Path(main.canvas_path(canvas['id'])).read_bytes()
+        before = (Path(main.CANVAS_DIR) / (canvas['id'] + '.json')).read_bytes()
         payload['title'] = '不应覆盖'
         self.assertEqual((await self.client.put(endpoint, json=payload)).status_code, 409)
-        self.assertEqual(Path(main.canvas_path(canvas['id'])).read_bytes(), before)
+        self.assertEqual((Path(main.CANVAS_DIR) / (canvas['id'] + '.json')).read_bytes(), before)
 
     async def test_soft_delete_restore_preserves_canvas_and_media(self):
         canvas = await self.create('smart')
@@ -100,7 +100,7 @@ class CanvasBaselineTests(unittest.IsolatedAsyncioTestCase):
         media = Path(main.OUTPUT_INPUT_DIR) / '保留.txt'
         media.write_text('isolated sample', encoding='utf-8')
         self.assertEqual((await self.client.delete(endpoint)).status_code, 200)
-        self.assertTrue(Path(main.canvas_path(canvas['id'])).exists())
+        self.assertTrue((Path(main.CANVAS_DIR) / (canvas['id'] + '.json')).exists())
         self.assertEqual((await self.client.get(endpoint)).status_code, 404)
         restored = await self.client.post(endpoint + '/restore')
         self.assertEqual(restored.status_code, 200)
@@ -116,7 +116,7 @@ class CanvasBaselineTests(unittest.IsolatedAsyncioTestCase):
         media.write_text('isolated result', encoding='utf-8')
         endpoint = '/api/canvases/' + canvas['id']
         self.assertEqual((await self.client.delete(endpoint + '/purge')).status_code, 200)
-        self.assertFalse(Path(main.canvas_path(canvas['id'])).exists())
+        self.assertFalse((Path(main.CANVAS_DIR) / (canvas['id'] + '.json')).exists())
         self.assertTrue(media.exists())
         self.assertEqual((await self.client.get(endpoint)).status_code, 404)
 
@@ -129,9 +129,9 @@ class CanvasBaselineTests(unittest.IsolatedAsyncioTestCase):
         main.save_canvas(expired)
         response = await self.client.get('/api/canvases/trash')
         self.assertEqual(response.status_code, 200)
-        self.assertTrue(Path(main.canvas_path(active['id'])).exists())
-        self.assertTrue(Path(main.canvas_path(recent['id'])).exists())
-        self.assertFalse(Path(main.canvas_path(expired['id'])).exists())
+        self.assertTrue((Path(main.CANVAS_DIR) / (active['id'] + '.json')).exists())
+        self.assertTrue((Path(main.CANVAS_DIR) / (recent['id'] + '.json')).exists())
+        self.assertFalse((Path(main.CANVAS_DIR) / (expired['id'] + '.json')).exists())
 
 
 if __name__ == '__main__':

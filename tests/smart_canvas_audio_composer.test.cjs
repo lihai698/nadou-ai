@@ -5,7 +5,8 @@ const path=require('node:path');
 const vm=require('node:vm');
 const source=readFileSync(path.join(__dirname,'../static/js/smart-canvas.js'),'utf8');
 const start=source.indexOf('function positionComposerForNode(');
-const end=source.indexOf('let composerUpdateTimer',start);
+const end=source.indexOf('\n}',start)+2;
+assert(start>=0&&end>start,'positionComposerForNode must be present and complete');
 
 test('smart audio composer clears the rendered player, actions and task warning',()=>{
     const composer={style:{}};

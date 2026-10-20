@@ -1,3 +1,4 @@
+const {createTaskContext}=require('./canvas_task_test_helpers.cjs');
 const test=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
@@ -10,7 +11,7 @@ function setup(){
  const out={id:'out',type:'output',images:[]},prompt={id:'prompt',type:'prompt',text:'原生视频正文'};
  const state={id:'canvas',updatedAt:7,nodes:[node,out,prompt],connections:[{from:'prompt',to:'video'},{from:'video',to:'out'}]};
  const submissions=[],storage=new Map();let serial=0,saves=0,polls=0;let saveHook=()=>true;
- const ctx=vm.createContext({nodes:state.nodes,connections:state.connections,canvas:{id:'canvas'},apiProviders:[{id:'manual',video_models:['user-video'],enabled:true}],uid:p=>p+'12345678'+(++serial),nowMs:()=>10,
+ const ctx=createTaskContext({nodes:state.nodes,connections:state.connections,canvas:{id:'canvas'},outputNodesForSource:()=>state.connections.filter(c=>c.from===node.id).map(c=>state.nodes.find(n=>n.id===c.to)).filter(n=>n?.type==='output'),CANVAS_MEDIA_OUTPUT_TYPES:['video'],mediaKindForOutputItem:x=>x?.kind||'video',isVideoUrl:()=>true,apiProviders:[{id:'manual',video_models:['user-video'],enabled:true}],uid:p=>p+'12345678'+(++serial),nowMs:()=>10,
   cascadeTargetIdFromOptions:()=>'',orderedSources:(_,s)=>s,generatorSources:()=>[{prompt:prompt.text,refs:[]}],applyUploadedUrlToRefs:x=>x,mediaKindForRef:x=>x.kind,imageRefsOnly:x=>x.filter(v=>v.kind==='image'),videoRefsOnly:x=>x.filter(v=>v.kind==='video'),audioRefsOnly:x=>x.filter(v=>v.kind==='audio'),manualVideoUrlForNode:()=>'',tempShUploadedUrlForNode:(_,u)=>u,
   outputForNode:()=>out,runSnapshot:(n,p,refs)=>({node:{id:n.id},prompt:p,refs}),makePendingForRun:(id,run)=>({id,run,startedAt:10}),refreshRunNodes:()=>{},resolveVideoProviderId:x=>x,
   saveCanvas:async()=>{saves++;state.updatedAt++;return saveHook(saves);},scheduleSave:()=>{},fetch:async(url,opts)=>{const body=JSON.parse(opts.body);submissions.push(body);return {ok:true,json:async()=>({task_id:body.client_task_id,provider_id:body.provider_id,model:body.model,canvas_id:body.canvas_id,node_id:body.node_id,assistant_action_id:body.assistant_action_id,input_hash:body.input_hash,status:'queued'})};},responseErrorMessage:async()=> '拒绝',
@@ -89,4 +90,26 @@ test('普通手动视频关闭输出时仍保留原生节点结果，助手限�
  const s=setup();s.node.outputEnabled=false;s.ctx.outputForNode=()=>null;
  await s.ctx.runVideoNode(s.node.id);
  assert.equal(s.submissions.length,1);assert.equal(s.polls(),1);assert.equal(s.node.generatedOutputs?.[0]?.url,'/output/video.mp4');assert.equal(s.node.runStatus,'done');
+});
+for(const outcome of ['success','failure']){
+ test(`手动视频${outcome}晚于清空时不回填旧输出、日志或触发保存`,async()=>{
+  const s=setup(),effects=[];let resolve,reject;
+  const waiting=new Promise((a,b)=>{resolve=a;reject=b;});s.ctx.waitCanvasVideoTaskResult=()=>waiting;
+  s.ctx.addGenerationLog=()=>effects.push('log');s.ctx.scheduleSave=()=>effects.push('save');s.ctx.refreshRunNodes=()=>effects.push('render');s.ctx.alert=()=>effects.push('alert');
+  load(s.ctx,'findPendingTask');const running=s.ctx.runVideoNode(s.node.id);await new Promise(r=>setImmediate(r));
+  assert.equal(s.submissions.length,1);s.state.nodes.length=0;effects.length=0;
+  if(outcome==='success')resolve({videos:['/output/late.mp4']});else reject(new Error('late failure'));
+  await running;assert.deepEqual(effects,[]);assert.equal(s.out.images.length,0);
+ });
+}
+test('关闭输出的旧视频回包不能写入重建的同ID节点',async()=>{
+ const s=setup();s.ctx.outputForNode=()=>null;let release;
+ s.ctx.waitCanvasVideoTaskResult=()=>new Promise(resolve=>{release=resolve;});load(s.ctx,'findPendingTask');
+ const running=s.ctx.runVideoNode(s.node.id);await new Promise(r=>setImmediate(r));
+ const replacement={id:s.node.id,type:'video'};s.state.nodes.splice(0,s.state.nodes.length,replacement);
+ release({videos:['/output/late.mp4']});await running;assert.equal(replacement.generatedOutputs,undefined);
+});
+test('提交前保存等待期间删除视频节点时不调用生成服务',async()=>{
+ const s=setup();let release;s.ctx.saveCanvas=()=>new Promise(resolve=>{release=resolve;});
+ const running=s.ctx.runVideoNode(s.node.id);s.state.nodes.length=0;release(true);await running;assert.equal(s.submissions.length,0);
 });

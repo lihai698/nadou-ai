@@ -1,8 +1,11 @@
-"""RunningHub 回包的纯解析规则。
+"""RunningHub 回包解析与标准接口参数的纯规则。
 
-本模块只读取调用方传入的 JSON 对象，不读取配置、不发起请求、不保存
-上游原始回包。网络请求、认证、输出下载和错误文案仍由应用入口负责。
+本模块只处理调用方传入的数据，不读取配置、不发起请求、不保存上游回包。
+标准接口网络流程由 runninghub_openapi 负责，认证与文件操作由宿主注入。
 """
+
+import math
+import re
 
 from typing import Any
 
@@ -45,4 +48,146 @@ def runninghub_extract_task_id(raw: Any) -> str:
         for key in ("taskId", "task_id", "id"):
             if data.get(key):
                 return str(data[key])
+    return ""
+
+
+def runninghub_schema_options(field):
+    values = []
+    for item in (field or {}).get("options") or []:
+        if isinstance(item, dict):
+            value = item.get("value")
+        else:
+            value = item
+        if value is not None and str(value) != "":
+            values.append(str(value))
+    return values
+
+
+def runninghub_schema_value(field, preferred=None):
+    preferred = "" if preferred is None else str(preferred).strip()
+    options = runninghub_schema_options(field)
+    if preferred and (not options or preferred in options):
+        return preferred
+    default = (field or {}).get("defaultValue")
+    if default is not None and str(default) != "":
+        return default
+    return options[0] if options else preferred
+
+
+def runninghub_schema_field(params, *keys):
+    wanted = {str(k).lower() for k in keys if k}
+    for field in params or []:
+        if not isinstance(field, dict):
+            continue
+        names = {str(field.get("fieldKey") or "").lower(), str(field.get("label") or "").lower()}
+        if names & wanted:
+            return field
+    return None
+
+
+def runninghub_aspect_from_size(size, fallback="1:1", *, parse_size):
+    width, height = parse_size(size)
+    if width and height:
+        divisor = math.gcd(width, height) or 1
+        return f"{width // divisor}:{height // divisor}"
+    raw = str(size or "").strip().lower()
+    if re.fullmatch(r"(auto|\d+\s*:\s*\d+)", raw):
+        return raw.replace(" ", "")
+    return fallback
+
+
+def runninghub_resolution_from_size(size, fallback="2k", *, parse_size):
+    width, height = parse_size(size)
+    if width and height:
+        long_edge = max(width, height)
+        if long_edge >= 3200:
+            return "4k"
+        if long_edge >= 1400:
+            return "2k"
+        return "1k"
+    raw = str(size or "").strip().lower()
+    return raw if raw in {"1k", "2k", "4k", "480p", "720p", "1080p", "native1080p"} else fallback
+
+
+def runninghub_size_for_aspect(aspect_ratio, fallback="1280x720"):
+    ratio = str(aspect_ratio or "").strip()
+    return {
+        "9:16": "720x1280",
+        "16:9": "1280x720",
+        "1:1": "1024x1024",
+        "4:3": "1024x768",
+        "3:4": "768x1024",
+    }.get(ratio, fallback)
+
+
+def runninghub_is_image_to_video(value):
+    text = str(value or "").strip().lower()
+    compact = re.sub(r"[\s_/]+", "-", text)
+    return "image-to-video" in compact or "-i2v" in compact or compact.endswith("i2v")
+
+
+def runninghub_apply_schema_defaults(body, params):
+    for field in params or []:
+        if not isinstance(field, dict):
+            continue
+        key = str(field.get("fieldKey") or "").strip()
+        if not key or key in body:
+            continue
+        default = field.get("defaultValue")
+        options = runninghub_schema_options(field)
+        if default is None or default == "":
+            if field.get("required") is True and options:
+                default = options[0]
+            else:
+                continue
+        ftype = str(field.get("type") or "").upper()
+        if ftype == "BOOLEAN":
+            body[key] = bool(default) if not isinstance(default, str) else default.lower() == "true"
+        elif ftype in {"INT", "INTEGER"}:
+            try:
+                body[key] = int(default)
+            except Exception:
+                body[key] = default
+        elif ftype == "FLOAT":
+            try:
+                body[key] = float(default)
+            except Exception:
+                body[key] = default
+        else:
+            body[key] = default
+    return body
+
+
+def runninghub_task_endpoint(provider, model, *, RUNNINGHUB_DEFAULT_IMAGE_MODELS, runninghub_endpoint_url, runninghub_openapi_url):
+    raw_model_path = str(model or "").strip()
+    model_path = raw_model_path.strip("/")
+    if not model_path:
+        model_path = RUNNINGHUB_DEFAULT_IMAGE_MODELS[0]
+    if raw_model_path.startswith("/openapi/"):
+        return runninghub_endpoint_url(provider, raw_model_path)
+    if model_path.startswith("openapi/"):
+        return runninghub_endpoint_url(provider, f"/{model_path}")
+    return runninghub_openapi_url(provider, model_path)
+
+
+def runninghub_endpoint_alias_for_model(model, *, RUNNINGHUB_MODEL_ENDPOINT_ALIASES):
+    model_id = str(model or "").strip().strip("/")
+    if not model_id:
+        return ""
+    direct = RUNNINGHUB_MODEL_ENDPOINT_ALIASES.get(model_id)
+    if direct:
+        return direct
+    lowered = model_id.lower()
+    if lowered.startswith("gpt-image-2.0/") or lowered.startswith("gpt-image-2/"):
+        if "/text-to-image-" in lowered or lowered.endswith("/text-to-image"):
+            return "rhart-image-g-2/text-to-image"
+        if "/edit-" in lowered or lowered.endswith("/edit"):
+            return "rhart-image-g-2/image-to-image"
+        if "/image-to-image-" in lowered or lowered.endswith("/image-to-image"):
+            return "rhart-image-g-2/image-to-image"
+    if lowered.startswith("nano-banana/"):
+        if "/text-to-image-" in lowered or lowered.endswith("/text-to-image"):
+            return "rhart-image-v1/text-to-image"
+        if "/edit-" in lowered or lowered.endswith("/edit"):
+            return "rhart-image-v1/edit"
     return ""

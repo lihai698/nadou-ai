@@ -3,13 +3,17 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const path=require('node:path');
 const vm=require('node:vm');
+const {attachSaveState}=require('./canvas_save_test_helpers.cjs');
 const classic=fs.readFileSync(path.join(__dirname,'../static/js/canvas.js'),'utf8');
 const smart=fs.readFileSync(path.join(__dirname,'../static/js/smart-canvas.js'),'utf8');
 function section(source,begin,end){const a=source.indexOf(begin),b=source.indexOf(end,a);assert.ok(a>=0&&b>a,begin);return source.slice(a,b);}
 function editor(fields){const e=vm.createContext({window:{},structuredClone,console,...fields});const module=path.join(__dirname,'../static/js/canvas-save-recovery.js');if(fs.existsSync(module))vm.runInContext(fs.readFileSync(module,'utf8'),e);return e;}
 test('classic: another page update never clears an unsaved local edit',()=>{
-    const e=editor({canvas:{id:'c'},CLIENT_ID:'local',lastCanvasUpdatedAt:1,savingCanvasNow:false,saveTimer:1,
-        localCanvasDirty:true,remoteSyncTimer:null,clearTimeout(){},setTimeout(){return 2;},syncRemoteCanvasNow(){},setStatus(){}});
+    const e=editor({canvas:{id:'c'},CLIENT_ID:'local',lastCanvasUpdatedAt:1,
+        localCanvasDirty:true,applyingRemoteCanvas:false,document:{hidden:false},clearTimeout(){},setTimeout(){return 2;},setStatus(){}});
+    attachSaveState(e,'classic');
+    vm.runInContext(fs.readFileSync(path.join(__dirname,'../static/js/canvas-remote-sync.js'),'utf8'),e);
+    vm.runInContext(section(classic,'const classicRemoteSync =','let lastCanvasUpdatedAt ='),e);
     vm.runInContext(section(classic,'function handleCanvasUpdatedMessage(','async function clearCurrentCanvas('),e);
     vm.runInContext("handleCanvasUpdatedMessage({type:'canvas_updated',canvas_id:'c',client_id:'other',updated_at:2})",e);
     assert.equal(e.localCanvasDirty,true);

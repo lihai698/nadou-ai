@@ -1,3 +1,4 @@
+const {createTaskContext}=require('./canvas_task_test_helpers.cjs');
 const {test} = require('node:test');
 const assert = require('node:assert/strict');
 const vm = require('node:vm');
@@ -31,7 +32,7 @@ test('asset manager reports only files actually deleted and names protected file
     for(const language of ['zh', 'en']){
         const messages=[];
         let renders=0;
-        const context = vm.createContext({
+        const context = createTaskContext({
             findLocalUpload:id=>({file:id}),
             setStatus:message=>messages.push(message),
             apiJson:async()=>({deleted:['free.png'],skipped_referenced:['used.png']}),
@@ -56,7 +57,7 @@ test('smart canvas shows retention rather than a false deletion success', async(
     const bundle = translations('smart-canvas');
     const notices=[];
     const requests=[];
-    const context = vm.createContext({
+    const context = createTaskContext({
         activeAssetCategory:()=>({items:[{id:'used',file:'used.png'}]}),
         localAssetLibrary:{items:[]},
         fetch:async(url, options)=>{

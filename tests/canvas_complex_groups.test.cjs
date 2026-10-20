@@ -1,3 +1,4 @@
+const {createTaskContext}=require('./canvas_task_test_helpers.cjs');
 const {test} = require('node:test');
 const assert = require('node:assert/strict');
 const {readFileSync} = require('node:fs');
@@ -13,7 +14,7 @@ function editor(smart, initialNodes, initialLinks=[], ids=[]) {
         return source.slice(a,b);
     }
     let serial=0;
-    const e=vm.createContext({nodes:structuredClone(initialNodes), connections:structuredClone(initialLinks),
+    const e=createTaskContext({nodes:structuredClone(initialNodes), connections:structuredClone(initialLinks),
         canvas:{id:'isolated',connections:structuredClone(initialLinks)}, selected:new Set(ids), selectedIds:ids,
         selectedId:ids.length===1?ids[0]:'', selectedImage:{}, activeComposerSubject:null,
         undoStack:[], UNDO_MAX:20, document:{activeElement:null},window:{},

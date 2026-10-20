@@ -1,3 +1,4 @@
+const {createTaskContext}=require('./canvas_task_test_helpers.cjs');
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const Audio=require('../static/js/canvas-audio.js');
@@ -10,7 +11,7 @@ function productionFunction(file,start,end){
 const providers=[{id:'p',name:'P',enabled:true,audio_models:['asr'],audio_generation_models:['tts']}];
 test('blank classic audio material opens the existing upload picker',()=>{
     let host, picked;
-    const context=vm.createContext({document:{createElement:()=>({})},window:{CanvasAudio:{mediaHtml:()=>'',bindMedia:(_wrap,_item,_state,value)=>{host=value;}}},
+    const context=createTaskContext({document:{createElement:()=>({})},window:{CanvasAudio:{mediaHtml:()=>'',bindMedia:(_wrap,_item,_state,value)=>{host=value;}}},
         canvasAudioMaterialHost:()=>({}),pickMediaForNode:id=>{picked=id;},node:{id:'audio',type:'audio'},allowImageNodeDropEvent(){},handleImageNodeDropEvent(){}});
     vm.runInContext(productionFunction('canvas-audio-host.js','function renderCanvasAudioMaterial(','function renderCanvasApiAudio('),context);
     vm.runInContext('renderCanvasAudioMaterial(node)',context);
@@ -18,7 +19,7 @@ test('blank classic audio material opens the existing upload picker',()=>{
 });
 test('classic audio download rejects a missing file instead of claiming success',async()=>{
     const downloaded=[];
-    const context=vm.createContext({scheduleSave(){},downloadUrl:async()=>true,outputImageName:()=> 'missing.wav',
+    const context=createTaskContext({scheduleSave(){},downloadUrl:async()=>true,outputImageName:()=> 'missing.wav',
         fetch:async()=>({ok:false,status:400}),responseErrorMessage:async()=> '音频文件不存在',
         downloadBlob:(blob,name)=>downloaded.push({blob,name})});
     vm.runInContext(productionFunction('canvas-audio-host.js','function canvasAudioMaterialHost(','function renderCanvasAudioMaterial('),context);
@@ -28,7 +29,7 @@ test('classic audio download rejects a missing file instead of claiming success'
 });
 test('classic audio picker accepts one audio file and surfaces upload errors',async()=>{
     const input={},errors=[],calls=[];
-    const context=vm.createContext({nodes:[{id:'audio',type:'audio'}],document:{createElement:()=>input},
+    const context=createTaskContext({canvas:{id:'audio-test'},canvasOpenGeneration:1,nodes:[{id:'audio',type:'audio'}],document:{createElement:()=>input},
         fillImageNode:async(id,files)=>{calls.push([id,files]);throw new Error('上传失败验收');},showErrorModal:message=>errors.push(message)});
     input.click=()=>{};
     vm.runInContext(productionFunction('canvas.js','function pickMediaForNode(','function addLLMNode('),context);
@@ -39,7 +40,7 @@ test('classic audio picker accepts one audio file and surfaces upload errors',as
 });
 test('classic audio replacement rejects non-audio before uploading or changing saved material',async()=>{
     let uploads=0;const node={id:'audio',type:'audio',url:'/assets/original.wav'};
-    const context=vm.createContext({nodes:[node],ensureCanvas:()=>true,mediaKindForUpload:file=>file.type.startsWith('audio/')?'audio':'image',
+    const context=createTaskContext({canvas:{id:'audio-test'},canvasOpenGeneration:1,nodes:[node],ensureCanvas:()=>true,mediaKindForUpload:file=>file.type.startsWith('audio/')?'audio':'image',
         fetch:async()=>{uploads++;},CANVAS_UPLOAD_MAX:50});
     vm.runInContext(productionFunction('canvas.js','async function fillImageNode(','function setImageNodeFromOutput('),context);
     await assert.rejects(vm.runInContext("fillImageNode('audio',[{name:'wrong.png',type:'image/png'}])",context),/只能.*音频/);
@@ -54,7 +55,7 @@ test('audio connections keep the downstream node generic until an audio model is
 });
 
 test('audio downstream model catalog includes every configured text model on the selected platform',()=>{
-    const context=vm.createContext({
+    const context=createTaskContext({
         apiProviders:[{id:'p',image_models:['image-a'],chat_models:['chat-a'],video_models:['video-a'],audio_models:['asr-a'],audio_generation_models:['tts-a']}],
         uniqueModels:list=>[...new Set(list.map(value=>String(value||'').trim()).filter(Boolean))]
     });
@@ -63,7 +64,7 @@ test('audio downstream model catalog includes every configured text model on the
 });
 test('smart API audio analysis sends audio to the LLM endpoint',async()=>{
     const calls=[];
-    const context=vm.createContext({
+    const context=createTaskContext({
         fetch:async (url,options)=>{calls.push([url,JSON.parse(options.body)]);return {ok:true,json:async()=>({text:'音频摘要'})};},
         audioRefsOnly:refs=>(refs||[]).filter(ref=>ref?.url && ref.kind==='audio'),
         providerChatModels:()=>['text-model'],
@@ -96,38 +97,38 @@ test('copy detaches task identity while retaining model and material',()=>{
 test('copied API audio outputs remain references after task identity is detached',()=>{
     const node={type:'generator',audioTaskId:'old',generatedOutputs:[{url:'/output/copied.wav',kind:'audio'}]};
     Audio.detachTask(node);
-    const context=vm.createContext({outputUrlValue:item=>item.url,mediaKindForOutputItem:item=>item.kind,outputImageName:()=>'',node});
+    const context=createTaskContext({outputUrlValue:item=>item.url,mediaKindForOutputItem:item=>item.kind,outputImageName:()=>'',node});
     vm.runInContext(productionFunction('canvas.js','function generatedImageRefs(','function mediaRefsFromNode('),context);
     assert.equal(vm.runInContext('generatedImageRefs(node).length',context),1);
 });
 test('successful smart media completion clears earlier recognition text',()=>{
     const node={audioOutputText:'old text',images:[],pending:1};
-    const context=vm.createContext({node,smartPendingTasks:()=>[],resultMediaUrls:x=>x,cleanHistoryImages:x=>x,stripImageGenerationMeta:x=>x,copyMediaSizeFields:(_x,result)=>result,nowMs:()=>10,mediaNodeDefaultScale:()=>1,MEDIA_NODE_DEFAULT_SCALE:1});
+    const context=createTaskContext({node,smartPendingTasks:()=>[],resultMediaUrls:x=>x,cleanHistoryImages:x=>x,stripImageGenerationMeta:x=>x,copyMediaSizeFields:(_x,result)=>result,nowMs:()=>10,mediaNodeDefaultScale:()=>1,MEDIA_NODE_DEFAULT_SCALE:1});
     vm.runInContext(productionFunction('smart-canvas.js','function finalizeSmartPendingTask(','async function resumeSmartPendingNode('),context);
     vm.runInContext("finalizeSmartPendingTask(node,'task',[{url:'/output/image.png',kind:'image'}])",context);
     assert.equal(node.audioOutputText,undefined);
     assert.equal(node.images[0].url,'/output/image.png');
 });
 test('smart audio logs retain the original audio task ID and selected model',()=>{
-    const context=vm.createContext({run:{kind:'audio',settings:{engine:'api',model:'image-model'},audioRequest:{task_id:'canvas_audio_original',model:'tts',provider_id:'p'}}});
+    const context=createTaskContext({run:{kind:'audio',settings:{engine:'api',model:'image-model'},audioRequest:{task_id:'canvas_audio_original',model:'tts',provider_id:'p'}}});
     vm.runInContext(productionFunction('smart-canvas.js','function smartRunRequestMeta(','function smartRunSnapshot('),context);
     assert.equal(vm.runInContext('smartRunRequestMeta(run).task_id',context),'canvas_audio_original');
     assert.equal(vm.runInContext('smartRunRequestMeta(run).model',context),'tts');
 });
 test('smart audio retry failure retains playable material and shows recovery state',()=>{
-    const context=vm.createContext({window:{CanvasAudio:Audio},mediaKindForItem:item=>item.kind,node:{images:[{url:'/output/old.wav',kind:'audio'}],audioTaskId:'original',audioStatus:'unknown',audioError:'状态未知'}});
+    const context=createTaskContext({window:{CanvasAudio:Audio},mediaKindForItem:item=>item.kind,node:{images:[{url:'/output/old.wav',kind:'audio'}],audioTaskId:'original',audioStatus:'unknown',audioError:'状态未知'}});
     vm.runInContext(productionFunction('smart-canvas-audio-host.js','function smartAudioBodyHtml(','function bindSmartAudioMedia('),context);
     const html=vm.runInContext('smartAudioBodyHtml(node)',context);
     assert.ok(html.includes('/output/old.wav'));assert.ok(html.includes('查询原任务'));assert.ok(html.includes('状态未知'));
 });
 test('smart API keeps original task query after audio source disconnects',()=>{
-    const context=vm.createContext({window:{CanvasAudio:Audio},settings:{engine:'api',apiKind:'image'},smartAudioSources:()=>[],node:{audioTaskId:'original',audioStatus:'query-paused'}});
+    const context=createTaskContext({window:{CanvasAudio:Audio},settings:{engine:'api',apiKind:'image'},smartAudioSources:()=>[],node:{audioTaskId:'original',audioStatus:'query-paused'}});
     vm.runInContext(productionFunction('smart-canvas-audio-host.js','function smartApiAudioMode(','function renderSmartApiAudioParams('),context);
     assert.equal(vm.runInContext('smartApiAudioMode(node)',context),true);
     assert.equal(vm.runInContext('smartApiAudioMode(null)',context),false);
 });
 test('completed smart audio task does not hide a later native media group',()=>{
-    const context=vm.createContext({window:{CanvasAudio:Audio},node:{images:[{url:'/output/a.wav',kind:'audio'},{url:'/output/b.png',kind:'image'}],audioTaskId:'completed',audioStatus:'done'}});
+    const context=createTaskContext({window:{CanvasAudio:Audio},node:{images:[{url:'/output/a.wav',kind:'audio'},{url:'/output/b.png',kind:'image'}],audioTaskId:'completed',audioStatus:'done'}});
     vm.runInContext(productionFunction('smart-canvas-audio-host.js','function smartAudioBodyHtml(','function bindSmartAudioMedia('),context);
     assert.equal(vm.runInContext('smartAudioBodyHtml(node)',context),'');
 });

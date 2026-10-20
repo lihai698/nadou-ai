@@ -1,3 +1,4 @@
+const {createTaskContext}=require('./canvas_task_test_helpers.cjs');
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const model=require('../static/js/canvas-video-deconstruction-model.js');
@@ -35,7 +36,7 @@ test('创作阶段连线保留可读依赖但不会将整篇小说和资产串�
  const nodes=[{id:'story',type:'smart-prompt'},{id:'table',type:'smart-shot-table'},{id:'prompt',type:'smart-prompt'},{id:'image',type:'smart-image'}];
  const canvas={connections:[{from:'story',to:'table',kind:'story'},{from:'table',to:'prompt',kind:'story'},{from:'prompt',to:'image',kind:'input'}]};
  const code=smartSource.slice(smartSource.indexOf('function upstreamNodesForKinds('),smartSource.indexOf('function clearDetachedRunInputRefs('));
- const context=vm.createContext({nodes,canvas,canvasUsesConnections:true});
+ const context=createTaskContext({nodes,canvas,canvasUsesConnections:true});
  vm.runInContext(code,context);
  assert.equal(vm.runInContext('inputNodesFor(nodes[2]).length',context),0);
  assert.equal(vm.runInContext('workflowInputNodesFor(nodes[2]).length',context),0);
@@ -46,7 +47,7 @@ test('创作阶段连线保留可读依赖但不会将整篇小说和资产串�
 test('长工作流最后几镜超出原4000高度时连线仍处于SVG绘制范围',()=>{
  const nodes=[{id:'table',x:100,y:100,w:1120,h:390},{id:'shot12',x:7000,y:5200,w:340,h:260}];
  const canvas={connections:[{from:'table',to:'shot12',kind:'story'}]};
- const context=vm.createContext({nodes,canvas,isSmartGroupNode:()=>false,cascadeConnectionKeys:()=>new Set(),smartCascadeRunPath:null,
+ const context=createTaskContext({nodes,canvas,isSmartGroupNode:()=>false,cascadeConnectionKeys:()=>new Set(),smartCascadeRunPath:null,
  selectedNodeIds:()=>[],loopInsertPreview:null,smartCascadeEdgeState:()=>'',nodeRect:n=>({x:n.x,y:n.y,width:n.w,height:n.h})});
  const code=smartSource.slice(smartSource.indexOf('function renderConnections('),smartSource.indexOf('function refreshConnectionLayer('));
  vm.runInContext(code,context);

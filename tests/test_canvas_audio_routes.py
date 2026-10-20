@@ -1,5 +1,6 @@
 """只加载真实音频路由定义，隔离目录与模拟供应商，不读取个人配置。"""
 import ast
+from contextlib import contextmanager
 import asyncio
 import hashlib
 import json
@@ -21,17 +22,21 @@ from backend.canvas_audio import *
 from backend.task_records import (TaskRecordError, _read_task_record_unlocked,
     _write_task_record_unlocked, read_task_record, write_task_record, task_records_lock, mark_interrupted_task)
 from backend.task_states import task_state_update
+from backend import canvas_audio_service
+from backend import canvas_task_service
+from backend.canvas_task_service import public_task as _public_canvas_task
 
 
 def load_routes(root):
     source = ast.parse(Path('main.py').read_text(encoding='utf-8'))
-    names = {'CanvasAudioTaskRequest', 'build_canvas_audio_result', 'run_canvas_audio_task',
+    names = {'_canvas_audio_task_errors', 'CanvasAudioTaskRequest', 'build_canvas_audio_result', 'run_canvas_audio_task',
              'create_canvas_audio_task', 'get_canvas_audio_task', 'refresh_canvas_audio_task', '_durable_canvas_task', '_interrupted_canvas_task', '_public_canvas_task'}
     selected = [n for n in source.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) and n.name in names]
-    selected += [n for n in source.body if isinstance(n, ast.Assign) and any(isinstance(t, ast.Name) and t.id in {'_CANVAS_TASK_PERSISTED_FIELDS', '_CANVAS_RESULT_PERSISTED_FIELDS'} for t in n.targets)]
     ns = dict(globals(), app=FastAPI(), CANVAS_TASKS={}, CANVAS_TASK_LOCK=threading.RLock(),
               CANVAS_TASK_DIR=str(root), CANVAS_TASK_PROCESS_ID='test-process', CANVAS_TASK_UNKNOWN='服务重启，原任务状态未知', CANVAS_AUDIO_TASK_GATE=asyncio.Semaphore(3),
               sanitize_record_usage=lambda value: None, task_context=lambda *args, **kwargs: {},
+              video_deconstruction_media=lambda: None,
+              output_path_for=lambda name, group: str(root/name), output_url_for=lambda name, group: '/output/'+name,
               api_headers=lambda **kwargs: {'Authorization': 'Bearer test-only'},
               public_comfy_error_detail=lambda *args, **kwargs: kwargs.get('fallback', '音频失败'),
               safe_upstream_http_detail=lambda response: '音频平台请求失败')
@@ -39,6 +44,8 @@ def load_routes(root):
     ns['_write_canvas_task_record'] = lambda task, **kw: write_task_record(str(root), ns['_durable_canvas_task'](task))
     ns['_read_canvas_task_record'] = lambda task_id: read_task_record(str(root), task_id)
     ns['_load_canvas_task_for_worker'] = lambda task_id: ns['CANVAS_TASKS'].get(task_id)
+    ns['_mark_canvas_worker_start_failed'] = lambda task, identity: canvas_task_service.mark_start_failed(
+        task, identity, tasks=ns['CANVAS_TASKS'], write_record=ns['_write_canvas_task_record'])
     return ns
 
 

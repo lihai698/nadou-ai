@@ -8,12 +8,32 @@ from pathlib import Path
 from unittest.mock import patch
 
 import httpx
+import anyio
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import main
+from backend import canvas_task_service
 
 
 class CanvasTaskLifecycleTests(unittest.IsolatedAsyncioTestCase):
+    async def test_http_image_task_uses_service_record_policy_and_worker(self):
+        generated = asyncio.Event()
+        async def generator(payload):
+            generated.set()
+            return {'images': ['/assets/output/test-only.png']}
+        with patch.object(main, 'build_online_image_result', side_effect=generator), \
+             patch.object(canvas_task_service, 'run_image_worker', wraps=canvas_task_service.run_image_worker) as worker, \
+             patch.object(canvas_task_service, 'write_record', wraps=canvas_task_service.write_record) as writer:
+            response = await self.client.post('/api/canvas-image-tasks', json={'prompt': '服务委托验收', 'provider_id': 'test-only'})
+            self.assertEqual(response.status_code, 200)
+            await asyncio.wait_for(generated.wait(), timeout=2)
+            await asyncio.sleep(0)
+            task_id = response.json()['task_id']
+            fetched = await self.client.get('/api/canvas-image-tasks/' + task_id)
+            self.assertEqual(fetched.json()['status'], 'succeeded')
+            worker.assert_awaited_once()
+            self.assertGreaterEqual(writer.call_count, 3)
+
     async def test_assistant_credential_revision_changes_without_returning_secret(self):
         catalog = lambda:[{'id':'test-only','protocol':'openai','image_models':['image']}]
         with patch.object(main, 'public_api_providers', side_effect=catalog):
@@ -45,6 +65,8 @@ class CanvasTaskLifecycleTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(generated, ['固定编号验收'])
 
     async def asyncSetUp(self):
+        # Initialize the HTTP backend before tests intercept application task creation.
+        anyio.get_cancelled_exc_class()
         self.tasks_patch = patch.object(main, 'CANVAS_TASKS', {})
         self.tasks_patch.start()
         self.addCleanup(self.tasks_patch.stop)

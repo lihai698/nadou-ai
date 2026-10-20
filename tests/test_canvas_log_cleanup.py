@@ -1,4 +1,5 @@
 import json
+import hashlib
 import sys
 import tempfile
 import unittest
@@ -6,6 +7,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import httpx
+from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import main
@@ -299,6 +301,39 @@ class CanvasLogCleanupTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(preview.exists())
         self.assertEqual(result["removed_files"], [path.name])
         self.assertEqual(result["removed_previews"], 1)
+
+    def test_preview_key_uses_the_same_resolved_path_as_cleanup(self):
+        path, _ = self.generated_file()
+        stat = path.stat()
+        canonical = str(path) + "-resolved-alias"
+        expected = hashlib.sha1(
+            f"{canonical}|{stat.st_mtime_ns}|{stat.st_size}|256".encode("utf-8")
+        ).hexdigest()
+        with patch.object(main.os.path, "realpath", return_value=canonical):
+            webp, png = main.media_preview_cache_paths(str(path), 256)
+            self.assertEqual(Path(webp).name, expected + ".webp")
+            self.assertEqual(Path(png).name, expected + ".png")
+            Path(webp).write_bytes(b"preview")
+            Path(png).write_bytes(b"preview")
+            self.assertEqual(main.delete_media_preview_cache(str(path)), 2)
+        self.assertTrue(path.exists())
+
+    async def test_jpeg_key_uses_the_same_resolved_path_as_cleanup(self):
+        path, url = self.generated_file()
+        Image.new("RGB", (8, 8), "blue").save(path, format="PNG")
+        stat = path.stat()
+        canonical = str(path) + "-resolved-alias"
+        expected = hashlib.sha1(
+            f"{canonical}|{stat.st_mtime_ns}|{stat.st_size}|256|jpg".encode("utf-8")
+        ).hexdigest()
+        with patch.object(main, "output_file_from_url", return_value=str(path)), patch.object(
+            main.os.path, "realpath", return_value=canonical
+        ):
+            response = await main.image_jpeg(url=url, w=256)
+            self.assertEqual(Path(response.path).name, expected + ".jpg")
+            self.assertTrue(Path(response.path).is_file())
+            self.assertEqual(main.delete_media_preview_cache(str(path)), 1)
+        self.assertTrue(path.exists())
 
     async def test_generation_history_does_not_pin_deleted_log_media(self):
         path, url = self.generated_file("history-only.png")

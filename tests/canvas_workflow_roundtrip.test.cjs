@@ -1,3 +1,4 @@
+const {createTaskContext}=require('./canvas_task_test_helpers.cjs');
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const {readFileSync}=require('node:fs');
@@ -10,7 +11,7 @@ function section(file,start,end){
 }
 function editor(smart){
     let serial=0;
-    const context=vm.createContext({canvas:{id:'isolated',connections:[]},nodes:[],connections:[],selected:new Set(),
+    const context=createTaskContext({canvas:{id:'isolated',connections:[]},nodes:[],connections:[],selected:new Set(),
         selectedIds:[],selectedId:'',selectedImage:{},activeComposerSubject:null,lastMouseBoard:{x:100,y:100},lastMouseWorld:{x:100,y:100},
         document:{activeElement:null},window:{},uid:prefix=>`${prefix}-${++serial}`,pushUndo(){},render(){},scheduleSave(){},toast(){},setStatus(){},
         defaultPoint:()=>({x:0,y:0}),viewportCenter:()=>({x:0,y:0}),serializableCanvasNode:n=>({...n}),serializableSmartNode:n=>structuredClone(n),

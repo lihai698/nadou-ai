@@ -14,6 +14,7 @@ import httpx
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import main
+from backend.canvas_store import CanvasStore
 
 
 class CanvasConcurrentSaveTests(unittest.TestCase):
@@ -37,11 +38,11 @@ class CanvasConcurrentSaveTests(unittest.TestCase):
             second_loaded = threading.Event()
             load_count = 0
             count_lock = threading.Lock()
-            real_load_canvas = main.load_canvas
+            real_load_canvas = CanvasStore.load
 
-            def coordinated_load(requested_id):
+            def coordinated_load(store, requested_id):
                 nonlocal load_count
-                canvas = real_load_canvas(requested_id)
+                canvas = real_load_canvas(store, requested_id)
                 with count_lock:
                     load_count += 1
                     call_number = load_count
@@ -70,7 +71,7 @@ class CanvasConcurrentSaveTests(unittest.TestCase):
 
             with (
                 patch.object(main, "CANVAS_DIR", str(canvas_dir)),
-                patch.object(main, "load_canvas", side_effect=coordinated_load),
+                patch.object(CanvasStore, "load", autospec=True, side_effect=coordinated_load),
                 patch.object(main.manager, "broadcast_canvas_updated", new_callable=AsyncMock),
                 ThreadPoolExecutor(max_workers=2) as executor,
             ):

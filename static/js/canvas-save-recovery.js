@@ -3,6 +3,19 @@
     'use strict';
     const transient = new Set(['running','runStatus','runError','pending','queued','_cascadeIdx','_cascadeFailed','_activeLoopCtx']);
     const clone = value => value === undefined ? undefined : JSON.parse(JSON.stringify(value));
+    function draftSnapshot(canvas,nodes,connections){
+        return {...canvas,nodes,connections:clone(connections || [])};
+    }
+    function recoveredState(recovered,viewport){
+        if(!recovered) return null;
+        return {
+            canvas:{...recovered.canvas,viewport},
+            hasConflict:recovered.conflicts > 0,
+            message:recovered.conflicts
+                ? '已恢复本机草稿，并保留冲突副本。请检查后重试保存。'
+                : '已恢复未保存的本机草稿，请检查后重试保存。'
+        };
+    }
     function canonical(value){
         if(Array.isArray(value)) return value.map(canonical);
         if(value && typeof value === 'object'){
@@ -254,5 +267,5 @@
         result.conflicts+=Number(draft.recoveredConflicts || 0);
         return result;
     }
-    root.CanvasSaveRecovery={clone,equal,mergeNodes,mergeConnections,mergeDocument,placeConflictCopies,saveDraft,readDraft,clearDraft,recoverDraft,prepareRecovery,exportDraft,content};
+    root.CanvasSaveRecovery={clone,draftSnapshot,recoveredState,equal,mergeNodes,mergeConnections,mergeDocument,placeConflictCopies,saveDraft,readDraft,clearDraft,recoverDraft,prepareRecovery,exportDraft,content};
 })(typeof window !== 'undefined' ? window : globalThis);

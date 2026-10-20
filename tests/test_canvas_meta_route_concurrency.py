@@ -14,6 +14,7 @@ import httpx
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import main
+from backend.canvas_store import CanvasStore
 
 
 class CanvasMetaRouteConcurrencyTests(unittest.TestCase):
@@ -51,13 +52,13 @@ class CanvasMetaRouteConcurrencyTests(unittest.TestCase):
         self.seed(deleted=deleted)
         entered = threading.Event()
         second_done = threading.Event()
-        real_load = main.load_canvas_any if deleted or first_method == "DELETE" else main.load_canvas
+        real_load = CanvasStore.load_any if deleted or first_method == "DELETE" else CanvasStore.load
         first_call = True
         call_lock = threading.Lock()
 
-        def pause_after_first_load(canvas_id):
+        def pause_after_first_load(store, canvas_id):
             nonlocal first_call
-            canvas = real_load(canvas_id)
+            canvas = real_load(store, canvas_id)
             with call_lock:
                 pause = first_call
                 first_call = False
@@ -73,8 +74,8 @@ class CanvasMetaRouteConcurrencyTests(unittest.TestCase):
                     return restored
             return await asyncio.to_thread(self.request, "POST", self.endpoint + "/meta", {"title": "新标题"})
 
-        load_name = "load_canvas_any" if deleted or first_method == "DELETE" else "load_canvas"
-        with patch.object(main, load_name, side_effect=pause_after_first_load):
+        load_name = "load_any" if deleted or first_method == "DELETE" else "load"
+        with patch.object(CanvasStore, load_name, autospec=True, side_effect=pause_after_first_load):
             with ThreadPoolExecutor(max_workers=2) as executor:
                 first = executor.submit(self.request, first_method, first_path)
                 self.assertTrue(entered.wait(timeout=3), "第一个请求未读到画布")
@@ -121,19 +122,19 @@ class CanvasMetaRouteConcurrencyTests(unittest.TestCase):
         self.seed()
         entered = threading.Event()
         delete_done = threading.Event()
-        real_load = main.load_canvas
+        real_load = CanvasStore.load
         first_call = True
 
-        def pause_meta_load(canvas_id):
+        def pause_meta_load(store, canvas_id):
             nonlocal first_call
-            canvas = real_load(canvas_id)
+            canvas = real_load(store, canvas_id)
             if first_call:
                 first_call = False
                 entered.set()
                 delete_done.wait(timeout=0.35)
             return canvas
 
-        with patch.object(main, "load_canvas", side_effect=pause_meta_load):
+        with patch.object(CanvasStore, "load", autospec=True, side_effect=pause_meta_load):
             with ThreadPoolExecutor(max_workers=2) as executor:
                 meta = executor.submit(self.request, "POST", self.endpoint + "/meta", {"title": "新标题"})
                 self.assertTrue(entered.wait(timeout=3))
