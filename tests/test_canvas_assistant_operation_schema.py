@@ -14,7 +14,9 @@ from pathlib import Path
 sys.path.insert(0, sys.argv[1])
 class BlockExecutor(importlib.abc.MetaPathFinder):
     def find_spec(self, fullname, path=None, target=None):
-        if fullname in {'backend.canvas_assistant_operations', 'main'}:
+        if fullname in {'backend.canvas_assistant_operations', 'main',
+                        'backend.canvas_assistant_story', 'backend.canvas_assistant_story_analysis',
+                        'backend.canvas_assistant_shot_prompts'}:
             raise AssertionError('protocol loaded execution entry: ' + fullname)
 sys.meta_path.insert(0, BlockExecutor())
 from backend.canvas_assistant_tools import parse_decision, validate_tool
@@ -24,6 +26,9 @@ assert Path(tools.__file__).resolve().is_relative_to(Path(sys.argv[1]))
 operation = {'op':'create','operationId':'c','ref':'p','type':'prompt','content':'原文'}
 validated = validate_tool('apply_canvas_operations', {'operations':[operation]})
 assert validated['operations'][0]['content'] == '原文'
+analysis = validate_tool('create_story_analysis', {'sourceNodeId':'story','title':'故事','style':'水墨'})
+assert analysis == {'sourceNodeId':'story','title':'故事','style':'水墨'}
+assert validate_tool('create_shot_images', {'tableId':'table','rowIds':['shot']})['newAttempt'] is False
 decision = parse_decision('{"reply":"计划","operations":[{"op":"connect","operationId":"e","from":"p","to":"g"}]}')
 assert decision.legacy and decision.arguments['operations'][0]['from'] == 'p'
 for invalid in ({**operation, 'taskId':'forbidden'}, {**operation, 'op':'delete'}):

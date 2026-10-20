@@ -8,9 +8,7 @@ from fastapi import HTTPException
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from backend.canvas_assistant_node_rules import StrictOperation, CreateNode
-from backend.canvas_assistant_story import StoryWorkflow
-from backend.canvas_assistant_story_analysis import StoryAnalysis, StoryAnalysisResult
-from backend.canvas_assistant_shot_prompts import ShotPrompts, ShotImages
+from backend.canvas_assistant_story_schema import StoryWorkflow, StoryAnalysis, StoryAnalysisResult, ShotPrompts, ShotImages
 
 
 class UpdateNode(StrictOperation):

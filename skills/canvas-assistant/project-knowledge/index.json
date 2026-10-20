@@ -9189,7 +9189,7 @@
           "symbol": "create_story_nodes",
           "line": 75,
           "evidence": "backend/canvas_assistant_story.py:create_story_nodes",
-          "sha256": "178488d858cbbb32aac5d353153819f7f53103f5421e75f899193b8aa65cc218"
+          "sha256": "183e0fb09de3dcfef80c0624adc4ca0367893cdba3319321243d8ccdbdc2eec1"
         },
         {
           "path": "backend/canvas_assistant_agent.py",
@@ -9210,14 +9210,14 @@
           "symbol": "create_analysis",
           "line": 22,
           "evidence": "backend/canvas_assistant_story_analysis.py:create_analysis",
-          "sha256": "1703ff6bc4aaad7321f86b0ed53c3cc06905ceaf37cf0fd307b11d3171467203"
+          "sha256": "835db9a7c564970e3bd39200b248e5c8c8ef4b9f0a3ddb3c8656d134b4d724cd"
         },
         {
           "path": "backend/canvas_assistant_shot_prompts.py",
           "symbol": "create_shot_prompts",
           "line": 32,
           "evidence": "backend/canvas_assistant_shot_prompts.py:create_shot_prompts",
-          "sha256": "48738a20609bbe6fb47d17187e9de09e86921e869fead6a4b509a7a956651bad"
+          "sha256": "f656cde24627e5dce7816010b517bec0030766675bf48206c42ca76b38043c29"
         },
         {
           "path": "backend/canvas_assistant_autonomy.py",

@@ -4,19 +4,9 @@ import hashlib
 import json
 
 from fastapi import HTTPException
-from pydantic import BaseModel, ConfigDict, Field
 from backend.canvas_assistant_node_rules import CreateNode, is_busy, new_node
-from backend.canvas_assistant_story_analysis import StoryAnalysis, create_analysis
-
-
-class ShotPrompts(BaseModel):
-    model_config=ConfigDict(extra='forbid',strict=True)
-    tableId:str=Field(min_length=1,max_length=100)
-    rowIds:list[str]=Field(min_length=1,max_length=30)
-
-
-class ShotImages(ShotPrompts):
-    newAttempt:bool=False
+from backend.canvas_assistant_story_analysis import create_analysis
+from backend.canvas_assistant_story_schema import StoryAnalysis
 
 
 def shot_input(table,row):

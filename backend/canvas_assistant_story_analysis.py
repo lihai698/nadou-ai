@@ -3,20 +3,9 @@ import copy
 import hashlib
 import json
 from fastapi import HTTPException
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
-from backend.canvas_assistant_story import StoryWorkflow, create_story_nodes
-
-
-class StoryAnalysis(BaseModel):
-    model_config=ConfigDict(extra='forbid',strict=True)
-    sourceNodeId:str=Field(min_length=1,max_length=100)
-    title:str=Field(min_length=1,max_length=80)
-    style:str=Field(min_length=1,max_length=2000)
-
-
-class StoryAnalysisResult(BaseModel):
-    model_config=ConfigDict(extra='forbid',strict=True)
-    analysisNodeId:str=Field(min_length=1,max_length=100)
+from pydantic import ValidationError
+from backend.canvas_assistant_story import create_story_nodes
+from backend.canvas_assistant_story_schema import StoryWorkflow
 
 
 def create_analysis(candidate,data,settings,providers):
