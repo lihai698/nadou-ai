@@ -177,3 +177,8 @@ def assistant_output_media(result):
             continue
         output.append({"url": url, "name": item.get("name") if isinstance(item, dict) else "助手图片"})
     return output
+
+
+def model_image_identity(value):
+    """关键帧内容只保存一份；读取证据使用摘要，不重复落入回执和消息日志。"""
+    return 'sha256:' + hashlib.sha256(value.encode('utf-8')).hexdigest() if value.startswith('data:image/') else value

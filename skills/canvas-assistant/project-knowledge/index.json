@@ -9113,7 +9113,7 @@
           "symbol": "AGENT_GUIDE",
           "line": 20,
           "evidence": "backend/canvas_assistant_agent.py:AGENT_GUIDE",
-          "sha256": "812e4528fd44f1ebcdaadd82587800ef7a99c9d432663ea0b73bf167bc6abbf9"
+          "sha256": "8582d20346deb04b101d91926311b40ef1cd9f6e2d3a94103028670157bdc5b2"
         },
         {
           "path": "static/js/canvas.js",
@@ -9196,7 +9196,7 @@
           "symbol": "AGENT_GUIDE",
           "line": 20,
           "evidence": "backend/canvas_assistant_agent.py:AGENT_GUIDE",
-          "sha256": "812e4528fd44f1ebcdaadd82587800ef7a99c9d432663ea0b73bf167bc6abbf9"
+          "sha256": "8582d20346deb04b101d91926311b40ef1cd9f6e2d3a94103028670157bdc5b2"
         },
         {
           "path": "static/js/canvas.js",

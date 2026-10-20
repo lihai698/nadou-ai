@@ -3,19 +3,15 @@ from __future__ import annotations
 
 import asyncio
 import copy
-import hashlib
 import json
 import time
 
 from fastapi import HTTPException
 
+from backend import canvas_assistant_canvas_rules as context_rules
 from backend.canvas_assistant_skills import SkillCatalog
 from backend.canvas_assistant_tools import TOOLS, parse_decision, tool_catalog, validate_tool, decision_diagnostic
 
-
-def model_image_identity(value):
-    """关键帧内容只保存一份；读取证据使用摘要，不重复落入回执和消息日志。"""
-    return 'sha256:' + hashlib.sha256(value.encode('utf-8')).hexdigest() if value.startswith('data:image/') else value
 
 AGENT_GUIDE = """你是当前画布的创作 Agent，使用简体中文。你可以分步读取画布、调用受控工具、读取真实工具回执，再决定下一步。
 每次只返回一个 JSON：{"reply":"简短说明","tool":"工具名或null","arguments":{}}。无需工具时 tool 为 null 并给出最终回复。
@@ -115,7 +111,7 @@ async def run_agent(*, payload, previous, agent, checkpoint, execute, call_model
         if budget and agent.get("plan"):
             agent = await budget(agent, {"modelCalls": 1}, f"model:{payload.requestId}:{agent['modelCalls'] + 1}")
         agent["modelCalls"] += 1
-        agent['lastModelInputImages'] = [model_image_identity(value) for value in agent.get('images') or []]
+        agent['lastModelInputImages'] = [context_rules.model_image_identity(value) for value in agent.get('images') or []]
         await checkpoint(agent)
         await emit({"type": "agent_step", "label": "正在规划" if agent["modelCalls"] == 1 else "继续判断", "modelCalls": agent["modelCalls"]})
         started = time.monotonic()
