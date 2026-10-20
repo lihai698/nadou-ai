@@ -68,3 +68,6 @@
  .depth-capture-tabs:has(.video-deconstruction-menu) { flex-wrap:wrap; }
  .video-deconstruction-row-preview { align-items:flex-start; flex-direction:column; }
 }
+
+.shot-table-body .shot-table-summary { cursor:grab; }
+.shot-table-body .shot-table-summary:active { cursor:grabbing; }

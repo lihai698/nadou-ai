@@ -1200,7 +1200,10 @@ function smartNavigationHost(){
 async function backToCanvasList(){
     return SmartNavigation.backToCanvasList(smartNavigationHost());
 }
-clearCurrentCanvasBtn?.addEventListener('click', clearCurrentSmartCanvas);
+clearCurrentCanvasBtn?.addEventListener('click', () => {
+    closeCreateMenu();
+    clearCurrentSmartCanvas();
+});
 
 async function clearCurrentSmartCanvas(){
     return SmartNavigation.clearCurrentSmartCanvas(smartNavigationHost());
@@ -1291,6 +1294,9 @@ let smartSelectionUiNodeIds = new Set();
 let smartSelectionUiImage = {nodeId:'', index:-1};
 function syncSelectionUi(){
     return SmartSelection.syncSelectionUi(smartLayoutHost());
+}
+function syncSelectionGroup(){
+    return SmartSelection.syncSelectionGroup(smartLayoutHost());
 }
 function isNodeSelected(id){
     return SmartSelection.isNodeSelected(smartLayoutHost(), id);
@@ -3820,7 +3826,8 @@ function smartInteractionViewHost(){
         render:(...args)=>render(...args),
         smartGroupCompactMembers:(...args)=>smartGroupCompactMembers(...args),
         applyThumbDisplaySizeToElement:(...args)=>applyThumbDisplaySizeToElement(...args),
-        scheduleInteractionLayerRefresh:(...args)=>scheduleInteractionLayerRefresh(...args)
+        scheduleInteractionLayerRefresh:(...args)=>scheduleInteractionLayerRefresh(...args),
+        syncSelectionGroup:(...args)=>syncSelectionGroup(...args)
     };
 }
 const smartInteractionView=SmartNodeView.createInteractionRefresh(smartInteractionViewHost);
@@ -5032,6 +5039,7 @@ function smartNodeViewHost(){
         smartRecoverableImageTask:(...args)=>smartRecoverableImageTask(...args),
         syncPromptNodeHeightForSplit:(...args)=>syncPromptNodeHeightForSplit(...args),
         syncSelectionUi:(...args)=>syncSelectionUi(...args),
+        syncSelectionGroup:(...args)=>syncSelectionGroup(...args),
         syncSmartSelectedImageResolution:(...args)=>syncSmartSelectedImageResolution(...args),
         thumbMediaHtml:(...args)=>thumbMediaHtml(...args),
         toast:(...args)=>toast(...args),

@@ -57,6 +57,45 @@ test('smart Comfy text route uses requested dimensions and task coordinator',asy
     assert.equal(submitted.workflow_json,'Z-Image.json');assert.equal(submitted.width,640);assert.equal(submitted.height,360);
 });
 
+test('both smart custom workflow routes submit fresh noise and current prompt and image',async t=>{
+    const workflowParams=require('../static/js/smart-workflow-params.js');
+    let random=0;
+    t.mock.method(Math,'random',()=>random+=0.1);
+    for(const direct of [false,true]){
+        const calls=[];
+        const config={fields:[{id:'prompt',node:'238',input:'value',type:'textarea'},{id:'image',node:'199',input:'image',type:'image'}]};
+        const settings={comfyMode:'custom',comfyWorkflow:'custom/test.json'};
+        const h={settings,smartClientId:'fixture',comfyWorkflows:[],
+            imageRefsOnly:refs=>refs.filter(ref=>ref.kind==='image'),videoRefsOnly:()=>[],audioRefsOnly:()=>[],
+            fetch:async()=>({ok:true,json:async()=>({config,workflow:{'129':{class_type:'RandomNoise',inputs:{noise_seed:12}}}})}),
+            comfyFieldKind:f=>workflowParams.comfyFieldKind({},f),comfyNameForRef:async()=> 'new-upload.png',
+            comfyParamsFromWorkflowValues:(cfg,values)=>workflowParams.comfyParamsFromWorkflowValues({},cfg,values),
+            runQueuedSmartComfyGenerate:async body=>{calls.push(body);return {videos:['new-video.mp4']};},
+            resultMediaUrls:r=>r.videos,mediaKindForUrls:()=> 'video',finalizePendingNode(){},clearPromptInput(){},scheduleSave(){}};
+        for(let i=0;i<2;i++){
+            if(direct)await comfy.runComfyGeneration(h,{},'new prompt',[{kind:'image',url:'new.png'}],{},{});
+            else await comfy.generateComfyUrlsWithSettings(h,settings,'new prompt',[{kind:'image',url:'new.png'}],{});
+        }
+        assert.equal(calls.length,2);
+        for(const call of calls){
+            assert.equal(call.params['238'].value,'new prompt');
+            assert.equal(call.params['199'].image,'new-upload.png');
+            assert.ok(Number.isInteger(call.params['129'].noise_seed));
+        }
+        assert.notEqual(calls[0].params['129'].noise_seed,calls[1].params['129'].noise_seed);
+    }
+});
+
+test('a custom workflow explicit seed field keeps its fixed value',async()=>{
+    let submitted;
+    const h={smartClientId:'fixture',imageRefsOnly:x=>x,videoRefsOnly:()=>[],audioRefsOnly:()=>[],
+        fetch:async()=>({ok:true,json:async()=>({config:{fields:[]},workflow:{noise:{class_type:'RandomNoise',inputs:{noise_seed:12}}}})}),
+        comfyParamsFromWorkflowValues:()=>({noise:{noise_seed:42}}),
+        runQueuedSmartComfyGenerate:async body=>{submitted=body;return {videos:['result.mp4']};},resultMediaUrls:r=>r.videos,mediaKindForUrls:()=> 'video'};
+    await comfy.generateComfyUrlsWithSettings(h,{comfyMode:'custom',comfyWorkflow:'custom/test.json'},'prompt',[],{});
+    assert.equal(submitted.params.noise.noise_seed,42);
+});
+
 test('smart audio-analysis dispatch uses text route with no system prompt',async()=>{
     let submitted;
     const h={audioRefsOnly:x=>x,isApiLikeEngine:()=>true,providerChatModels:()=>['chosen'],fetch:async(url,options)=>{submitted={url,body:JSON.parse(options.body)};return {ok:true,json:async()=>({text:' answer '})};}};

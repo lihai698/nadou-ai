@@ -71,6 +71,7 @@
         "comfy.deleteConfirm": { zh: "确认删除工作流「{name}」？此操作不可恢复。", en: "Delete workflow \"{name}\"? This cannot be undone." },
         "comfy.deleteFailed": { zh: "删除失败", en: "Delete failed" },
         "comfy.runFailed": { zh: "运行失败", en: "Run failed" },
+        "comfy.disconnectedInput": { zh: "节点 {node} 未连接到工作流，修改不会参与生成。请选择已连接的输入节点。", en: "Node {node} is disconnected from the workflow and will not affect generation. Select a connected input node." },
         "comfy.noRunOutput": { zh: "工作流未返回图片、视频或音频，请检查 ComfyUI 的执行状态和输出节点。", en: "The workflow returned no image, video or audio. Check ComfyUI execution status and output nodes." },
         "comfy.deleteTestNode": { zh: "删除{type}节点", en: "Delete {type} node" },
         "comfy.uploadNotReady": { zh: "素材尚未上传成功，请等待上传完成或重新上传后再运行测试。", en: "Media has not uploaded successfully. Wait for the upload or retry it before running the test." },

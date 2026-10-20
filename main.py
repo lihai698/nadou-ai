@@ -223,6 +223,7 @@ from backend.canvas_clip import CanvasClipManager, CanvasClipConflict
 from backend.canvas_video_media import VideoMedia
 from backend.canvas_video_deconstruction import VideoDeconstructionManager, create_video_deconstruction_router
 from backend.canvas_video_speech import VideoSpeech
+from backend.canvas_local_vision import LocalVideoVision
 
 QUIET_ACCESS_PATHS = {
     "/api/queue_status",
@@ -6727,7 +6728,8 @@ def video_deconstruction_manager():
         if _video_deconstruction_manager is None or key != _video_deconstruction_key:
             _video_deconstruction_manager = VideoDeconstructionManager(DATA_DIR, validate_video_deconstruction_source,
                 video_deconstruction_media, canvas_assistant_providers, call_canvas_assistant_model,
-                lambda *args, **kwargs: video_speech_engine().transcribe(*args, **kwargs))
+                lambda *args, **kwargs: video_speech_engine().transcribe(*args, **kwargs),
+                local_vision=LocalVideoVision(DATA_DIR, lambda url: video_deconstruction_media().resolve({'source_url':url})))
             _video_deconstruction_key = key
         return _video_deconstruction_manager
 

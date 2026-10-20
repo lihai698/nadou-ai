@@ -10,6 +10,20 @@ const rulesSource = readFileSync(path.join(root, 'static/js/comfyui-settings-rul
 const settingsSource = readFileSync(path.join(root, 'static/js/comfyui-settings.js'), 'utf8');
 const apiSettingsSource = readFileSync(path.join(root, 'static/js/api-settings.js'), 'utf8');
 
+test('disconnected primitive inputs cannot masquerade as effective workflow inputs', () => {
+    const rules = require('../static/js/comfyui-settings-rules.js');
+    const workflow = {
+        '238':{class_type:'PrimitiveStringMultiline',inputs:{value:'prompt'}},
+        '246':{class_type:'PrimitiveStringMultiline',inputs:{value:'unused'}},
+        '148':{class_type:'SaveVideo',inputs:{prompt:['238',0]}}
+    };
+    assert.equal(rules.isDisconnectedPrimitive(workflow,'238'), false);
+    assert.equal(rules.isDisconnectedPrimitive(workflow,'246'), true);
+    assert.equal(rules.isDisconnectedPrimitive(workflow,'148'), false);
+    assert.match(settingsSource, /settingsRules\.isDisconnectedPrimitive\(currentWorkflow, node\)/);
+    assert.match(settingsSource, /currentConfig\.fields\.find\(f => settingsRules\.isDisconnectedPrimitive/);
+});
+
 test('ComfyUI field rules retain workflow input and media formats', () => {
     const rules = require('../static/js/comfyui-settings-rules.js');
     assert.equal(rules.guessType('clip.mp4?view=1', 'file'), 'video');

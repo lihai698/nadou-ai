@@ -20,11 +20,11 @@
     <script src="/static/vendor/js/lucide.js?v=2026.10.08.1.1792186296"></script>
     <script src="/static/js/theme.js?v=2026.10.08.1.1792186296"></script>
     <script src="/static/js/touch-mouse.js?v=2026.10.08.1.1792186296"></script>
-    <script src="/static/js/i18n.js?v=2026.10.08.1.1792186296"></script>
-    <link rel="stylesheet" href="/static/css/canvas.css?v=2026.10.21.4">
-    <link rel="stylesheet" href="/static/css/canvas-depth-capture.css?v=2026.10.08.1.1792186296">
+    <script src="/static/js/i18n.js?v=2026.10.08.1.1792519032"></script>
+    <link rel="stylesheet" href="/static/css/canvas.css?v=2026.10.08.1.1792522296">
+    <link rel="stylesheet" href="/static/css/canvas-depth-capture.css?v=2026.10.08.1.1792522813">
     <link rel="stylesheet" href="/static/css/canvas-view-adjust.css?v=2026.10.08.1.1792186296">
-    <link rel="stylesheet" href="/static/css/studio-layout.css?v=2026.10.08.1.1792186296">
+    <link rel="stylesheet" href="/static/css/studio-layout.css?v=2026.10.08.1.1792522334">
     <link rel="stylesheet" href="/static/css/theme.css?v=2026.10.08.1.1792186296">
     <link rel="stylesheet" href="/static/css/canvas-assistant.css?v=2026.10.08.1.1792186296">
     <link rel="stylesheet" href="/static/css/canvas-clip.css?v=2026.10.08.1.1792186296">
@@ -52,8 +52,6 @@
                 <hr class="canvas-more-divider">
                 <button id="workflowTransferToggle" class="tool-btn" type="button" title="导入导出工作流" aria-label="导入导出工作流"><i data-lucide="package-open" class="w-4 h-4"></i><span>工作流</span></button>
                 <button id="canvasLogToggle" class="tool-btn" type="button" title="日志" aria-label="日志" data-i18n-title="canvas.logs"><i data-lucide="list-todo" class="w-4 h-4"></i><span data-i18n="canvas.logs">日志</span></button>
-                <hr class="canvas-more-divider">
-                <button id="clearCurrentCanvasBtn" class="tool-btn canvas-clear-btn" type="button" title="清空当前画布" aria-label="清空当前画布"><i data-lucide="trash-2" class="w-4 h-4"></i><span>清空</span></button>
             </div>
         </div>
 
@@ -70,6 +68,8 @@
             <div id="selectionBox" class="selection-box"></div>
             <div id="selectionHub" class="selection-hub"></div>
             <div id="createMenu" class="create-menu">
+                <button id="clearCurrentCanvasBtn" class="menu-btn" type="button" title="清空当前画布" aria-label="清空当前画布"><i data-lucide="trash-2" class="w-4 h-4"></i><span>清空当前画布</span></button>
+                <div class="menu-divider"></div>
                 <button class="menu-btn" onclick="menuAdd('image')"><i data-lucide="image-plus" class="w-4 h-4"></i><span data-i18n="canvas.imageCard">上传节点</span></button>
                 <button class="menu-btn" onclick="menuAdd('storyboard')"><i data-lucide="table-2" class="w-4 h-4"></i><span>分镜表</span></button>
                 <button class="menu-btn" onclick="menuAdd('prompt')"><i data-lucide="text-cursor-input" class="w-4 h-4"></i><span data-i18n="canvas.prompt">提示词</span></button>
@@ -364,10 +364,10 @@
     <script src="/static/js/canvas-clip-model.js?v=2026.10.08.1.1792186296"></script>
     <script src="/static/js/canvas-clip-host.js?v=2026.10.08.1.1792186296"></script>
     <script src="/static/js/canvas-clip-node.js?v=2026.10.08.1.1792186296"></script>
-    <link rel="stylesheet" href="/static/css/canvas-video-deconstruction.css?v=2026.10.08.1.1792186296">
+    <link rel="stylesheet" href="/static/css/canvas-video-deconstruction.css?v=2026.10.08.1.1792524479">
     <script src="/static/js/canvas-video-deconstruction-model.js?v=2026.10.08.1.1792186296"></script>
     <script src="/static/js/canvas-video-deconstruction-host.js?v=2026.10.08.1.1792186296"></script>
-    <script src="/static/js/canvas-video-deconstruction-ui.js?v=2026.10.08.1.1792186296"></script>
+    <script src="/static/js/canvas-video-deconstruction-ui.js?v=2026.10.08.1.1792525189"></script>
     <link rel="stylesheet" href="/static/css/canvas-audio.css?v=2026.10.08.1.1792186296">
     <script src="/static/js/canvas-audio.js?v=2026.10.08.1.1792186296"></script>
     <script src="/static/js/canvas-audio-host.js?v=2026.10.08.1.1792186296"></script>
@@ -379,7 +379,7 @@
     <script src="/static/js/canvas-accepted-task-recovery.js?v=2026.10.08.1.1792264920"></script>
     <script src="/static/js/canvas-media-runner.js?v=2026.10.08.1.1792267918"></script>
     <script src="/static/js/canvas-direct-tasks.js?v=2026.10.08.1.1792267918"></script>
-    <script src="/static/js/canvas-comfy-runner.js?v=2026.10.08.1.1792267918"></script>
+    <script src="/static/js/canvas-comfy-runner.js?v=2026.10.08.1.1792519873"></script>
     <script src="/static/js/canvas-llm-runner.js?v=2026.10.08.1.1792267918"></script>
     <script src="/static/js/canvas-midjourney-runner.js?v=2026.10.08.1.1792267918"></script>
     <script src="/static/js/canvas-cascade-state.js?v=2026.10.08.1.1792266770"></script>
@@ -396,7 +396,7 @@
     <script src="/static/js/canvas-layout.js?v=2026.10.08.1.1792272392"></script>
     <script src="/static/js/canvas-interaction.js?v=2026.10.08.1.1792310010"></script>
     <script src="/static/js/canvas-viewport.js?v=2026.10.08.1.1792273349"></script>
-    <script src="/static/js/canvas-node-view.js?v=2026.10.21.4"></script>
+    <script src="/static/js/canvas-node-view.js?v=2026.10.08.1.1792521759"></script>
     <script src="/static/js/canvas-generation-view.js?v=2026.10.08.1.1792274724"></script>
     <script src="/static/js/canvas-text-view.js?v=2026.10.08.1.1792274724"></script>
     <script src="/static/js/canvas-workflow-view.js?v=2026.10.08.1.1792274724"></script>
@@ -434,6 +434,6 @@
     <script src="/static/js/canvas-task-transport.js?v=2026.10.08.1.1792264124"></script>
     <script src="/static/js/image-editor-session.js?v=2026.10.08.1.1792325443"></script>
     <script src="/static/js/canvas-image-editor-events.js?v=2026.10.08.1.1792327150"></script>
-    <script src="/static/js/canvas.js?v=2026.10.08.1.1792325847"></script>
+    <script src="/static/js/canvas.js?v=2026.10.08.1.1792524753"></script>
 </body>
 </html>

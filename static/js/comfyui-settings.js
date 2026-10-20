@@ -332,6 +332,10 @@ function toggleField(node, input){
         delete previewValues[existing.id];
         delete previewRandomActive[existing.id];
     } else {
+        if(settingsRules.isDisconnectedPrimitive(currentWorkflow, node)){
+            alert(tf('comfy.disconnectedInput', {node}));
+            return;
+        }
         const nodeData = currentWorkflow[node];
         const rawValue = nodeData?.inputs?.[input];
         const type = guessType(rawValue, input);
@@ -1415,6 +1419,8 @@ async function onUpload(event){
 
 async function onSave(){
     if(!selectedName || !currentConfig) return;
+    const disconnected = currentConfig.fields.find(f => settingsRules.isDisconnectedPrimitive(currentWorkflow, f.node));
+    if(disconnected){ alert(tf('comfy.disconnectedInput', {node:disconnected.node})); return; }
     const missingNameField = settingsRules.firstUnnamedField(currentConfig.fields);
     if(missingNameField){ alert(tf('comfy.saveMissingName', {field:missingNameField.input})); return; }
     setStatus(tr('comfy.saving'));

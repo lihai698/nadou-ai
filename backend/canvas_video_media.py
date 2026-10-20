@@ -44,9 +44,9 @@ class VideoMedia:
         return hashlib.sha256(json.dumps([str(path),stat.st_size,stat.st_mtime_ns,source.get('node_id'),source.get('result_id')],ensure_ascii=False).encode()).hexdigest()
 
     def _tools(self):return self.tools or find_media_tools()
-    def _command(self,args,*,cancelled=lambda:False,timeout=1800):
+    def _command(self,args,*,cancelled=lambda:False,timeout=1800,cwd=None):
         if cancelled():raise VideoCancelled('任务已取消')
-        try:process=subprocess.Popen(args,stdout=subprocess.PIPE,stderr=subprocess.PIPE,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
+        try:process=subprocess.Popen(args,stdout=subprocess.PIPE,stderr=subprocess.PIPE,cwd=cwd,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
         except OSError as exc:raise ValueError('媒体工具无法启动，请检查 FFmpeg 组件') from exc
         start=time.monotonic()
         try:

@@ -299,13 +299,6 @@ function bindNodeEvents(deps){
     deps.world.querySelectorAll('.image-node').forEach(el => {
         const id = el.dataset.id;
         const nodeForControls = deps.nodes.find(n => n.id === id);
-        el.querySelectorAll('[data-smart-video-edit]').forEach(button => {
-            button.addEventListener('mousedown', event => { event.preventDefault(); event.stopPropagation(); }, true);
-            button.addEventListener('click', event => {
-                event.preventDefault(); event.stopPropagation();
-                deps.openSmartVideoEditor(id, Number(button.dataset.smartVideoEdit || 0));
-            }, true);
-        });
         el.querySelectorAll('[data-depth-action]').forEach(button => {
             button.addEventListener('mousedown', event => event.stopPropagation());
             button.addEventListener('click', event => {
@@ -341,6 +334,10 @@ function bindNodeEvents(deps){
         el.onclick = e => {
             e.stopPropagation();
             if(Date.now() < deps.suppressNodeClickUntil) return;
+            if(deps.selectedIds.length > 1 && deps.selectedIds.includes(id)){
+                deps.syncSelectionUi();
+                return;
+            }
             const node = deps.nodes.find(n => n.id === id);
             deps.hideRunTimerForNode(node);
             const alreadySelected = deps.selectedId === id && deps.selectedIds.length === 0 && deps.selectedImage.nodeId === '';
@@ -513,6 +510,10 @@ function bindNodeEvents(deps){
                 e.stopPropagation();
                 e.stopImmediatePropagation();
                 if(Date.now() < deps.suppressImageClickUntil) return;
+                if(e.detail < 2 && deps.selectedIds.length > 1 && deps.selectedIds.includes(id)){
+                    deps.syncSelectionUi();
+                    return;
+                }
                 const target = thumbTarget();
                 const owner = deps.nodes.find(n => n.id === id);
                 if(deps.mediaKindForItem(target.image || {}) === 'video'){

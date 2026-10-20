@@ -11,7 +11,7 @@ function fixture(){
         world:{querySelector(selector){return els.get(selector.match(/data-id="([^"]+)"/)[1])||null;}},
         smartMediaInputController:{capture(){const generation=epoch,id=context.canvas.id;return ()=>epoch===generation&&context.canvas.id===id;}},
         selectedNode:()=>context.nodes.find(n=>n.id===context.selectedId),positionComposerForNode:n=>calls.push(['composer',n.id]),
-        refreshConnectionLayer:()=>calls.push(['connections']),renderMinimap:()=>calls.push(['minimap']),render:()=>calls.push(['render']),
+        refreshConnectionLayer:()=>calls.push(['connections']),renderMinimap:()=>calls.push(['minimap']),render:()=>calls.push(['render']),syncSelectionGroup:()=>calls.push(['selection-group']),
         isSmartGroupNode:n=>n.type==='smart-group',smartGroupImageRefs:n=>(n.images||[]).map(item=>({item})),
         smartGroupCompactMembers:n=>n.members||[],nodeScale:()=>1,imageLayout:()=>({width:200,height:160,thumb:40,cols:2,rows:4,visibleRows:4}),
         SMART_GROUP_MAX_VISIBLE_ROWS:3,MEDIA_GROUP_MAX_VISIBLE_ROWS:2,applyThumbDisplaySizeToElement:(el,img,size)=>calls.push(['thumb',img?.url,size])});
@@ -28,7 +28,7 @@ function fixture(){
 test('drag updates live node elements and selected composer, batching connections then minimap',()=>{
     const f=fixture(),el=element();f.els.set('a',el);f.context.nodes=[{id:'a',x:25,y:40}];f.context.selectedId='a';f.context.dragState={id:'a'};
     f.run('moveNodeElementsDuringDrag(); moveNodeElementsDuringDrag()');assert.equal(el.style.left,'25px');assert.equal(el.style.top,'40px');assert.equal(f.frames.size,1);
-    f.frames.get(1)();assert.deepEqual(f.calls.slice(-2),[['connections'],['minimap']]);assert.equal(f.calls.filter(x=>x[0]==='composer').length,2);
+    f.frames.get(1)();assert.deepEqual(f.calls.slice(-2),[['connections'],['minimap']]);assert.equal(f.calls.filter(x=>x[0]==='composer').length,2);assert.equal(f.calls.filter(x=>x[0]==='selection-group').length,2);
 });
 test('resize retains media nodes, grid limits, skeleton dimensions and composer placement',()=>{
     const f=fixture(),el=element(),body=element(),grid=element(),single=element(),skeleton=element(),wrap=element(),media=element();

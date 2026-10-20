@@ -19,11 +19,11 @@
     <script src="/static/vendor/js/lucide.js?v=2026.10.08.1.1792186296"></script>
     <script src="/static/js/theme.js?v=2026.10.08.1.1792186296"></script>
     <script src="/static/js/touch-mouse.js?v=2026.10.08.1.1792186296"></script>
-    <script src="/static/js/i18n.js?v=2026.10.08.1.1792186296"></script>
-    <link rel="stylesheet" href="/static/css/smart-canvas.css?v=2026.10.21.4">
-    <link rel="stylesheet" href="/static/css/canvas-video-deconstruction.css?v=2026.10.08.1.1792186296">
+    <script src="/static/js/i18n.js?v=2026.10.08.1.1792519032"></script>
+    <link rel="stylesheet" href="/static/css/smart-canvas.css?v=2026.10.08.1.1792522296">
+    <link rel="stylesheet" href="/static/css/canvas-video-deconstruction.css?v=2026.10.08.1.1792524479">
     <link rel="stylesheet" href="/static/css/canvas-assistant.css?v=2026.10.08.1.1792186296">
-    <link rel="stylesheet" href="/static/css/canvas-depth-capture.css?v=2026.10.08.1.1792186296">
+    <link rel="stylesheet" href="/static/css/canvas-depth-capture.css?v=2026.10.08.1.1792522813">
     <link rel="stylesheet" href="/static/css/canvas-view-adjust.css?v=2026.10.08.1.1792186296">
 </head>
 <body>
@@ -67,7 +67,6 @@
             </div>
         </div>
         <button class="smart-back" type="button" onclick="backToCanvasList()"><i data-lucide="arrow-left"></i><span data-i18n="canvas.backToList">返回画布列表</span></button>
-        <button id="clearCurrentCanvasBtn" class="smart-clear-btn" type="button" title="清空当前画布" aria-label="清空当前画布"><i data-lucide="trash-2"></i><span>清空当前画布</span></button>
         <div id="smartTitle" class="smart-title" data-i18n="smart.title">智能画布</div>
         <div id="canvasSaveError" class="canvas-save-error" role="alert" hidden>
             <span data-i18n="smart.canvasSaveFailed">保存失败，当前修改尚未保存。请检查连接后重试。</span>
@@ -76,6 +75,9 @@
             <button type="button" data-draft-export hidden>导出草稿</button>
         </div>
         <div id="createMenu" class="create-menu">
+            <div class="create-menu-actions">
+                <button id="clearCurrentCanvasBtn" class="create-menu-clear" type="button" title="清空当前画布" aria-label="清空当前画布"><i data-lucide="trash-2"></i><span>清空当前画布</span></button>
+            </div>
             <div class="create-menu-grid">
                 <button class="create-card" type="button" data-create-type="image">
                     <span class="create-card-icon"><i data-lucide="upload-cloud"></i></span>
@@ -459,7 +461,7 @@
     <script src="/static/js/canvas-assistant.js?v=2026.10.08.1.1792186296"></script>
     <script src="/static/js/canvas-video-deconstruction-model.js?v=2026.10.08.1.1792186296"></script>
     <script src="/static/js/canvas-video-deconstruction-host.js?v=2026.10.08.1.1792186296"></script>
-    <script src="/static/js/canvas-video-deconstruction-ui.js?v=2026.10.08.1.1792186296"></script>
+    <script src="/static/js/canvas-video-deconstruction-ui.js?v=2026.10.08.1.1792525189"></script>
     <link rel="stylesheet" href="/static/css/canvas-audio.css?v=2026.10.08.1.1792186296">
     <script src="/static/js/canvas-audio.js?v=2026.10.08.1.1792186296"></script>
     <script src="/static/js/smart-canvas-audio-host.js?v=2026.10.08.1.1792186296"></script>
@@ -475,7 +477,7 @@
     <script src="/static/js/smart-api-runner.js?v=2026.10.08.1.1792269080"></script>
     <script src="/static/js/smart-provider-runner.js?v=2026.10.08.1.1792269080"></script>
     <script src="/static/js/smart-direct-tasks.js?v=2026.10.08.1.1792269080"></script>
-    <script src="/static/js/smart-comfy-runner.js?v=2026.10.08.1.1792269080"></script>
+    <script src="/static/js/smart-comfy-runner.js?v=2026.10.08.1.1792519204"></script>
     <script src="/static/js/smart-generation-runner.js?v=2026.10.08.1.1792269080"></script>
     <script src="/static/js/online-image-size-rules.js?v=2026.10.08.1.1792186296"></script>
     <script src="/static/js/canvas-image-params.js?v=2026.10.08.1.1792269932"></script>
@@ -487,7 +489,7 @@
     <script src="/static/js/smart-group-edit.js?v=2026.10.08.1.1792271708"></script>
     <script src="/static/js/smart-connection-edit.js?v=2026.10.08.1.1792271708"></script>
     <script src="/static/js/smart-layout.js?v=2026.10.08.1.1792272392"></script>
-    <script src="/static/js/smart-selection.js?v=2026.10.08.1.1792272392"></script>
+    <script src="/static/js/smart-selection.js?v=2026.10.08.1.1792519873"></script>
     <script src="/static/js/smart-viewport.js?v=2026.10.08.1.1792273349"></script>
     <script src="/static/js/smart-pointer-events.js?v=2026.10.08.1.1792325848"></script>
     <script src="/static/js/smart-preview-events.js?v=2026.10.08.1.1792339564"></script>
@@ -495,9 +497,9 @@
     <script src="/static/js/smart-composer-scheduler.js?v=2026.10.08.1.1792335725"></script>
     <script src="/static/js/smart-image-resolution.js?v=2026.10.08.1.1792332223"></script>
     <script src="/static/js/smart-image-dimensions.js?v=2026.10.08.1.1792330144"></script>
-    <script src="/static/js/smart-node-view.js?v=2026.10.08.1.1792330144"></script>
-    <script src="/static/js/smart-node-body.js?v=2026.10.08.1.1792275147"></script>
-    <script src="/static/js/smart-node-bindings.js?v=2026.10.08.1.1792321330"></script>
+    <script src="/static/js/smart-node-view.js?v=2026.10.08.1.1792519954"></script>
+    <script src="/static/js/smart-node-body.js?v=2026.10.08.1.1792522813"></script>
+    <script src="/static/js/smart-node-bindings.js?v=2026.10.08.1.1792522813"></script>
     <script src="/static/js/smart-param-view.js?v=2026.10.08.1.1792275623"></script>
     <script src="/static/js/smart-param-controls.js?v=2026.10.08.1.1792275623"></script>
     <script src="/static/js/smart-param-state.js?v=2026.10.08.1.1792275623"></script>
@@ -529,7 +531,7 @@
     <script src="/static/js/smart-output-coordination.js?v=2026.10.08.1.1792302596"></script>
     <script src="/static/js/smart-media-drop.js?v=2026.10.08.1.1792305536"></script>
     <script src="/static/js/smart-upload-coordination.js?v=2026.10.08.1.1792321330"></script>
-    <script src="/static/js/smart-create-menu.js?v=2026.10.08.1.1792306998"></script>
+    <script src="/static/js/smart-create-menu.js?v=2026.10.08.1.1792522296"></script>
     <script src="/static/js/canvas-graph-rules.js?v=2026.10.08.1.1792266274"></script>
     <script src="/static/js/canvas-task-results.js?v=2026.10.08.1.1792265650"></script>
     <script src="/static/js/canvas-task-runtime.js?v=2026.10.08.1.1792265650"></script>
@@ -538,6 +540,6 @@
     <script src="/static/js/smart-media-input-events.js?v=2026.10.08.1.1792321746"></script>
     <script src="/static/js/image-editor-session.js?v=2026.10.08.1.1792325443"></script>
     <script src="/static/js/smart-image-editor-events.js?v=2026.10.08.1.1792327150"></script>
-    <script src="/static/js/smart-canvas.js?v=2026.10.08.1.1792516295"></script>
+    <script src="/static/js/smart-canvas.js?v=2026.10.08.1.1792522296"></script>
 </body>
 </html>

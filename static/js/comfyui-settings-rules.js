@@ -44,7 +44,14 @@
         return fields.find(field => !field.name || !field.name.trim());
     }
 
-    const rules = {fieldKind, isMediaField, mediaAccept, guessType, cleanComfyInstances, firstUnnamedField};
+    function isDisconnectedPrimitive(workflow, nodeId){
+        const node = workflow?.[nodeId];
+        if(!['PrimitiveString','PrimitiveStringMultiline','PrimitiveInt','PrimitiveFloat','PrimitiveBoolean'].includes(node?.class_type)) return false;
+        return !Object.values(workflow).some(other => Object.values(other.inputs || {}).some(value =>
+            Array.isArray(value) && value.length === 2 && String(value[0]) === String(nodeId)));
+    }
+
+    const rules = {fieldKind, isMediaField, mediaAccept, guessType, cleanComfyInstances, firstUnnamedField, isDisconnectedPrimitive};
     global.ComfySettingsRules = rules;
     if(typeof module !== 'undefined' && module.exports) module.exports = rules;
 })(typeof window !== 'undefined' ? window : globalThis);

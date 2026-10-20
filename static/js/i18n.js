@@ -1,5 +1,5 @@
 (function(){
-    const VERSION = '2026.10.08.canvas-navigation';
+    const VERSION = '2026.10.21.workflow-inputs';
     const scripts = [
         '/static/js/i18n-core.js',
         '/static/js/i18n/common.js',

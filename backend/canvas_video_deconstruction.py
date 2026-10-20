@@ -19,6 +19,7 @@ from backend.canvas_video_media import VideoCancelled
 
 TERMINAL = {'ready', 'failed', 'cancelled', 'interrupted'}
 BUILTIN = [('shotSize', '景别'), ('motion', '运镜'), ('visual', '画面'), ('dialogue', '对白'), ('onScreenText', '屏幕文字'), ('mood', '情绪')]
+ANALYSIS_SYSTEM_PROMPT = Path(__file__).with_name('canvas_video_analysis_prompt.txt').read_text(encoding='utf8').strip()
 
 
 def digest(value):
@@ -62,11 +63,12 @@ def vision_supported(provider, model):
 
 
 class VideoDeconstructionManager:
-    def __init__(self, root, validate_source, media_factory, providers, call_vision, transcribe):
+    def __init__(self, root, validate_source, media_factory, providers, call_vision, transcribe, *, local_vision=None):
         self.root = Path(root) / 'video_deconstruction_tasks'
         self.root.mkdir(parents=True, exist_ok=True)
         self.validate_source, self.media_factory = validate_source, media_factory
         self.providers, self.call_vision, self.transcribe = providers, call_vision, transcribe
+        self.local_vision = local_vision
         self.lock, self.tasks, self.events, self.media = RLock(), {}, {}, {}
         self.pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix='video-deconstruction')
         for path in self.root.glob('*.json'):
@@ -109,7 +111,7 @@ class VideoDeconstructionManager:
             task = self._task(task_id, user)
             if task['status'] not in TERMINAL:
                 self.events[task_id].set()
-                task.update(status='cancelled', phase='已停止后续处理', error='已发出的模型调用可能仍计费')
+                task.update(status='cancelled', phase='已停止后续处理', error='本地分析已取消' if task.get('options',{}).get('localAnalysis') else '已发出的模型调用可能仍计费')
                 self._persist(task)
             return self._public(task)
 
@@ -153,9 +155,17 @@ class VideoDeconstructionManager:
     def _prepare(self, task):
         media = self.media[task['id']]
         cancelled = lambda: self._cancelled(task)
+        local_acquired = False
+        analysis_started = False
         try:
             self._update(task, status='running')
             mode, opts = task['mode'], task['options']
+            if opts.get('localAnalysis') and mode not in {'detect','frames'}:
+                if self.local_vision is None:raise ValueError('本地视觉分析尚未启用，请重启程序后重试')
+                self._update(task, phase='加载本地视觉模型')
+                model = self.local_vision.acquire(cancelled)
+                local_acquired = True
+                self._update(task, localModel=model)
             # 重试使用服务器自己的已分析行，不采信前端提供的图片或时间。
             if mode.startswith('retry-'):
                 with self.lock:
@@ -219,9 +229,16 @@ class VideoDeconstructionManager:
             revision = digest(self.providers())
             quote = dict(id=uuid.uuid4().hex, sourceFingerprint=task['context']['source_fingerprint'], tableRevision=task['context'].get('table_revision', 0),
                          columns=columns, visionCalls=vision_calls, framesPerShot=3, audioCalls=int(audio.get('hasAudio', False) and mode != 'retry-shot'), expiresAt=time.time()+1800)
-            self._update(task, audio=audio, quote=quote, providersRevision=revision, status='awaiting-confirmation', phase='等待整批调用确认', progress=0)
+            # 本地任务在同一锁内自动进入分析，轮询不会误停在旧确认状态。
+            with self.lock:
+                self._update(task, audio=audio, quote=quote, providersRevision=revision, status='awaiting-confirmation', phase='等待整批调用确认', progress=0)
+                if local_acquired and not cancelled():
+                    self.confirm(task['id'], task['owner'], {'providerId':'__local_video__', 'model':model, 'speech':{'mode':'local'}}, quote['id'])
+                    analysis_started = True
         except Exception as exc:
             self._update(task, status='failed', phase='本地准备失败', error=str(exc) if isinstance(exc, ValueError) else '拆解准备失败，请检查视频和存储目录')
+        finally:
+            if local_acquired and not analysis_started:self.local_vision.release()
 
     def confirm(self, task_id, user, selection, quote_id):
         with self.lock:
@@ -229,12 +246,15 @@ class VideoDeconstructionManager:
             quote = task.get('quote', {})
             if task['status'] != 'awaiting-confirmation' or quote_id != quote.get('id') or time.time() > quote['expiresAt']:
                 raise ValueError('确认已失效或已使用，请重新准备')
-            if digest(self.providers()) != task['providersRevision']:
+            if not task.get('localModel') and digest(self.providers()) != task['providersRevision']:
                 raise ValueError('平台配置已改变，请重新准备')
             self._same_source(task, check_revision=True)
             selected = copy.deepcopy(selection)
+            local = selected.get('providerId') == '__local_video__'
+            if local and (not self.local_vision or not task.get('localModel') or selected.get('model') != task['localModel']):
+                raise ValueError('本地视觉模型尚未加载')
             provider = next((p for p in self.providers() if p['id'] == selected.get('providerId')), {})
-            if quote['visionCalls'] and (selected.get('model') not in provider.get('chat_models', []) or not vision_supported(provider, selected.get('model', ''))):
+            if not local and quote['visionCalls'] and (selected.get('model') not in provider.get('chat_models', []) or not vision_supported(provider, selected.get('model', ''))):
                 raise ValueError('请选择已启用、支持读图和分析参数的模型')
             speech = selected.get('speech', {'mode': 'local'})
             if quote['audioCalls'] and speech.get('mode') == 'cloud':
@@ -252,7 +272,7 @@ class VideoDeconstructionManager:
         with self.lock:
             if self._cancelled(task):
                 raise VideoCancelled('任务已取消')
-            if digest(self.providers()) != task['providersRevision']:
+            if not task.get('localModel') and digest(self.providers()) != task['providersRevision']:
                 raise ValueError('平台配置变化，已停止整批调用')
             self._same_source(task)
             field = 'remaining' + kind
@@ -289,8 +309,9 @@ class VideoDeconstructionManager:
                     try:
                         fields = dict(provider=task['selection']['providerId'], model=task['selection']['model'], images=[f['url'] for f in extracted['frames']],
                             temperature=.2, max_tokens=4000, message=f'镜头 {row["index"]}，{a}–{b} 秒。这三帧是同一镜头的首、中、尾画面。',
-                            system_prompt='分析同一镜头全部画面，只返回一个 JSON 对象。汇总所有帧的字幕、价格和角标。shotSize 为极特写/特写/近景/中景/全景/远景；mood 为2–4字；visual 为30–60字中文事实；onScreenText 多条用 / 分隔，无则空；imagePrompt 描述主体、构图、光线、材质、风格；motionPrompt 描述运镜与动作演进。不要猜测对白。所有字段必须是字符串。自定义字段：'+json.dumps({c['id']:c.get('hint') or c['label'] for c in custom}, ensure_ascii=False))
-                        response = await self.call_vision(fields)
+                            system_prompt=ANALYSIS_SYSTEM_PROMPT+'\n自定义字段：'+json.dumps({c['id']:c.get('hint') or c['label'] for c in custom}, ensure_ascii=False))
+                        if task.get('localModel'):fields['cancelled'] = cancelled
+                        response = await (self.local_vision.analyze(fields) if task.get('localModel') else self.call_vision(fields))
                         result = parse_analysis(response.get('text'), custom)
                         row.update(imagePrompt=result.pop('imagePrompt'), motionPrompt=result.pop('motionPrompt'), keyframeUrl=extracted['frames'][1]['url'], visionFailed=False, failureReason='')
                         row['cells'].update(result, motion=row['motionPrompt'])
@@ -310,7 +331,7 @@ class VideoDeconstructionManager:
             self._consume(task, 'Audio')
             try:
                 if not self.transcribe:
-                    raise ValueError('语音引擎尚未安装，请安装后重试或显式选择云端')
+                    raise ValueError('本地语音引擎尚未安装，请安装组件后重试对白')
                 result = await asyncio.to_thread(self.transcribe, task['audio'], task['selection'].get('speech', {'mode':'local'}),
                     cancelled=cancelled, on_progress=lambda phase, progress: self._update(task, speechProgress=phase))
                 return {**result, 'status':'ready' if result.get('segments') else 'no-speech'}
@@ -342,6 +363,8 @@ class VideoDeconstructionManager:
         except Exception as exc:
             self.events[task['id']].set()
             self._update(task, status='failed', rows=rows, failureKind='authorization', error=str(exc) if isinstance(exc, ValueError) else '整批分析中断，请重新确认')
+        finally:
+            if task.get('localModel'):self.local_vision.release()
 
 
 def create_video_deconstruction_router(*, manager, user_id, speech_engine):
@@ -367,7 +390,8 @@ def create_video_deconstruction_router(*, manager, user_id, speech_engine):
     def models():
         return {'providers':[dict(id=p['id'], name=p.get('name',p['id']), models=[dict(id=m,enabled=bool(vision_supported(p,m))) for m in p.get('chat_models',[])],
                                  audioModels=p.get('audio_timestamp_models',[]) if p.get('protocol','openai')=='openai' else [], imageModels=p.get('image_models',[]))
-                             for p in manager().providers() if p.get('enabled',True)], 'localSpeech':speech_engine().installation_status()}
+                             for p in manager().providers() if p.get('enabled',True)], 'localSpeech':speech_engine().installation_status(),
+                'localAnalysis':manager().local_vision is not None}
     @router.post('/speech/install')
     def install():
         return speech_engine().start_install()

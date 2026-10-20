@@ -123,6 +123,11 @@
                     }
                     params[f.node][f.input] = deps.comfyParamValue(compiledNode, f);
                 });
+                Object.entries(wf.workflow || {}).forEach(([id, workflowNode]) => {
+                    if(workflowNode.class_type === 'RandomNoise'){
+                        params[id] = {noise_seed:Math.floor(Math.random() * 4294967295) + 1, ...params[id]};
+                    }
+                });
                 const result = await deps.runQueuedComfyGenerate({
                     prompt,
                     workflow_json:workflowName,

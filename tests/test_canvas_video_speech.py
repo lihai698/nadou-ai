@@ -1,4 +1,4 @@
-import tempfile,unittest
+import tempfile,unittest,json
 from unittest.mock import patch
 from pathlib import Path
 try:
@@ -7,6 +7,25 @@ except ImportError:
  VideoSpeech=transcribe_chunks=normalize_segments=None
 
 class SpeechTests(unittest.TestCase):
+ def test_local_transcription_uses_relative_arguments_in_chinese_directory(self):
+  class Media:
+   def _tools(self):return ('ffmpeg','ffprobe')
+   def _command(self,args,**kw):
+    if args[0]=='ffmpeg':return b''
+    for option in ['-m','-f','--vad-model','-of']:
+     value=args[args.index(option)+1]
+     self_test.assertFalse(Path(value).is_absolute())
+     self_test.assertTrue(value.isascii())
+    output=Path(kw['cwd'])/args[args.index('-of')+1]
+    output.with_suffix('.json').write_text(json.dumps({'result':{'language':'zh'},'transcription':[{'offsets':{'from':0,'to':1000},'text':'测试对白'}]}),encoding='utf8')
+    return b''
+  self_test=self
+  with tempfile.TemporaryDirectory() as folder:
+   engine=VideoSpeech(Path(folder)/'中文项目',lambda:[],lambda p:'',Media())
+   engine.runtime.mkdir(parents=True)
+   with patch.object(engine,'installation_status',return_value={'installed':True}),patch.object(engine,'_health',return_value=engine.runtime/'whisper-cli.exe'):
+    result=engine.transcribe({'path':'video.mp3','durationSeconds':2},{'mode':'local'})
+   self.assertEqual(result['segments'][0]['text'],'测试对白')
  def test_chunks_cross_sentence_and_silent_tail(self):
   self.assertIsNotNone(transcribe_chunks,'缺少分段转写')
   calls=[]

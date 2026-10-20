@@ -9,6 +9,7 @@
         deps.selectedId = '';
         deps.selectedIds = [];
         deps.selectedImage = {nodeId:'', index:-1};
+        syncSelectionGroup(deps);
     }
 
     function syncSelectionUi(deps){
@@ -33,6 +34,30 @@
         deps.syncSmartSelectedImageResolution(deps.world);
         deps.syncRunButtonState();
         deps.scheduleConnectionLayerRefresh();
+        syncSelectionGroup(deps);
+    }
+
+    function syncSelectionGroup(deps){
+        const ids = new Set(selectedNodeIds(deps));
+        const members = deps.nodes.filter(node => ids.has(node.id));
+        let frame = deps.world.querySelector('.smart-selection-group');
+        if(members.length < 2){
+            frame?.remove();
+            return;
+        }
+        const rects = members.map(node => deps.nodeRect(node));
+        const padding = 24;
+        const left = Math.min(...rects.map(rect => rect.x)) - padding;
+        const top = Math.min(...rects.map(rect => rect.y)) - padding;
+        const right = Math.max(...rects.map(rect => rect.x + rect.width)) + padding;
+        const bottom = Math.max(...rects.map(rect => rect.y + rect.height)) + padding;
+        if(!frame){
+            frame = deps.world.ownerDocument.createElement('div');
+            frame.className = 'smart-selection-group';
+            frame.setAttribute('aria-hidden', 'true');
+            deps.world.prepend(frame);
+        }
+        Object.assign(frame.style, {left:`${left}px`, top:`${top}px`, width:`${right-left}px`, height:`${bottom-top}px`});
     }
 
     function isNodeSelected(deps, id){
@@ -73,7 +98,7 @@
         deps.setTimeout(() => { deps.selectionJustFinished = false; }, 0);
     }
 
-    const api={selectedNode, clearSelection, syncSelectionUi, isNodeSelected, selectedNodeIds, updateSelectionBox, finishSelection};
+    const api={selectedNode, clearSelection, syncSelectionUi, syncSelectionGroup, isNodeSelected, selectedNodeIds, updateSelectionBox, finishSelection};
     if(typeof module!=='undefined' && module.exports) module.exports=api;
     root.SmartSelection=api;
 })(typeof globalThis!=='undefined' ? globalThis : window);

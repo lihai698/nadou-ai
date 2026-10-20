@@ -172,16 +172,13 @@ function nodeBodyHtml(deps, node, layout){
         return `<div class="canvas-depth-task" style="width:${layout.width}px;min-height:${layout.height}px"><strong>${capture.role === 'pose' ? '骨骼姿态参考' : '灰度深度参考'}</strong><span>${deps.escapeHtml(capture.stage || '准备处理')}${capture.error ? `：${deps.escapeHtml(capture.error)}` : ''}</span><span class="canvas-depth-progress-label">进度 ${progress}%</span><div class="canvas-depth-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${progress}"><i style="width:${progress}%"></i></div><div class="canvas-depth-task-actions">${running && capture.taskId ? '<button type="button" data-depth-action="cancel">取消</button>' : ''}${capture.sourceId && ['failed','cancelled'].includes(capture.status) ? '<button type="button" data-depth-action="retry">重试</button>' : ''}</div></div>`;
     }
     const media = nodeMediaBodyHtml(deps, node, layout);
-    const videoEdit = (node.type === 'smart-image' || !node.type) && (node.images || []).length === 1
-        && deps.mediaKindForItem(deps.imageForDisplay(node.images[0])) === 'video'
-        ? '<button type="button" class="smart-video-edit-direct" data-smart-video-edit="0"><i data-lucide="scan-face"></i><span>编辑</span></button>' : '';
     if(node.depthCapture?.role === 'pose' && node.depthCapture.pose_data_url){
-        return `${media}${videoEdit}<div class="canvas-depth-task-actions"><a href="${deps.escapeAttr(node.depthCapture.pose_data_url)}" download>下载关节 JSON</a></div>`;
+        return `${media}<div class="canvas-depth-task-actions"><a href="${deps.escapeAttr(node.depthCapture.pose_data_url)}" download>下载关节 JSON</a></div>`;
     }
     const task = (node.type === 'smart-image' || !node.type) && (node.images || []).length
         ? deps.smartRecoverableImageTask(node) : null;
-    if(!task) return media + videoEdit;
-    return `${media}${videoEdit}<div class="partial-task-recovery">${imageTaskRecoverBodyHtml(deps, node, task, {width:layout.width, height:150})}</div>`;
+    if(!task) return media;
+    return `${media}<div class="partial-task-recovery">${imageTaskRecoverBodyHtml(deps, node, task, {width:layout.width, height:150})}</div>`;
 }
 
 function nodeMediaBodyHtml(deps, node, layout){

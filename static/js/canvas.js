@@ -441,7 +441,10 @@ function classicNavigationHost(){
 async function returnToCanvasManager(){
     return CanvasNavigation.returnToCanvasManager(classicNavigationHost());
 }
-clearCurrentCanvasBtn?.addEventListener('click', clearCurrentCanvas);
+clearCurrentCanvasBtn?.addEventListener('click', () => {
+    closeCreateMenu();
+    clearCurrentCanvas();
+});
 let localCanvasDirty = false;
 const classicSaveSession = CanvasSaveSession.create({clearQueuedOnBegin:true});
 let applyingRemoteCanvas = false;
@@ -3717,6 +3720,7 @@ function restoreOutputScrolls(state){
     return CanvasOutputView.restoreOutputScrolls(classicOutputViewHost(), state);
 }
 function isNodeControl(target){
+    if(target.closest('.shot-table-summary') && !target.closest('button, input, select, textarea, a')) return false;
     return !!target.closest('textarea, input, select, option, button, audio, video, [contenteditable="true"], .shot-table-body, .video-deconstruction-modal, .clip-axis-scroll, .clip-node-hint, .clip-panel, .seg, .gen-btn, .comfy-run, .input-item, .blank-image, .mode-tabs, .ms-model-tabs, .llm-provider, .llm-output, .llm-chat-log, .llm-pane-resizer, .loop-preview, .pr-wrapper, .pr-toolbar, .pr-viewport, .pr-canvas, .pr-player-controls, .pr-prompt-area');
 }
 

@@ -119,6 +119,7 @@ function render(deps){
     deps.syncSmartSelectedImageResolution(deps.world);
     deps.measureSmartNodeImages();
     deps.refreshRunTimerPills();
+    deps.syncSelectionGroup?.();
     return;
     
 }
@@ -141,6 +142,7 @@ function moveNodeElementsDuringDrag(deps){
         deps.positionComposerForNode(active);
     }
     deps.scheduleInteractionLayerRefresh();
+    deps.syncSelectionGroup?.();
 }
 
 function updateNodeElementDuringResize(deps, node){
@@ -204,6 +206,7 @@ function updateNodeElementDuringResize(deps, node){
     const active = deps.selectedNode();
     if(active?.id === node.id) deps.positionComposerForNode(active);
     deps.scheduleInteractionLayerRefresh();
+    deps.syncSelectionGroup?.();
 }
 
 function syncSmartGroupMemberElements(deps, group){

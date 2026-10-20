@@ -11,14 +11,16 @@ function openCreateMenu(deps, event, options={}){
     if(!deps.createMenu) return;
     deps.createMenuPoint = deps.screenToWorld(event);
     deps.createMenuGroupId = options.groupId || '';
-    const w = 500;
-    const h = 222;
+    const actions = deps.createMenu.querySelector('.create-menu-actions');
+    if(actions) actions.hidden = Boolean(options.groupId);
+    deps.createMenu.classList.add('open');
+    deps.refreshIcons();
+    const w = deps.createMenu.offsetWidth;
+    const h = deps.createMenu.offsetHeight;
     const left = Math.max(14, Math.min(deps.window.innerWidth - w - 14, event.clientX + 8));
     const top = Math.max(14, Math.min(deps.window.innerHeight - h - 14, event.clientY + 8));
     deps.createMenu.style.left = `${left}px`;
     deps.createMenu.style.top = `${top}px`;
-    deps.createMenu.classList.add('open');
-    deps.refreshIcons();
 }
 
 function handleCreateMenuMouseDown(deps, event){event.stopPropagation();}

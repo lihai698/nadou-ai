@@ -2,6 +2,17 @@
 (function(root){
     'use strict';
 
+    function customWorkflowParams(deps, workflow, values){
+        const params = deps.comfyParamsFromWorkflowValues(workflow.config || {fields:[]}, values);
+        // 每次新生成更新噪声；用户通过字段明确指定的固定种子优先。
+        Object.entries(workflow.workflow || {}).forEach(([id, node]) => {
+            if(node.class_type === 'RandomNoise'){
+                params[id] = {noise_seed:Math.floor(Math.random() * 4294967295) + 1, ...params[id]};
+            }
+        });
+        return params;
+    }
+
     async function generateComfyUrlsWithSettings(deps, runSettings, prompt, refs, node){
         const allRefs = refs || [];
         const imageRefs = deps.imageRefsOnly(allRefs);
@@ -52,7 +63,7 @@
                 values[field.id] = runSettings.comfyParams?.[field.id] ?? field.default;
             }
         });
-        const result = await deps.runQueuedSmartComfyGenerate({prompt, workflow_json:workflowName, params:deps.comfyParamsFromWorkflowValues(wf.config || {fields:[]}, values), type:'workflow-custom', client_id:deps.smartClientId}, node);
+        const result = await deps.runQueuedSmartComfyGenerate({prompt, workflow_json:workflowName, params:customWorkflowParams(deps, wf, values), type:'workflow-custom', client_id:deps.smartClientId}, node);
         const urls = deps.resultMediaUrls(result);
         const fallbackKind = result.videos?.length ? 'video' : result.audios?.length ? 'audio' : result.texts?.length ? 'text' : 'image';
         return {urls, kind:deps.mediaKindForUrls(urls, fallbackKind)};
@@ -91,7 +102,7 @@
                 values[field.id] = deps.settings.comfyParams?.[field.id] ?? field.default;
             }
         });
-        const result = await deps.runQueuedSmartComfyGenerate({prompt, workflow_json:workflowName, params:deps.comfyParamsFromWorkflowValues(wf.config || {fields:[]}, values), type:'workflow-custom', client_id:deps.smartClientId}, pendingNode);
+        const result = await deps.runQueuedSmartComfyGenerate({prompt, workflow_json:workflowName, params:customWorkflowParams(deps, wf, values), type:'workflow-custom', client_id:deps.smartClientId}, pendingNode);
         const urls = deps.resultMediaUrls(result);
         if(!urls.length) throw new Error(deps.tr('smart.errComfyNoImages'));
         const kind = deps.mediaKindForUrls(urls, result.videos?.length ? 'video' : result.audios?.length ? 'audio' : result.texts?.length ? 'text' : 'image');

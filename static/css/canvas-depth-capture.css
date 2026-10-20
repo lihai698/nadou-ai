@@ -34,6 +34,4 @@
 .canvas-depth-task-actions { display:flex; flex-wrap:wrap; gap:6px; }
 .canvas-depth-task-actions button,.canvas-depth-task-actions a { padding:6px 9px; border:1px solid var(--line); border-radius:8px; background:var(--soft); color:var(--text); font:inherit; font-size:11px; font-weight:700; cursor:pointer; text-decoration:none; }
 .output-depth-edit { position:absolute; right:35px; top:6px; z-index:4; padding:4px 7px; border:1px solid rgba(255,255,255,.4); border-radius:7px; background:rgba(15,23,42,.75); color:#fff; font:inherit; font-size:10px; font-weight:750; cursor:pointer; }
-.smart-video-edit-direct { position:absolute; left:8px; top:8px; z-index:6; display:inline-flex; align-items:center; gap:5px; padding:6px 9px; border:1px solid rgba(255,255,255,.5); border-radius:8px; background:rgba(15,23,42,.78); color:#fff; font:inherit; font-size:11px; font-weight:750; cursor:pointer; }
-.smart-video-edit-direct svg { width:13px; height:13px; }
 html[data-studio-scale="off"].studio-scale-managed .depth-capture-modal { zoom:var(--studio-ui-scale,1); }

@@ -53,7 +53,7 @@ def transcribe_chunks(duration, transcribe, *, cancelled=lambda:False, on_progre
                 return result
             except Exception as exc:
                 if attempt:
-                    raise ValueError(f'第 {index} 段转写失败，已重试一次；请重试对白或显式选择云端') from exc
+                    raise ValueError(f'第 {index} 段转写失败，已重试一次；请检查本地语音组件后重试对白') from exc
         accepted = [dict(start=cursor+s['start'], end=min(duration,cursor+s['end']), text=s['text'])
                     for s in segments if s['start'] < nominal_end-cursor and s['start'] < duration-cursor]
         result.extend(accepted)
@@ -114,10 +114,10 @@ class VideoSpeech:
         with self.lock:
             try:
                 installed = self._check_runtime()
-                error = self.install_state['error']
+                error = '' if installed else self.install_state['error']
             except (OSError, ValueError, KeyError):
                 installed, error = False, '本地组件损坏或无法启动，请重新安装'
-            return {**self.install_state, 'installed':installed, 'error':error, 'totalBytes':sum(a['size'] for a in self.manifest['assets']),
+            return {**self.install_state, 'status':'ready' if installed else self.install_state['status'], 'installed':installed, 'error':error, 'totalBytes':sum(a['size'] for a in self.manifest['assets']),
                     'deviceNotice':'Windows CPU 转写可能较慢，首次下载约 579 MB；不自动改用云端。'}
 
     def start_install(self):
@@ -141,25 +141,35 @@ class VideoSpeech:
         total = sum(a['size'] for a in self.manifest['assets'])
         downloaded = 0
         try:
-            with httpx.Client(follow_redirects=True,timeout=120) as client:
+            with httpx.Client(follow_redirects=True,timeout=httpx.Timeout(120,connect=10)) as client:
                 for asset in self.manifest['assets']:
                     target = stage / asset['name']
-                    h = hashlib.sha256()
-                    with client.stream('GET',asset['url']) as response:
-                        response.raise_for_status()
-                        with target.open('wb') as out:
-                            for chunk in response.iter_bytes(1024*1024):
-                                if cancelled():
-                                    raise VideoCancelled('组件安装已取消')
-                                downloaded += len(chunk)
-                                if target.stat().st_size+len(chunk)>asset['size']:
-                                    raise ValueError('组件体积与固定清单不符')
-                                h.update(chunk);out.write(chunk)
-                                with self.lock:
-                                    self.install_state.update(downloadedBytes=downloaded)
-                                on_progress(downloaded,total)
-                    if target.stat().st_size!=asset['size'] or h.hexdigest()!=asset['sha256']:
-                        raise ValueError('下载校验失败，已保留原有组件，请重试')
+                    before = downloaded
+                    urls = [asset['url'], *asset.get('mirrors', [])]
+                    for index, url in enumerate(urls):
+                        h = hashlib.sha256()
+                        downloaded = before
+                        try:
+                            with client.stream('GET',url) as response:
+                                response.raise_for_status()
+                                size = 0
+                                with target.open('wb') as out:
+                                    for chunk in response.iter_bytes(1024*1024):
+                                        if cancelled():raise VideoCancelled('组件安装已取消')
+                                        size += len(chunk)
+                                        if size>asset['size']:raise ValueError('组件体积与固定清单不符')
+                                        downloaded += len(chunk)
+                                        h.update(chunk);out.write(chunk)
+                                        with self.lock:self.install_state.update(downloadedBytes=downloaded)
+                                        on_progress(downloaded,total)
+                            if size!=asset['size'] or h.hexdigest()!=asset['sha256']:
+                                raise ValueError('下载校验失败，已保留原有组件，请重试')
+                            break
+                        except VideoCancelled:
+                            raise
+                        except (httpx.HTTPError, ValueError) as exc:
+                            if index == len(urls)-1:
+                                raise ValueError(f'{asset["name"]} 下载或校验失败，请检查网络后重试') from exc
                     if asset['kind']=='engine':
                         with zipfile.ZipFile(target) as archive:
                             if sum(i.file_size for i in archive.infolist())>100*1024*1024:
@@ -217,14 +227,16 @@ class VideoSpeech:
         vad=self.runtime/'ggml-silero-v6.2.0.bin'
         duration=audio['durationSeconds']
         detected_language=''
-        with tempfile.TemporaryDirectory(prefix='speech-',dir=self.root) as temporary:
+        with tempfile.TemporaryDirectory(prefix='speech-',dir=self.runtime) as temporary:
             folder=Path(temporary)
             def chunk(start,length):
                 nonlocal detected_language
                 if cancelled():raise VideoCancelled('转写已取消')
                 wav=folder/'segment.wav';output=folder/'segment'
                 self.media._command([self.media._tools()[0],'-v','error','-y','-ss',str(start),'-i',audio['path'],'-t',str(length),'-ar','16000','-ac','1',str(wav)],cancelled=cancelled)
-                self.media._command([str(cli),'-m',str(model),'-f',str(wav),'-l','auto','--vad','--vad-model',str(vad),'-mc','0','-oj','-of',str(output)],cancelled=cancelled,timeout=7200)
+                # Windows 版 whisper.cpp 不稳定支持中文文件参数。工作目录由
+                # CreateProcess 处理，模型与临时文件使用该目录下的相对路径。
+                self.media._command([str(cli.resolve()),'-m',model.name,'-f',str(wav.relative_to(self.runtime)),'-l','auto','--vad','--vad-model',vad.name,'-mc','0','-oj','-of',str(output.relative_to(self.runtime))],cwd=self.runtime,cancelled=cancelled,timeout=7200)
                 raw=json.loads(output.with_suffix('.json').read_text(encoding='utf8'))
                 detected_language=raw.get('result',{}).get('language','') or detected_language
                 return [{'start':s['offsets']['from']/1000,'end':s['offsets']['to']/1000,'text':s['text']} for s in raw.get('transcription',[])]
