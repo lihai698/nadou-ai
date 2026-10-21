@@ -17,6 +17,14 @@ function fixture(){
  const api=create(h);return {h,api,events,timers,probes,calls};
 }
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
+
+test('classic storyboard errors show a visible alert as well as the existing status',()=>{
+ const f=fixture(),alerts=[];f.h.window.alert=text=>alerts.push(text);
+ f.api.initCanvasVideoDeconstructionBridge();
+ const text='镜头 1 缺少画面或生图提示词，请先填写';
+ f.h.window.CanvasVideoDeconstructionBridge.onError(new Error(text));
+ assert.deepEqual(alerts,[text]);assert.deepEqual(f.calls.at(-1),['status',text]);
+});
 test('missing host modules and repeated initialization preserve original guards',()=>{
  const api=create({window:{}});assert.equal(api.initCanvasClipBridge(),undefined);assert.equal(api.initCanvasVideoDeconstructionBridge(),undefined);assert.equal(api.initSmartVideoDeconstructionBridge(),undefined);
  const f=fixture();f.api.initCanvasClipBridge();const first=f.h.window.CanvasClipBridge;f.api.initCanvasClipBridge();assert.equal(f.h.window.CanvasClipBridge,first);assert.equal(f.events.length,1);

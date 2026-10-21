@@ -141,7 +141,8 @@
         if(node.shotTableOrigin&&(!node.apiProvider||!node.model)){deps.showErrorModal('请先在节点工具栏选择视频平台和模型');return;}
         if(node.shotTableOrigin?.stage==='video'){
             const image=deps.nodes.find(n=>n.id===node.shotTableOrigin.imageNodeId);
-            if(image&&(image.running||image.pending||image.pendingTasks?.length||image.submissionUnknown||image._pending?.some(p=>!p.failed))){deps.showErrorModal('本镜画面正在生成，请完成后再运行视频节点');return;}
+            const upstream=image?.type==='output'?(deps.connections||[]).filter(c=>c.to===image.id).map(c=>deps.nodes.find(n=>n.id===c.from)).filter(Boolean):[];
+            if([image,...upstream].some(n=>n&&(n.running||n.pending||n.pendingTasks?.length||n.submissionUnknown||n._pending?.some(p=>!p.failed)))){deps.showErrorModal('本镜画面正在生成，请完成后再运行视频节点');return;}
         }
         const cascadeTargetId = deps.cascadeTargetIdFromOptions(opts);
         const sources = deps.orderedSources(node, deps.generatorSources(node));

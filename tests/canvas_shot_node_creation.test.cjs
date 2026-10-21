@@ -23,11 +23,12 @@ function fixture(smart=false,defaults={}){
  table.shotTableData.rows.forEach((r,i)=>r.imagePrompt='镜头画面 '+i);table.shotTableData.selectedRowIds=table.shotTableData.rows.map(r=>r.id);
  return {e,host,table,errors,notices,focused};
 }
-function mounted(f,action='create-rows'){const listeners={},body={classList:{add(){}},addEventListener:(k,fn)=>listeners[k]=fn};ui.mount({dataset:{},querySelector:()=>body},f.table,f.host);const button={dataset:{vdAction:action},disabled:false};return {body,button,click:()=>listeners.click({stopPropagation(){},target:{closest:()=>button}})};}
-const imageText=(n,smart)=>smart?n.promptDraftText:n.viewAdjustPrompt;
-function setImageText(n,smart,text){if(smart)n.promptDraftText=text;else n.viewAdjustPrompt=text;}
+function mounted(f,action='create-rows'){const listeners={},status={textContent:'',hidden:true},body={querySelector:()=>status,classList:{add(){}},addEventListener:(k,fn)=>listeners[k]=fn};ui.mount({dataset:{},querySelector:()=>body},f.table,f.host);const button={dataset:{vdAction:action},disabled:false};return {body,button,click:()=>listeners.click({stopPropagation(){},target:{closest:()=>button}})};}
+const imageText=(n,smart)=>n.type==='prompt'?n.text:smart?n.promptDraftText:n.viewAdjustPrompt;
+function setImageText(n,smart,text){if(n.type==='prompt')n.text=text;else if(smart)n.promptDraftText=text;else n.viewAdjustPrompt=text;}
 function legacyImagePrompt(f,smart,row,text=row.imagePrompt){
  const map=Object.values(f.table.shotTableData.generationMap).find(v=>f.e.nodes.find(n=>n.id===v.generatorId)?.shotTableOrigin.rowId===row.id),g=f.e.nodes.find(n=>n.id===map.generatorId),p={id:'legacy-'+row.id,type:smart?'smart-prompt':'prompt',text,x:g.x-350,y:g.y},edges=smart?f.e.canvas.connections:f.e.connections;
+ if(map.promptId!==g.id){const old=map.promptId;f.e.nodes.splice(f.e.nodes.findIndex(n=>n.id===old),1);for(let i=edges.length-1;i>=0;i--)if(edges[i].from===old||edges[i].to===old)edges.splice(i,1);}
  delete g.viewAdjustPrompt;delete g.promptDraftText;delete g.promptDraftHtml;map.promptId=p.id;
  for(let i=edges.length-1;i>=0;i--)if(edges[i].from===f.table.id&&edges[i].to===g.id)edges.splice(i,1);
  f.e.nodes.push(p);edges.push({from:f.table.id,to:p.id,kind:'story'},{from:p.id,to:g.id});return {map,g,p,edges};
@@ -40,7 +41,7 @@ for(const smart of [false,true]){
   await m.click();assert.deepEqual(f.errors,[]);assert.equal(f.focused.length,1);
   const g=f.e.nodes.find(n=>n.id===Object.values(f.table.shotTableData.generationMap)[0].generatorId);
   assert.equal(g.type,smart?'smart-image':'generator');assert.equal(smart?g.runSettings.provider_id:g.apiProvider,'');assert.equal(smart?g.runSettings.model:g.model,'');
-  assert.equal(f.e.nodes.length,5);assert.equal((smart?f.e.canvas.connections:f.e.connections).length,4);assert.equal(m.button.disabled,false);
+  assert.equal(f.e.nodes.length,smart?5:13);assert.equal((smart?f.e.canvas.connections:f.e.connections).length,smart?4:14);assert.equal(m.button.disabled,false);
  });
  test(label+'真实桥：继承有效设置、逐镜错开，重复创建保留手改节点',()=>{
   const f=fixture(smart,{provider_id:'p',model:'m',ratio:'custom',customRatio:'5:4',customRatioWidth:5,customRatioHeight:4});
@@ -49,24 +50,24 @@ for(const smart of [false,true]){
   assert.equal((smart?g.runSettings:g).customRatioWidth,5);assert.equal((smart?g.runSettings:g).ratio,'custom');assert.notEqual(g.y,f.e.nodes.find(n=>n.id===b.generatorIds[0]).y);
   const again=f.host.createRows(f.table.id,rows.map(r=>r.id));assert.equal(again.createdIds.length,0);assert.equal(again.reusedIds.length,2);assert.equal(imageText(p,smart),'手工内容');assert.equal(smart?g.runSettings.model:g.model,'手选模型');
  });
- test(label+'分镜表直接连接图片再到视频，仅创建两个节点且各自引用提示词',()=>{
+ test(label+'按画布类型创建逐镜链，两类提示词分别引用',()=>{
   const f=fixture(smart),row=f.table.shotTableData.rows[0];row.motionPrompt='从低角度全景开始，缓慢向前推进并拉近人物面部';
   const a=f.host.createRows(f.table.id,[row.id]),map=Object.values(f.table.shotTableData.generationMap)[0],p=f.e.nodes.find(n=>n.id===map.promptId),edges=smart?f.e.canvas.connections:f.e.connections;
-  assert.equal(map.promptId,map.generatorId);assert.equal(imageText(p,smart),model.rowPrompt(row));assert.ok(!imageText(p,smart).includes(row.motionPrompt));const video=f.e.nodes.find(n=>n.id===map.video.generatorId);assert.equal(smart?video.promptDraftText:video.viewAdjustPrompt,row.motionPrompt);assert.equal(f.e.nodes.length,3);assert.equal(edges.filter(c=>c.from===f.table.id&&c.to===p.id&&c.kind==='story').length,1);assert.ok(!f.e.nodes.some(n=>['prompt','smart-prompt'].includes(n.type)));
+  assert.equal(map.promptId===map.generatorId,smart);assert.equal(imageText(p,smart),model.rowPrompt(row));assert.ok(!imageText(p,smart).includes(row.motionPrompt));const video=f.e.nodes.find(n=>n.id===map.video.generatorId);assert.equal(imageText(f.e.nodes.find(n=>n.id===map.video.promptId),smart),row.motionPrompt);assert.equal(f.e.nodes.length,smart?3:7);assert.equal(edges.filter(c=>c.from===f.table.id&&c.to===p.id&&c.kind==='story').length,1);assert.equal(f.e.nodes.filter(n=>['prompt','smart-prompt'].includes(n.type)).length,smart?0:2);
   f.host.createRows(f.table.id,[row.id]);assert.equal(imageText(p,smart),model.rowPrompt(row));assert.equal(edges.filter(c=>c.from===f.table.id&&c.to===p.id).length,1);
-  f.host.editTable(f.table.id,d=>model.editCell(d,row.id,'motionPrompt','绕人物顺时针移动'));assert.equal(imageText(p,smart),row.imagePrompt);assert.equal(smart?video.promptDraftText:video.viewAdjustPrompt,'绕人物顺时针移动');
+  f.host.editTable(f.table.id,d=>model.editCell(d,row.id,'motionPrompt','绕人物顺时针移动'));assert.equal(imageText(p,smart),row.imagePrompt);assert.equal(imageText(f.e.nodes.find(n=>n.id===map.video.promptId),smart),'绕人物顺时针移动');
  });
- test(label+'旧图片提示词及缺失来源线可原位补齐，手改内容不覆盖',()=>{
+ test(label+'旧图片提示词按画布结构保留或合并，手改内容不覆盖',()=>{
   const f=fixture(smart),row=f.table.shotTableData.rows[0];row.motionPrompt='缓慢推进';f.host.createRows(f.table.id,[row.id]);
   const {map,p,g,edges}=legacyImagePrompt(f,smart,row,'我手写的画面');delete map.promptFormat;
-  const count=f.e.nodes.length;f.host.createRows(f.table.id,[row.id]);assert.equal(imageText(g,smart),'我手写的画面');assert.equal(f.e.nodes.length,count-1);assert.ok(!f.e.nodes.includes(p));assert.ok(edges.some(c=>c.from===f.table.id&&c.to===g.id));
-  f.host.editTable(f.table.id,d=>model.editCell(d,row.id,'imagePrompt','表格的新画面'));assert.equal(imageText(g,smart),'我手写的画面');
+  const count=f.e.nodes.length;f.host.createRows(f.table.id,[row.id]);assert.equal(imageText(smart?g:p,smart),'我手写的画面');assert.equal(f.e.nodes.length,count-(smart?1:0));assert.equal(f.e.nodes.includes(p),!smart);assert.ok(edges.some(c=>c.from===f.table.id&&c.to===(smart?g:p).id));
+  f.host.editTable(f.table.id,d=>model.editCell(d,row.id,'imagePrompt','表格的新画面'));assert.equal(imageText(smart?g:p,smart),'我手写的画面');
  });
  test(label+'旧提示词仍被使用、运行中或图片已有不同手写输入时保留内容',()=>{
   for(const reason of ['shared','running','edited']){
    const f=fixture(smart),row=f.table.shotTableData.rows[0];f.host.createRows(f.table.id,[row.id]);const {g,p,edges}=legacyImagePrompt(f,smart,row);
    if(reason==='shared'){edges.push({from:p.id,to:'other'});p.text=row.imagePrompt+'\n\n【分镜提示词：动作与运镜】\n共享动作';Object.values(f.table.shotTableData.generationMap)[0].promptFormat='image-motion-v1';}if(reason==='running')g.running=true;if(reason==='edited')setImageText(g,smart,'图片节点中的独立手写内容');
-   const original=p.text,made=f.host.createRows(f.table.id,[row.id]);assert.ok(f.e.nodes.includes(p));assert.equal(p.text,original);assert.ok(made.warnings.some(w=>w.includes('已保留')));if(reason==='edited')assert.equal(imageText(g,smart),'图片节点中的独立手写内容');
+   const original=p.text,made=f.host.createRows(f.table.id,[row.id]);assert.ok(f.e.nodes.includes(p));assert.equal(p.text,original);if(smart)assert.ok(made.warnings.some(w=>w.includes('已保留')));if(reason==='edited')assert.equal(imageText(g,smart),'图片节点中的独立手写内容');
   }
  });
  test(label+'真实桥：失效模型、空选、只读和部分删除均有明确边界',()=>{
@@ -92,10 +93,10 @@ for(const smart of [false,true]){
   assert.throws(()=>f.host.createVideoRows(f.table.id,ids),/先创建画面节点/);assert.equal(f.e.nodes.length,1);
   const row=f.table.shotTableData.rows[0];row.motionPrompt='镜头推近，人物缓缓转身';f.host.createRows(f.table.id,ids);
   const made=f.host.createVideoRows(f.table.id,ids),map=Object.values(f.table.shotTableData.generationMap)[0],v=map.video,g=f.e.nodes.find(n=>n.id===v.generatorId),p=f.e.nodes.find(n=>n.id===v.promptId),edges=smart?f.e.canvas.connections:f.e.connections;
-  assert.equal(g.type,smart?'smart-image':'video');assert.equal(smart?p.promptDraftText:p.viewAdjustPrompt,model.videoPrompt(row));assert.ok(edges.some(c=>c.from===map.outputId&&c.to===g.id));assert.equal(v.promptId,v.generatorId);assert.equal(smart?g.runSettings.videoModel:g.model,'vm');
-  f.host.editTable(f.table.id,d=>model.editCell(d,row.id,'motionPrompt','摇镜'));assert.match(smart?p.promptDraftText:p.viewAdjustPrompt,/摇镜/);
-  if(smart)p.promptDraftText='手写动作';else p.viewAdjustPrompt='手写动作';if(smart)g.runSettings.videoModel='手选';else g.model='手选';const count=f.e.nodes.length;
-  const reuse=f.host.createVideoRows(f.table.id,ids);assert.equal(reuse.createdIds.length,0);assert.equal(smart?p.promptDraftText:p.viewAdjustPrompt,'手写动作');assert.equal(f.e.nodes.length,count);
+  assert.equal(g.type,smart?'smart-image':'video');assert.equal(imageText(p,smart),model.videoPrompt(row));assert.ok(edges.some(c=>c.from===map.outputId&&c.to===g.id));assert.equal(v.promptId===v.generatorId,smart);assert.equal(smart?g.runSettings.videoModel:g.model,'vm');
+  f.host.editTable(f.table.id,d=>model.editCell(d,row.id,'motionPrompt','摇镜'));assert.match(imageText(p,smart),/摇镜/);
+  setImageText(p,smart,'手写动作');if(smart)g.runSettings.videoModel='手选';else g.model='手选';const count=f.e.nodes.length;
+  const reuse=f.host.createVideoRows(f.table.id,ids);assert.equal(reuse.createdIds.length,0);assert.equal(imageText(p,smart),'手写动作');assert.equal(f.e.nodes.length,count);
   edges.splice(edges.findIndex(c=>c.from===map.outputId&&c.to===g.id),1);assert.throws(()=>f.host.createVideoRows(f.table.id,ids),/部分删除或断开/);assert.equal(f.e.nodes.length,count);
  });
  test(label+'视频按钮可保存和定位，未配置模型保持空白',async()=>{
@@ -104,7 +105,7 @@ for(const smart of [false,true]){
  test(label+'整理镜头按镜号、去重并保留人工剪辑，禁止未结束任务与无结果',async()=>{
   const f=fixture(smart),ids=f.table.shotTableData.selectedRowIds;f.host.createRows(f.table.id,ids);f.host.createVideoRows(f.table.id,ids);
   await assert.rejects(f.host.organizeRows(f.table.id,ids),/还没有视频结果/);
-  const maps=Object.values(f.table.shotTableData.generationMap);maps.forEach((map,i)=>{const out=f.e.nodes.find(n=>n.id===map.video.outputId);out[smart?'images':'generatedOutputs']=[{url:`/assets/v${i}.mp4`,kind:'video',durationSeconds:4}];});
+  const maps=Object.values(f.table.shotTableData.generationMap);maps.forEach((map,i)=>{const out=f.e.nodes.find(n=>n.id===map.video.outputId);out.images=[{url:`/assets/v${i}.mp4`,kind:'video',durationSeconds:4}];});
   f.e.nodes.find(n=>n.id===maps[0].video.generatorId).running=true;await assert.rejects(f.host.organizeRows(f.table.id,ids),/未完成任务/);f.e.nodes.find(n=>n.id===maps[0].video.generatorId).running=false;
   await f.host.organizeRows(f.table.id,[...ids].reverse());const collection=f.e.nodes.find(n=>n.id===f.table.shotTableData.collectionNodeId),items=smart?collection.images:collection.clipData.clips;assert.equal(collection.type,smart?'smart-group':'clip');assert.equal(items.length,2);assert.match(items[0].name,/镜头 1/);assert.match(items[1].name,/镜头 2/);
   if(!smart)collection.clipData.clips[0].muted=true;await f.host.organizeRows(f.table.id,ids);assert.equal((smart?collection.images:collection.clipData.clips).length,2);if(!smart)assert.equal(collection.clipData.clips[0].muted,true);
@@ -143,7 +144,7 @@ test('智能视频未选模型、未生成画面不会进入原生任务提交',
  Object.assign(settings,{videoProvider:'p',videoModel:'m'});await assert.rejects(runner.generateUrlsForCurrentSettings({settings},n,'提示词',[],settings),/先生成并连接本镜画面/);
 });
 test('整理期间切画布或视频结果变化，不能把旧片段落入当前画布',async()=>{
- const f=fixture(false),ids=f.table.shotTableData.selectedRowIds;f.host.createRows(f.table.id,ids);f.host.createVideoRows(f.table.id,ids);for(const map of Object.values(f.table.shotTableData.generationMap))f.e.nodes.find(n=>n.id===map.video.outputId).generatedOutputs=[{url:'/assets/v.mp4',kind:'video'}];
+ const f=fixture(false),ids=f.table.shotTableData.selectedRowIds;f.host.createRows(f.table.id,ids);f.host.createVideoRows(f.table.id,ids);for(const map of Object.values(f.table.shotTableData.generationMap))f.e.nodes.find(n=>n.id===map.video.outputId).images=[{url:'/assets/v.mp4',kind:'video'}];
  let done;f.e.window.CanvasClipBridge.probeDuration=()=>new Promise(resolve=>done=resolve);
  const work=f.host.organizeRows(f.table.id,[ids[0]]);f.e.canvas.id='other';done(4);await assert.rejects(work,/已变化/);assert.ok(!f.e.nodes.some(n=>n.type==='clip'));
 });
@@ -160,20 +161,20 @@ test('上游画面仍在生成时，不用旧图片启动视频',async()=>{
 });
 
 for(const smart of [false,true]){
- test((smart?'智能':'普通')+'旧合并提示词原位拆分，保留旧输出和手改结果',()=>{
+ test((smart?'智能':'普通')+'旧提示词按画布策略处理，保留旧输出和手改结果',()=>{
   const f=fixture(smart),row=f.table.shotTableData.rows[0];row.motionPrompt='人物转身';f.host.createRows(f.table.id,[row.id]);
   const combined=row.imagePrompt+'\n\n【分镜提示词：动作与运镜】\n'+row.motionPrompt;
   const {map,p,g:image,edges}=legacyImagePrompt(f,smart,row,combined),g=f.e.nodes.find(n=>n.id===map.video.generatorId);
   map.promptFormat='image-motion-v1';const old={id:'old-video-prompt',type:smart?'smart-prompt':'prompt',text:combined,x:0,y:0};f.e.nodes.push(old);map.video.promptId=old.id;map.video.promptFormat='image-motion-v1';edges.push({from:old.id,to:g.id},{from:f.table.id,to:old.id,kind:'story'});
-  const count=f.e.nodes.length;f.host.createRows(f.table.id,[row.id]);assert.equal(f.e.nodes.length,count-1);assert.ok(!f.e.nodes.includes(p));assert.equal(imageText(image,smart),row.imagePrompt);assert.equal(old.text,row.motionPrompt);
+  const count=f.e.nodes.length;f.host.createRows(f.table.id,[row.id]);assert.equal(f.e.nodes.length,count-(smart?1:0));assert.equal(f.e.nodes.includes(p),!smart);assert.equal(imageText(smart?image:p,smart),smart?row.imagePrompt:combined);assert.equal(old.text,row.motionPrompt);
   old.text='用户修改视频提示词';f.host.editTable(f.table.id,d=>model.editCell(d,row.id,'motionPrompt','新动作'));assert.equal(old.text,'用户修改视频提示词');
  });
  test((smart?'智能':'普通')+'独立编辑两类提示词分别同步，未完成视频任务期间不改输入',()=>{
   const f=fixture(smart),row=f.table.shotTableData.rows[0];row.motionPrompt='视频动作';f.host.createRows(f.table.id,[row.id]);
-  let map=Object.values(f.table.shotTableData.generationMap)[0];const p=f.e.nodes.find(n=>n.id===map.promptId),g=f.e.nodes.find(n=>n.id===map.video.generatorId);
-  f.host.editTable(f.table.id,d=>model.editCell(d,row.id,'imagePrompt','新的静态画面'));assert.equal(imageText(p,smart),'新的静态画面');assert.equal(smart?g.promptDraftText:g.viewAdjustPrompt,'视频动作');
-  f.host.editTable(f.table.id,d=>model.editCell(d,row.id,'motionPrompt','新的运镜'));assert.equal(imageText(p,smart),'新的静态画面');assert.equal(smart?g.promptDraftText:g.viewAdjustPrompt,'新的运镜');
-  g._pending=[{canvasTaskId:'original-task'}];assert.throws(()=>f.host.editTable(f.table.id,d=>model.editCell(d,row.id,'motionPrompt','不能覆盖运行输入')),/正在运行/);assert.equal(smart?g.promptDraftText:g.viewAdjustPrompt,'新的运镜');
+  let map=Object.values(f.table.shotTableData.generationMap)[0];const p=f.e.nodes.find(n=>n.id===map.promptId),g=f.e.nodes.find(n=>n.id===map.video.generatorId),vp=f.e.nodes.find(n=>n.id===map.video.promptId);
+  f.host.editTable(f.table.id,d=>model.editCell(d,row.id,'imagePrompt','新的静态画面'));assert.equal(imageText(p,smart),'新的静态画面');assert.equal(imageText(vp,smart),'视频动作');
+  f.host.editTable(f.table.id,d=>model.editCell(d,row.id,'motionPrompt','新的运镜'));assert.equal(imageText(p,smart),'新的静态画面');assert.equal(imageText(vp,smart),'新的运镜');
+  g._pending=[{canvasTaskId:'original-task'}];assert.throws(()=>f.host.editTable(f.table.id,d=>model.editCell(d,row.id,'motionPrompt','不能覆盖运行输入')),/正在运行/);assert.equal(imageText(vp,smart),'新的运镜');
   const html=ui.tableHtml(f.table.shotTableData);assert.match(html,/<th>分镜图片提示词<\/th><th>分镜视频提示词<\/th>/);assert.doesNotMatch(mounted(f).body.innerHTML,/create-video-rows|organize-rows/);
  });
 }
@@ -200,11 +201,49 @@ test('普通图片节点的真实输入读取自身图片提示词，分镜来�
  assert.deepEqual(input.generatorSources(deps,n).map(s=>s.prompt),['图片专用：静态构图']);
  assert.equal(graph.validStoryConnection(deps,deps.connections[0]),true);
 });
-for(const smart of [false,true])test((smart?'智能':'普通')+'保存重开复用图片和视频，不恢复独立图片提示词节点',()=>{
+for(const smart of [false,true])test((smart?'智能':'普通')+'保存重开保留对应画布的制作链结构',()=>{
  const f=fixture(smart),ids=f.table.shotTableData.selectedRowIds;f.host.createRows(f.table.id,ids);
  const snapshot=structuredClone(f.e.nodes),edges=structuredClone(smart?f.e.canvas.connections:f.e.connections),count=snapshot.length;
  f.e.nodes.splice(0,f.e.nodes.length,...snapshot);if(smart)f.e.canvas.connections=edges;else f.e.connections=edges;
  const table=f.e.nodes.find(n=>n.id===f.table.id),made=f.host.createRows(table.id,ids);
- assert.equal(made.createdIds.length,0);assert.equal(f.e.nodes.length,count);assert.ok(!f.e.nodes.some(n=>['prompt','smart-prompt'].includes(n.type)));
- assert.ok(Object.values(table.shotTableData.generationMap).every(v=>v.promptId===v.generatorId));
+ assert.equal(made.createdIds.length,0);assert.equal(f.e.nodes.length,count);assert.equal(f.e.nodes.filter(n=>['prompt','smart-prompt'].includes(n.type)).length,smart?0:4);
+ assert.ok(Object.values(table.shotTableData.generationMap).every(v=>(v.promptId===v.generatorId)===smart));
+});
+
+test('普通六节点链的真实输入与视频任务结果落到独立结果节点',async()=>{
+ const f=fixture(false,{videoProvider:'vp',videoModel:'vm'}),row=f.table.shotTableData.rows[0];row.motionPrompt='视频专用：向右平移';f.host.createRows(f.table.id,[row.id]);
+ const map=Object.values(f.table.shotTableData.generationMap)[0],get=id=>f.e.nodes.find(n=>n.id===id),image=get(map.outputId),video=get(map.video.generatorId),out=get(map.video.outputId),g=get(map.generatorId);
+ const edges=f.e.connections,has=(from,to)=>edges.some(c=>c.from===from&&c.to===to);
+ assert.equal(new Set([map.promptId,map.generatorId,map.outputId,map.video.promptId,map.video.generatorId,map.video.outputId]).size,6);
+ for(const [from,to]of [[map.promptId,g.id],[g.id,image.id],[image.id,video.id],[map.video.promptId,video.id],[video.id,out.id]])assert.ok(has(from,to));
+ image.images=[{url:'/assets/current.png',kind:'image'}];
+ const input=require('../static/js/canvas-generator-input.js'),runner=require('../static/js/canvas-media-runner.js'),results=require('../static/js/canvas-task-results.js');
+ let payload;const errors=[],deps={nodes:f.e.nodes,connections:edges,CANVAS_MEDIA_OUTPUT_TYPES:['generator','video'],outputUrlValue:x=>typeof x==='string'?x:x.url,outputImageName:x=>x,mediaKindForOutputItem:x=>x.kind||'image',mediaKindForRef:x=>x.kind,
+  showErrorModal:x=>errors.push(x),alert:x=>errors.push(x),cascadeTargetIdFromOptions(){},applyUploadedUrlToRefs:x=>x,imageRefsOnly:x=>x.filter(r=>r.kind==='image'),videoRefsOnly:x=>x.filter(r=>r.kind==='video'),audioRefsOnly:x=>x.filter(r=>r.kind==='audio'),
+  outputForNode:()=>out,uid:()=> 'pending',runSnapshot:(n,prompt,refs)=>({node:{id:n.id},prompt,refs}),makePendingForRun:(id,run)=>({id,run,startedAt:1}),canvasVideoTaskIdForPending:p=>p.canvasTaskId='task',refreshRunNodes(){},resolveVideoProviderId:x=>x,manualVideoUrlForNode:()=>'',saveCanvas:async()=>true,
+  createCanvasVideoTask:async x=>{payload=x;assert.equal(out._pending.length,1);assert.equal(image._pending,undefined);return {task_id:'task'}},scheduleSave(){},waitCanvasVideoTaskResult:async()=>({videos:[{url:'/assets/result.mp4',kind:'video'}]}),nowMs:()=>20,requestMetaFromResult:()=>({}),resultMediaUrls:r=>r.videos,addGenerationLog(){},outputNodesForSource:id=>edges.filter(c=>c.from===id).map(c=>get(c.to)).filter(n=>n.type==='output')};
+ deps.generatorSources=n=>input.generatorSources(deps,n);deps.orderedSources=(n,s)=>input.orderedSources(deps,n,s);deps.completeCanvasVideoTask=(...args)=>results.completeCanvasVideoTask(deps,...args);
+ assert.deepEqual(deps.generatorSources(g).map(s=>s.prompt),[row.imagePrompt]);
+ await runner.runVideoNode(deps,video.id);assert.deepEqual(errors,[]);assert.equal(payload.prompt,row.motionPrompt);assert.equal(payload.images[0].url,'/assets/current.png');assert.equal(out.images[0].url,'/assets/result.mp4');assert.equal(out._pending.length,0);assert.equal(image.images[0].url,'/assets/current.png');assert.equal(f.e.nodes.length,7);
+});
+
+test('普通独立图片结果的上游正在生成时，视频不会使用旧结果提交',async()=>{
+ const f=fixture(false,{videoProvider:'vp',videoModel:'vm'}),row=f.table.shotTableData.rows[0];f.host.createRows(f.table.id,[row.id]);const map=Object.values(f.table.shotTableData.generationMap)[0],g=f.e.nodes.find(n=>n.id===map.generatorId),errors=[];g.pending=1;
+ await require('../static/js/canvas-media-runner.js').runVideoNode({nodes:f.e.nodes,connections:f.e.connections,showErrorModal:x=>errors.push(x)},map.video.generatorId);assert.match(errors[0],/画面正在生成/);
+});
+
+test('普通独立结果节点有待查询任务时，不改写图片或视频提示词',()=>{
+ const f=fixture(false),row=f.table.shotTableData.rows[0];row.motionPrompt='原动作';f.host.createRows(f.table.id,[row.id]);const map=Object.values(f.table.shotTableData.generationMap)[0];
+ for(const [id,field] of [[map.outputId,'imagePrompt'],[map.video.outputId,'motionPrompt']]){
+  const out=f.e.nodes.find(n=>n.id===id);out._pending=[{canvasTaskId:'pending'}];assert.throws(()=>f.host.editTable(f.table.id,d=>model.editCell(d,row.id,field,'新内容')),/正在运行/);delete out._pending;
+ }
+ assert.equal(f.e.nodes.find(n=>n.id===map.promptId).text,row.imagePrompt);assert.equal(f.e.nodes.find(n=>n.id===map.video.promptId).text,'原动作');
+});
+
+test('普通旧内嵌链重复创建保留任务与结果，新镜头使用六个独立节点',()=>{
+ const f=fixture(false),row=f.table.shotTableData.rows[0];f.host.createRows(f.table.id,[row.id]);const map=Object.values(f.table.shotTableData.generationMap)[0],g=f.e.nodes.find(n=>n.id===map.generatorId),v=f.e.nodes.find(n=>n.id===map.video.generatorId);
+ const removed=new Set([map.promptId,map.outputId,map.video.promptId,map.video.outputId]);for(let i=f.e.nodes.length-1;i>=0;i--)if(removed.has(f.e.nodes[i].id))f.e.nodes.splice(i,1);f.e.connections=f.e.connections.filter(c=>!removed.has(c.from)&&!removed.has(c.to));f.e.connections.push({from:f.table.id,to:g.id,kind:'story'},{from:g.id,to:v.id});
+ map.promptId=map.outputId=g.id;map.video.promptId=map.video.outputId=v.id;g.viewAdjustPrompt='手写图片';v.viewAdjustPrompt='手写视频';g.shotTableOrigin.inlineOutput=true;v.shotTableOrigin.inlineOutput=true;v.shotTableOrigin.imageNodeId=g.id;v._pending=[{canvasTaskId:'old-task'}];v.images=[{url:'/assets/old.mp4',kind:'video'}];
+ const made=f.host.createRows(f.table.id,[row.id]);assert.equal(made.createdIds.length,0);assert.equal(g.viewAdjustPrompt,'手写图片');assert.equal(v.viewAdjustPrompt,'手写视频');assert.equal(v._pending[0].canvasTaskId,'old-task');assert.equal(v.images[0].url,'/assets/old.mp4');
+ const next=f.host.createRows(f.table.id,[f.table.shotTableData.rows[1].id]);assert.equal(next.createdIds.length,6);
 });

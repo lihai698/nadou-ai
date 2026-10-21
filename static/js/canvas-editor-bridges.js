@@ -59,7 +59,15 @@ function initCanvasVideoDeconstructionBridge(){
         defaultImageSettings:()=>{const s=h.canvasAssistantCreationSettings();return {...s,providerId:s.provider_id};},
         defaultVideoSettings:()=>h.canvasAssistantCreationSettings(),
         nodeWidth:n=>Math.max(h.nodeRect(n).w,n.w||h.defaultNodeSize(n.type).w||0),
-        rowSpacing:700,
+        rowSpacing:1000,
+        separateShotNodes:true,
+        createGenerationChain:({row,promptText,table,id,settings,x,y,uid:makeId})=>{
+            const origin={tableId:id,rowId:row.id,stage:'image',sourceFingerprint:table.shotTableData.source.fingerprint,durationSeconds:row.durationSeconds,motionPrompt:row.motionPrompt||row.cells.motion||''};
+            const prompt={id:makeId('prompt'),type:'prompt',x,y,w:320,h:260,text:promptText,name:`镜头 ${row.index} · 图片提示词`,shotTableOrigin:{...origin,role:'prompt'}};
+            const generator={id:makeId('gen'),type:'generator',x:x+416,y,w:380,apiProvider:settings.providerId||'',model:settings.model||'',count:1,ratio:settings.ratio||'square',resolution:settings.resolution||'1k',quality:settings.quality||'auto',inputs:[],shotTableOrigin:{...origin,role:'generator'}};
+            const output={id:makeId('out'),type:'output',x:x+892,y,w:360,h:300,images:[],name:`镜头 ${row.index} · 图片结果`,shotTableOrigin:{...origin,role:'result'}};
+            return {nodes:[prompt,generator,output],connections:[{id:makeId('c'),from:prompt.id,to:generator.id},{id:makeId('c'),from:generator.id,to:output.id}],promptId:prompt.id,generatorId:generator.id,outputId:output.id};
+        },
         videoMedia:n=>h.window.CanvasClipHost.mediaForNode(n,h.nodes),
         prepareShotMedia:async media=>{
             const resolved=[];
@@ -75,8 +83,10 @@ function initCanvasVideoDeconstructionBridge(){
         collectionNotice:'已按镜号加入剪辑时间线。重复整理保留剪辑修改；重新生成的结果作为新片段加入。请预览并调整节奏、对白和声音后导出。',
         validateVideoSettings:s=>h.videoApiProviders().some(p=>p.id===s.videoProvider&&p.enabled!==false&&(p.video_models||[]).includes(s.videoModel)),
         createVideoChain:({row,promptText,id,settings,x,y,uid:makeId,imageNodeId})=>{
-            const video={id:makeId('vid'),type:'video',x,y,viewAdjustPrompt:promptText,name:`镜头 ${row.index} · 视频`,apiProvider:settings.videoProvider||'',model:settings.videoModel||'',duration:settings.videoDuration||5,aspectRatio:settings.videoAspect||'16:9',resolution:settings.videoResolution||'',enhancePrompt:!!settings.videoEnhancePrompt,enableUpsample:!!settings.videoEnableUpsample,watermark:!!settings.videoWatermark,cameraFixed:!!settings.videoCameraFixed,generateAudio:!!settings.videoGenerateAudio,multimodal:!!settings.videoMultimodal,useFrameRoles:!!settings.videoUseFrameRoles,inputs:[],tempShLinks:[],running:false,shotTableOrigin:{tableId:id,rowId:row.id,stage:'video',inlineOutput:true,imageNodeId,durationSeconds:row.durationSeconds,startSeconds:row.startSeconds,endSeconds:row.endSeconds}};
-            return {nodes:[video],connections:[{id:makeId('c'),from:imageNodeId,to:video.id}],promptId:video.id,generatorId:video.id,outputId:video.id};
+            const prompt={id:makeId('prompt'),type:'prompt',x:x-456,y:y+396,w:320,h:260,text:promptText,name:`镜头 ${row.index} · 视频提示词`,shotTableOrigin:{tableId:id,rowId:row.id,stage:'video',role:'prompt'}};
+            const output={id:makeId('out'),type:'output',x:x+516,y,w:360,h:300,images:[],name:`镜头 ${row.index} · 视频结果`,shotTableOrigin:{tableId:id,rowId:row.id,stage:'video',role:'result'}};
+            const video={id:makeId('vid'),type:'video',x,y,w:420,name:`镜头 ${row.index} · 视频`,apiProvider:settings.videoProvider||'',model:settings.videoModel||'',duration:settings.videoDuration||5,aspectRatio:settings.videoAspect||'16:9',resolution:settings.videoResolution||'',enhancePrompt:!!settings.videoEnhancePrompt,enableUpsample:!!settings.videoEnableUpsample,watermark:!!settings.videoWatermark,cameraFixed:!!settings.videoCameraFixed,generateAudio:!!settings.videoGenerateAudio,multimodal:!!settings.videoMultimodal,useFrameRoles:!!settings.videoUseFrameRoles,inputs:[],tempShLinks:[],running:false,shotTableOrigin:{tableId:id,rowId:row.id,stage:'video',role:'generator',imageNodeId,durationSeconds:row.durationSeconds,startSeconds:row.startSeconds,endSeconds:row.endSeconds}};
+            return {nodes:[prompt,video,output],connections:[{id:makeId('c'),from:imageNodeId,to:video.id},{id:makeId('c'),from:prompt.id,to:video.id},{id:makeId('c'),from:video.id,to:output.id}],promptId:prompt.id,generatorId:video.id,outputId:output.id};
         },
         focus:ids=>h.CanvasViewport.fitAllNodesViewport(h.classicViewportHost(),ids),
         validateImageSettings:s=>h.imageApiProviders().some(p=>p.id===s.providerId&&p.enabled!==false&&(p.image_models||[]).includes(s.model)),
@@ -87,7 +97,7 @@ function initCanvasVideoDeconstructionBridge(){
         }
     });
     const begin=bridge.begin;bridge.begin=()=>{generation++;begin();};
-    bridge.sourceFor=sourceFor;bridge.saveNow=h.saveCanvas;bridge.onError=e=>h.setStatus(e.message);bridge.onNotice=text=>h.setStatus(text);
+    bridge.sourceFor=sourceFor;bridge.saveNow=h.saveCanvas;bridge.onError=e=>{const message=e.message||'分镜表操作失败';h.setStatus(message);h.window.alert?.(message);};bridge.onNotice=text=>h.setStatus(text);
     h.window.CanvasVideoDeconstructionBridge=bridge;
 }
 
