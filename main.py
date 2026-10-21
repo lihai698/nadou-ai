@@ -3445,41 +3445,10 @@ async def image_jpeg(url: str, w: int = 0):
     return await media_storage_service.image_jpeg(url, w, FileResponse=FileResponse, HTTPException=HTTPException, Image=Image, ImageOps=ImageOps, MEDIA_PREVIEW_DIR=MEDIA_PREVIEW_DIR, output_file_from_url=output_file_from_url, write_diagnostic=write_diagnostic)
 
 def local_media_file_by_basename(name: str):
-    safe = os.path.basename(urllib.parse.unquote(str(name or "")))
-    if not safe:
-        return None
-    roots = [
-        OUTPUT_OUTPUT_DIR,
-        OUTPUT_INPUT_DIR,
-        os.path.join(ASSETS_DIR, "output"),
-        os.path.join(ASSETS_DIR, "input"),
-        os.path.join(ASSETS_DIR, "library"),
-    ]
-    for root in roots:
-        path = os.path.abspath(os.path.join(root, safe))
-        root_abs = os.path.abspath(root)
-        if os.path.commonpath([root_abs, path]) == root_abs and os.path.isfile(path):
-            return path
-    return None
+    return media_storage_service.local_media_file_by_basename(name, OUTPUT_OUTPUT_DIR=OUTPUT_OUTPUT_DIR, OUTPUT_INPUT_DIR=OUTPUT_INPUT_DIR, ASSETS_DIR=ASSETS_DIR)
 
 def fetch_remote_media_bytes(url: str, timeout: float = 30.0, max_bytes: int = 200 * 1024 * 1024):
-    text = rewrite_runninghub_file_url(str(url or "").strip())
-    parsed = urllib.parse.urlparse(text)
-    if parsed.scheme not in ("http", "https") or not parsed.netloc:
-        return None
-    with requests.get(text, stream=True, timeout=timeout, headers={"User-Agent": "ComfyUI-API-Modelscope/1.0"}) as response:
-        response.raise_for_status()
-        content_type = response.headers.get("content-type") or "application/octet-stream"
-        chunks = []
-        total = 0
-        for chunk in response.iter_content(chunk_size=1024 * 256):
-            if not chunk:
-                continue
-            total += len(chunk)
-            if total > max_bytes:
-                raise HTTPException(status_code=413, detail="文件太大，无法下载")
-            chunks.append(chunk)
-        return b"".join(chunks), content_type
+    return provider_media_transfer.fetch_remote_media_bytes(url, timeout, max_bytes, rewrite_runninghub_file_url=rewrite_runninghub_file_url, urllib=urllib, requests=requests, HTTPException=HTTPException)
 
 def origin_from_url(value):
     parsed = urllib.parse.urlparse(str(value or ""))

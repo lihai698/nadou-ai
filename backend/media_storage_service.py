@@ -349,3 +349,21 @@ def download_output(request, url: str, name: str = "", inline: bool = False, *, 
 
     return StreamingResponse(stream_remote(), media_type=content_type, headers=headers, status_code=upstream.status_code)
 
+
+def local_media_file_by_basename(name: str, *, OUTPUT_OUTPUT_DIR, OUTPUT_INPUT_DIR, ASSETS_DIR):
+    safe = os.path.basename(urllib.parse.unquote(str(name or "")))
+    if not safe:
+        return None
+    roots = [
+        OUTPUT_OUTPUT_DIR,
+        OUTPUT_INPUT_DIR,
+        os.path.join(ASSETS_DIR, "output"),
+        os.path.join(ASSETS_DIR, "input"),
+        os.path.join(ASSETS_DIR, "library"),
+    ]
+    for root in roots:
+        path = os.path.abspath(os.path.join(root, safe))
+        root_abs = os.path.abspath(root)
+        if os.path.commonpath([root_abs, path]) == root_abs and os.path.isfile(path):
+            return path
+    return None

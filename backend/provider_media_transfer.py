@@ -491,3 +491,22 @@ def runninghub_local_asset_path(url, *, urllib, OUTPUT_INPUT_DIR, OUTPUT_OUTPUT_
         return None
     return path
 
+
+def fetch_remote_media_bytes(url: str, timeout: float = 30.0, max_bytes: int = 200 * 1024 * 1024, *, rewrite_runninghub_file_url, urllib, requests, HTTPException):
+    text = rewrite_runninghub_file_url(str(url or "").strip())
+    parsed = urllib.parse.urlparse(text)
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        return None
+    with requests.get(text, stream=True, timeout=timeout, headers={"User-Agent": "ComfyUI-API-Modelscope/1.0"}) as response:
+        response.raise_for_status()
+        content_type = response.headers.get("content-type") or "application/octet-stream"
+        chunks = []
+        total = 0
+        for chunk in response.iter_content(chunk_size=1024 * 256):
+            if not chunk:
+                continue
+            total += len(chunk)
+            if total > max_bytes:
+                raise HTTPException(status_code=413, detail="文件太大，无法下载")
+            chunks.append(chunk)
+        return b"".join(chunks), content_type
