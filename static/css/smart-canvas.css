@@ -113,7 +113,7 @@ body.smart-node-drag .image-wrap:hover .image-resolution-badge { opacity:0 !impo
 .image-node.prompt-smart-node, .image-node.loop-smart-node{ padding:12px; background:var(--panel); border:1px solid var(--line); box-shadow:0 20px 56px var(--shadow); backdrop-filter:blur(20px); overflow:visible; }
 .image-node.smart-shot-table-node { padding:12px; min-height:0; background:var(--panel); border:1px solid var(--line); border-radius:16px; box-shadow:0 20px 56px var(--shadow); backdrop-filter:blur(20px); overflow:visible; }
 .image-node.smart-shot-table-node:hover, .image-node.smart-shot-table-node.selected { border-color:var(--strong); box-shadow:0 0 0 1px var(--strong), 0 14px 36px var(--shadow); }
-.image-node.smart-shot-table-node .node-body { width:100%; height:calc(100% - 30px); min-height:0; padding:0; align-items:stretch; justify-content:stretch; overflow:hidden; }
+.image-node.smart-shot-table-node .node-body { width:100%; height:100%; min-height:0; padding:0; align-items:stretch; justify-content:stretch; overflow:hidden; }
 .image-node.smart-shot-table-node .node-hint { display:none; }
 .image-node.loop-smart-node { padding-top:14px; padding-bottom:12px; }
 .theme-dark .image-node.prompt-smart-node, .theme-dark .image-node.loop-smart-node{ background:var(--panel); border-color:var(--line); }

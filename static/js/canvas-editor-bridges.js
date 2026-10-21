@@ -53,13 +53,17 @@ function initCanvasVideoDeconstructionBridge(){
     };
     const bridge=h.window.CanvasVideoDeconstructionHost.create({
         getState:()=>({canvas:h.canvas,nodes:h.nodes,connections:h.connections,generation,scale:h.viewport.scale}),
+        inputMedia:n=>h.mediaRefsFromNode(n),
+        inputPreview:v=>v.kind==='audio'?'<span class="input-thumb-audio" title="音频请先转写为文本">♫</span>':v.kind==='video'?h.canvasVideoPreviewHtml(v.url,256):h.canvasPreviewImgHtml(v.url,256),
         uid:h.uid,pushUndo:h.pushUndo,save:h.scheduleSave,render:h.render,
         readSource:source=>sourceFor(source.nodeId,source.sourceUrl)?.resultId===source.resultId?source:null,
+        analysisSource:table=>{const item=bridge.inputs(table.id).find(v=>v.kind==='video');return item?sourceFor(item.nodeId,item.url,item.name):null;},
         select:ids=>{h.selected.clear();ids.forEach(id=>h.selected.add(id));h.refreshSelectionVisuals();},
         defaultImageSettings:()=>{const s=h.canvasAssistantCreationSettings();return {...s,providerId:s.provider_id};},
         defaultVideoSettings:()=>h.canvasAssistantCreationSettings(),
         nodeWidth:n=>Math.max(h.nodeRect(n).w,n.w||h.defaultNodeSize(n.type).w||0),
         rowSpacing:1000,
+        nodeBounds:n=>h.nodeRect(n),
         separateShotNodes:true,
         createGenerationChain:({row,promptText,table,id,settings,x,y,uid:makeId})=>{
             const origin={tableId:id,rowId:row.id,stage:'image',sourceFingerprint:table.shotTableData.source.fingerprint,durationSeconds:row.durationSeconds,motionPrompt:row.motionPrompt||row.cells.motion||''};
@@ -186,11 +190,15 @@ function initSmartVideoDeconstructionBridge(){
             h.saveCanvas();h.render();return images;
         },
         readSource:source=>{const node=h.nodes.find(item=>item.id===source.nodeId);const index=(node?.images||[]).findIndex(item=>{const value=h.imageForDisplay(item);return value?.url===source.sourceUrl&&(value.id||value.resultId||value.url)===source.resultId;});return index>=0?sourceFor(source.nodeId,index,source.sourceUrl,source.title):null;},
+        inputMedia:n=>(n.images||[]).map(h.imageForDisplay).filter(v=>v?.url).map(v=>({...v,kind:h.mediaKindForItem(v)})),
+        inputPreview:v=>v.kind==='audio'?'<span class="input-thumb-audio" title="音频请先转写为文本">♫</span>':v.kind==='video'?h.smartVideoPreviewHtml(v,256):h.smartPreviewImgHtml(v,256),
+        analysisSource:table=>{const item=bridge.inputs(table.id).find(v=>v.kind==='video');if(!item)return null;const n=h.nodes.find(n=>n.id===item.nodeId),index=(n?.images||[]).findIndex(v=>h.imageForDisplay(v)?.url===item.url);return index>=0?sourceFor(n.id,index,item.url):null;},
         select:ids=>{h.selectedIds=ids.slice();h.selectedId=ids.length===1?ids[0]:'';h.selectedImage={nodeId:'',index:-1};h.syncSelectionUi?.();},
         defaultImageSettings:()=>{const s=h.smartSettingsForNode();return s.engine==='api'&&s.apiKind!=='video'?{...s,providerId:s.provider_id}:{};},
         defaultVideoSettings:()=>{const s=h.smartSettingsForNode();return s.engine==='api'?s:{};},
         nodeWidth:n=>h.nodeRect(n).width,
         rowSpacing:540,
+        nodeBounds:n=>h.nodeRect(n),
         videoMedia:n=>(n.images||[]).map(h.imageForDisplay).filter(item=>item?.url&&h.mediaKindForItem(item)==='video').map(item=>({...item,kind:'video',sourceNodeId:n.id,sourceResultId:item.id||item.resultId||item.url})),
         addShotCollection:({table,media,existing})=>{
             if(existing&&existing.type!=='smart-group')throw new Error('原镜头分组已改变，请先核对');

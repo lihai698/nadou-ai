@@ -167,6 +167,7 @@ function scheduleGeneratorInputSync(deps){
 }
 
 function refreshGeneratorInputViews(deps){
+    deps.refreshStoryboardInputs?.();
     deps.nodes.filter(n => deps.CANVAS_GENERATOR_TYPES.includes(n.type)).forEach(gen => {
         const el = deps.nodesEl.querySelector(`.node[data-id="${gen.id}"]`);
         if(!el) return;

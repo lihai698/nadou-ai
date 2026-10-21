@@ -4,6 +4,24 @@ function setup(){let generation=1,undo=0;const canvas={id:'A'},nodes=[{id:'v',ty
  const host=lib.create({model,getState:()=>({canvas,nodes,connections,generation,scale:1}),readSource:s=>nodes.find(n=>n.id===s.nodeId)?.url===s.sourceUrl?s:null,uid:p=>p+'-'+model.uid(),pushUndo:()=>undo++,save(){},render(){},select(){},runGenerators:async()=>{}});
  return {host,canvas,nodes,connections,source,next(){generation++},counts:()=>undo};}
 test('真实画布桥存在',()=>assert.ok(lib));
+test('折叠保留镜头与原始尺寸，重复折叠不覆盖恢复尺寸，展开不改变内容',()=>{
+ const e=setup(),t=e.host.createBlankTable({x:0,y:0});t.w=1480;t.h=820;
+ const data=JSON.stringify(t.shotTableData),revision=t.shotTableData.revision;
+ e.host.setCollapsed(t.id,true);assert.equal(t.w,320);assert.equal(t.h,160);assert.equal(t.shotTableCollapsed,true);
+ e.host.setCollapsed(t.id,true);assert.deepEqual(t.shotTableExpandedSize,{w:1480,h:820});
+ assert.equal(t.shotTableData.revision,revision);assert.equal(JSON.stringify(t.shotTableData),data);
+ e.host.setCollapsed(t.id,false);assert.equal(t.w,1480);assert.equal(t.h,820);assert.equal(t.shotTableCollapsed,undefined);assert.equal(t.shotTableExpandedSize,undefined);
+ e.canvas.readOnly=true;assert.throws(()=>e.host.setCollapsed(t.id,true),/只读/);
+});
+test('上游输入使用当前连线、LLM结果和媒体，去重并防止循环',()=>{
+ const nodes=[{id:'t'}, {id:'p',type:'prompt',text:'上游提示词'}, {id:'l',type:'llm',text:'输入不当输出',outputText:'分析结果'}, {id:'i',media:[{url:'/ref.png',kind:'image'}]}];
+ const connections=[{from:'p',to:'l'},{from:'l',to:'t'},{from:'i',to:'t'},{from:'i',to:'t'},{from:'t',to:'p'}];
+ const host=lib.create({model,getState:()=>({nodes,connections}),inputMedia:n=>n.media||[]});
+ assert.deepEqual(host.inputs('t').map(v=>v.text||v.url),['分析结果','/ref.png']);
+ nodes[2].outputText='新输出';assert.equal(host.inputs('t')[0].text,'新输出');
+ nodes[2].outputText='';assert.deepEqual(host.inputs('t').map(v=>v.url),['/ref.png']);
+ connections.length=0;assert.deepEqual(host.inputs('t'),[]);
+});
 test('复制逐镜完整链重映射来源，单独复制不继承原表映射',()=>{
  const d=model.createManualTable('table');d.rows=model.buildShotRows([],2);d.shotPromptMap={'shot-1':{sourceNodeId:'source',processorId:'processor'}};d.generationMap[`${d.source.fingerprint}:shot-1`]={promptId:'source',promptProcessorId:'processor',generatorId:'gen',outputId:'out'};
  const nodes=[{id:'table',type:'shot-table',shotTableData:d},{id:'source',type:'prompt'},{id:'processor',type:'llm',shotPromptOrigin:{tableId:'table',rowId:'shot-1',sourceNodeId:'source'},shotPromptResult:{sourceText:'实际输入'}},{id:'gen',type:'generator',shotPromptOrigin:{tableId:'table',rowId:'shot-1',sourceNodeId:'source',processorId:'processor',outputText:'结果'}}];

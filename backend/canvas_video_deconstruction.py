@@ -16,6 +16,7 @@ from threading import Event, RLock
 from fastapi import APIRouter, Header, HTTPException, Request
 from backend.atomic_json import write_json_atomic
 from backend.canvas_video_media import VideoCancelled
+from backend.canvas_storyboard_analysis import selected_rules, analysis_prompt, parse_selected, plan_text
 
 TERMINAL = {'ready', 'failed', 'cancelled', 'interrupted'}
 BUILTIN = [('shotSize', '景别'), ('motion', '运镜'), ('visual', '画面'), ('dialogue', '对白'), ('onScreenText', '屏幕文字'), ('mood', '情绪')]
@@ -125,6 +126,11 @@ class VideoDeconstructionManager:
             raise ValueError('操作编号无效')
         if not isinstance(options, dict) or len(json.dumps(options)) > 1_000_000:
             raise ValueError('拆解参数无效或过大')
+        if 'enabledFields' in options:
+            selected_rules(options)
+            provider = next((p for p in self.providers() if p.get('id') == options.get('providerId')), {})
+            if options.get('model') not in provider.get('chat_models', []) or not vision_supported(provider, options.get('model','')):
+                raise ValueError('请选择已启用并支持读图的平台和模型')
         canonical = self.validate_source(copy.deepcopy(context), user)
         media = self.media_factory(canonical)
         canonical['source_fingerprint'] = media.fingerprint(canonical)
@@ -149,9 +155,11 @@ class VideoDeconstructionManager:
 
     def _same_source(self, task, check_revision=False):
         input_context = copy.deepcopy(task['context'])
-        if not check_revision:
+        if not check_revision and not task['context'].get('storyboard_inputs'):
             input_context.pop('table_id', None)
         context = self.validate_source(input_context, task['owner'])
+        if context.get('storyboard_inputs') != task['context'].get('storyboard_inputs'):
+            raise ValueError('上游素材已变化，请重新分析')
         if self.media[task['id']].fingerprint(context) != task['context']['source_fingerprint']:
             raise ValueError('原视频已变化，请重新拆解')
 
@@ -220,15 +228,18 @@ class VideoDeconstructionManager:
             if not isinstance(columns, list) or len(columns) > 36 or any(not isinstance(c, dict) or not re.fullmatch(r'[A-Za-z0-9_-]{1,100}', c.get('id', '')) or c.get('kind') not in {'builtin', 'custom'} or not isinstance(c.get('label'), str) for c in columns):
                 raise ValueError('分析列无效')
             self._update(task, columns=columns)
+            rules = selected_rules(opts) if 'enabledFields' in opts else None
+            if rules:
+                self._update(task, enabledFields=list(rules))
             # 音轨失败与视觉分离，音轨不可用时仍允许分析画面。
             try:
-                audio = media.extract_audio(task['context'], cancelled=cancelled)
+                audio = media.extract_audio(task['context'], cancelled=cancelled) if rules is None or 'dialogue' in rules else {'hasAudio': False}
             except VideoCancelled:
                 return
             except ValueError as exc:
                 audio = {'hasAudio': False, 'error': str(exc)}
             row_ids = task.get('retryRowIds') or [r['id'] for r in task['rows']]
-            vision_calls = 0 if task.get('speechOnly') else len(row_ids)
+            vision_calls = 0 if task.get('speechOnly') or rules is not None and not any(k != 'dialogue' for k in rules) else len(row_ids)
             revision = digest(self.providers())
             quote = dict(id=uuid.uuid4().hex, sourceFingerprint=task['context']['source_fingerprint'], tableRevision=task['context'].get('table_revision', 0),
                          columns=columns, visionCalls=vision_calls, framesPerShot=9 if task.get('localModel') else 3, audioCalls=int(audio.get('hasAudio', False) and mode != 'retry-shot'), expiresAt=time.time()+1800)
@@ -238,6 +249,8 @@ class VideoDeconstructionManager:
                 if local_acquired and not cancelled():
                     self.confirm(task['id'], task['owner'], {'providerId':'__local_video__', 'model':model, 'speech':{'mode':'local'}}, quote['id'])
                     analysis_started = True
+                elif rules and not cancelled():
+                    self.confirm(task['id'], task['owner'], {'providerId':opts.get('providerId'), 'model':opts.get('model'), 'speech':{'mode':'local'}}, quote['id'])
         except Exception as exc:
             self._update(task, status='failed', phase='本地准备失败', error=str(exc) if isinstance(exc, ValueError) else '拆解准备失败，请检查视频和存储目录')
         finally:
@@ -291,10 +304,12 @@ class VideoDeconstructionManager:
         semaphore = asyncio.Semaphore(4)
         cancelled = lambda: self._cancelled(task)
         custom = [c for c in task['columns'] if c['kind'] == 'custom']
+        rules = selected_rules(task['options']) if 'enabledFields' in task['options'] else None
+        visual_rules = {k:v for k,v in rules.items() if k != 'dialogue'} if rules else None
         rows = copy.deepcopy(task['rows'])
         done = 0
         row_ids = task.get('retryRowIds') or [r['id'] for r in rows]
-        targets = [] if task.get('speechOnly') else [r for r in rows if r['id'] in row_ids]
+        targets = [] if task.get('speechOnly') or not task['quote']['visionCalls'] else [r for r in rows if r['id'] in row_ids]
 
         async def analyze(row):
             nonlocal done
@@ -311,14 +326,19 @@ class VideoDeconstructionManager:
                 if not extracted['failures'] and len(extracted['frames']) == len(seconds):
                     self._consume(task, 'Vision')
                     try:
-                        fields = dict(provider=task['selection']['providerId'], model=task['selection']['model'], images=[f['url'] for f in extracted['frames']],
+                        upstream = task['context'].get('storyboard_inputs', {})
+                        fields = dict(provider=task['selection']['providerId'], model=task['selection']['model'], images=[f['url'] for f in extracted['frames']]+upstream.get('images', []),
                             temperature=.2, max_tokens=2800 if task.get('localModel') else 4000,
                             message=f'待分析片段 {row["index"]}，{a}–{b} 秒，时长 {round(b-a, 3)} 秒。画面按时间排序，采样时刻（原片秒数）：{seconds}。本段由本地切点检测划分，仍需核对画面是否连续；不能默认一定是单一连续镜头。图片提示词还原第一张的静态构图，视频提示词描述该时长内的可见变化。',
-                            system_prompt=ANALYSIS_SYSTEM_PROMPT+'\n自定义字段：'+json.dumps({c['id']:c.get('hint') or c['label'] for c in custom}, ensure_ascii=False))
+                            system_prompt=analysis_prompt(visual_rules) if rules else ANALYSIS_SYSTEM_PROMPT+'\n自定义字段：'+json.dumps({c['id']:c.get('hint') or c['label'] for c in custom}, ensure_ascii=False))
+                        if upstream.get('source_text'):
+                            fields['message'] += '\n上游文本参考（不改变采样时间顺序）：\n'+upstream['source_text']
+                        if upstream.get('images'):
+                            fields['message'] += '\n最后 '+str(len(upstream['images']))+' 张为上游参考图片，不属于视频采样帧。'
                         if task.get('localModel'):fields['cancelled'] = cancelled
                         response = await (self.local_vision.analyze(fields) if task.get('localModel') else self.call_vision(fields))
-                        result = parse_analysis(response.get('text'), custom)
-                        row.update(imagePrompt=result.pop('imagePrompt'), motionPrompt=result.pop('motionPrompt'), keyframeUrl=extracted['frames'][0]['url'], visionFailed=False, failureReason='')
+                        result = parse_selected(response.get('text'), visual_rules) if rules else parse_analysis(response.get('text'), custom)
+                        row.update(imagePrompt=result.pop('imagePrompt', row.get('imagePrompt','')), motionPrompt=result.pop('motionPrompt',row.get('motionPrompt','')), keyframeUrl=extracted['frames'][0]['url'], visionFailed=False, failureReason='')
                         row['cells'].update(result)
                         row['usage'] = response.get('raw_usage')
                     except Exception:
@@ -397,6 +417,12 @@ def create_video_deconstruction_router(*, manager, user_id, speech_engine):
                                  audioModels=p.get('audio_timestamp_models',[]) if p.get('protocol','openai')=='openai' else [], imageModels=p.get('image_models',[]))
                              for p in manager().providers() if p.get('enabled',True)], 'localSpeech':speech_engine().installation_status(),
                 'localAnalysis':manager().local_vision is not None}
+    @router.post('/storyboard/analyze')
+    async def storyboard(payload: dict, request: Request, x_user_id: str = Header(default='')):
+        try:
+            return await plan_text(manager(), payload.get('context', {}), user_id(x_user_id, request), payload.get('options', {}))
+        except (ValueError, TypeError, KeyError) as exc:
+            raise HTTPException(409, '分镜分析失败：'+str(exc)) from exc
     @router.post('/speech/install')
     def install():
         return speech_engine().start_install()

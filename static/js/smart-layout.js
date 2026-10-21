@@ -330,7 +330,7 @@
     }
 
     function imageLayout(deps, images, scale=1, node=null){
-        if(node?.type === 'smart-shot-table') return {cols:1,rows:1,width:Math.max(560,Number(node.w)||1120),height:Math.max(300,Number(node.h)||390),thumb:96,single:true};
+        if(node?.type === 'smart-shot-table') return {cols:1,rows:1,width:node.shotTableCollapsed?320:Math.max(560,Number(node.w)||1120),height:node.shotTableCollapsed?160:Math.max(300,Number(node.h)||390),thumb:96,single:true};
         if(node?.type === 'smart-group'){
             const groupThumbLayout = smartGroupThumbLayout(deps, node);
             if(groupThumbLayout) return groupThumbLayout;

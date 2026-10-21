@@ -1,6 +1,12 @@
 const test=require('node:test'),assert=require('node:assert/strict');
 const classic=require('../static/js/canvas-layout.js'),smart=require('../static/js/smart-layout.js'),interaction=require('../static/js/canvas-interaction.js');
 const pointer=require('../static/js/canvas-pointer-events.js');
+test('smart storyboard compact bounds match ports and expanded size stays intact',()=>{
+ const node={type:'smart-shot-table',x:20,y:30,w:320,h:160,shotTableCollapsed:true};
+ const compact=smart.imageLayout({},[],1,node);assert.equal(compact.width,320);assert.equal(compact.height,160);
+ node.shotTableCollapsed=false;node.w=1480;node.h=820;
+ const expanded=smart.imageLayout({},[],1,node);assert.equal(expanded.width,1480);assert.equal(expanded.height,820);
+});
 test('classic coordinates and rectangles honor viewport and measured DOM',()=>{
  const d={viewport:{x:20,y:40,scale:2},board:{getBoundingClientRect:()=>({left:10,top:15})},nodesEl:{querySelector:()=>({offsetWidth:300,offsetHeight:200})}};
  assert.deepEqual(classic.screenToWorld(d,70,95),{x:20,y:20});

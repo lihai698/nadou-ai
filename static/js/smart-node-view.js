@@ -41,7 +41,7 @@ function render(deps){
         const imgs = node.images || [];
         const isShotTable = node.type === 'smart-shot-table';
         const shotRow=nodeById.get(node.shotTableOrigin?.tableId)?.shotTableData?.rows.find(row=>row.id===node.shotTableOrigin.rowId);
-        const title = shotRow ? deps.escapeHtml(`镜头 ${shotRow.index} · ${node.shotTableOrigin.stage==='video'?'视频':'画面'}`) : node.audioTaskId ? 'API生成' : isShotTable ? '分镜表' : node.depthCapture ? (node.depthCapture.role === 'pose' ? '骨骼姿态' : '灰度深度') : node.viewAdjust ? `API · ${node.viewAdjust.kind === 'angle' ? '多角度' : '打光'}` : node.type === 'smart-group' ? (node.title === '万能分组' ? '智能分组' : (node.title || '智能分组')) : node.type === 'smart-prompt' ? 'Prompt' : node.type === 'smart-loop' ? 'Loop' : imgs.length > 1 ? 'Group' : imgs.length ? 'Image' : deps.escapeHtml(deps.tr('smart.createImportNode'));
+        const title = shotRow ? deps.escapeHtml(`镜头 ${shotRow.index} · ${node.shotTableOrigin.stage==='video'?'视频':'画面'}`) : node.audioTaskId ? 'API生成' : isShotTable ? '智能分镜表' : node.depthCapture ? (node.depthCapture.role === 'pose' ? '骨骼姿态' : '灰度深度') : node.viewAdjust ? `API · ${node.viewAdjust.kind === 'angle' ? '多角度' : '打光'}` : node.type === 'smart-group' ? (node.title === '万能分组' ? '智能分组' : (node.title || '智能分组')) : node.type === 'smart-prompt' ? 'Prompt' : node.type === 'smart-loop' ? 'Loop' : imgs.length > 1 ? 'Group' : imgs.length ? 'Image' : deps.escapeHtml(deps.tr('smart.createImportNode'));
         const scale = deps.nodeScale(node);
         const layout = deps.imageLayout(imgs, scale, node);
         const isPrompt = node.type === 'smart-prompt';

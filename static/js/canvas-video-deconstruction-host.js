@@ -11,9 +11,33 @@
   function setImageText(map,g,text){if(map.promptId!==map.generatorId){node(map.promptId).text=text;return;}if(adapter.setImagePrompt)adapter.setImagePrompt(g,text);else g.viewAdjustPrompt=text;}
   function assertWrite(){if(readonly())throw new Error('只读画布不能修改');}
   function context(source,tableId,options={}){return {source:m.clone(source),canvasId:state().canvas?.id,generation:state().generation,epoch,allowDetached:!!options.allowDetached,sourceNode:node(source.nodeId),tableId,tableNode:node(tableId),rowSnapshots:Object.fromEntries((node(tableId)?.shotTableData?.rows||[]).map(r=>[r.id,JSON.stringify(r)]))};}
-  function isCurrent(ctx){return (!readonly()||ctx.allowDetached)&&ctx.canvasId===state().canvas?.id&&ctx.generation===state().generation&&ctx.epoch===epoch&&(ctx.allowDetached&&ctx.tableNode?.shotTableData&&(ctx.tableNode.shotTableData.source.kind==='manual'||ctx.tableNode.shotTableData.rows.length)||ctx.sourceNode===node(ctx.source.nodeId)&&!!adapter.readSource(ctx.source))&&(!ctx.tableId||ctx.tableNode===node(ctx.tableId));}
+  function isCurrent(ctx){return (!readonly()||ctx.allowDetached)&&ctx.canvasId===state().canvas?.id&&ctx.generation===state().generation&&ctx.epoch===epoch&&(ctx.allowDetached&&ctx.tableNode?.shotTableData&&(['manual','text'].includes(ctx.tableNode.shotTableData.source.kind)||ctx.tableNode.shotTableData.rows.length)||ctx.sourceNode===node(ctx.source.nodeId)&&!!adapter.readSource(ctx.source))&&(!ctx.tableId||ctx.tableNode===node(ctx.tableId));}
   function save(){adapter.save();adapter.render();}
   function begin(){epoch++;}
+  function setCollapsed(id,collapsed){
+   assertWrite();const n=node(id);if(n?.type!==tableType)throw new Error('分镜表已不存在');
+   if(!!n.shotTableCollapsed===!!collapsed)return;
+   adapter.pushUndo();
+   if(collapsed){n.shotTableExpandedSize={w:n.w||1120,h:n.h||390};n.w=320;n.h=160;n.shotTableCollapsed=true;}
+   else {const size=n.shotTableExpandedSize||{};n.w=size.w||1120;n.h=size.h||390;delete n.shotTableExpandedSize;delete n.shotTableCollapsed;}
+   save();
+  }
+  function inputs(id){
+   const s=state(),seen=new Set([id]),items=[],urls=new Set();
+   function visit(key){
+    if(seen.has(key))return;seen.add(key);const n=node(key);if(!n)return;
+    const stale=n.type==='smart-prompt'&&n.llmEnabled&&n.llmOutputStale;
+    const text=String(stale?'':n.type==='llm'?n.outputText||'':['prompt','smart-prompt','text'].includes(n.type)?n.text||'':n.audioOutputText||'').trim();
+    if(text)items.push({nodeId:key,kind:'text',text,label:n.name||n.title||'文本'});
+    const media=n.type==='group'?[]:adapter.inputMedia?.(n)||[];
+    for(const v of media)if(v.url&&!urls.has(v.url)){urls.add(v.url);items.push({...v,nodeId:key,label:v.name||n.name||n.title||v.kind});}
+    if(n.type==='group')for(const child of n.items||[])visit(child);
+    if(text||media.length||n.type==='llm'||stale)return;
+    for(const c of s.connections||[])if(c.to===key&&c.kind!=='story')visit(c.from);
+   }
+   for(const c of s.connections||[])if(c.to===id&&c.kind!=='story')visit(c.from);
+   return items;
+  }
   function landFrames(ctx,result){if(!isCurrent(ctx))return false;if(adapter.landFrames)return adapter.landFrames(ctx,result);const source=ctx.sourceNode,operation=result.operationId||result.id;const created=[];const width=260,height=190;const valid=(result.frames||[]).filter(f=>f.url);
    const fresh=valid.filter(f=>!state().nodes.some(n=>n.frameOperationId===operation&&n.frameIndex===f.index));if(!fresh.length)return [];
    adapter.pushUndo();fresh.forEach(f=>{const i=f.index??created.length,n={id:adapter.uid('img'),type:'image',mediaKind:'image',url:f.url,name:`${ctx.source.title||'视频'}·${m.formatTime(f.seconds||0)}`,x:source.x+(source.w||260)+96+(i%4)*(width+32),y:source.y+Math.floor(i/4)*(height+32),w:width,h:height,frameOperationId:operation,frameIndex:i};state().nodes.push(n);created.push(n);});
@@ -21,7 +45,7 @@
    if(!g){g={id:adapter.uid('grp'),type:'group',name:`拆自${ctx.source.title||'视频'}`,frameGroupOperationId:operation};state().nodes.push(g);}Object.assign(g,{x:all[0].x-24,y:source.y-58,w:x2-all[0].x+48,h:y2-source.y+90,items:all.map(n=>n.id)});
    adapter.select(all.map(n=>n.id));save();return created;
   }
-  function createBlankTable(point){assertWrite();const id=adapter.uid(tableType),n={id,type:tableType,name:'分镜表',title:'分镜表',x:point.x,y:point.y,w:1120,h:390,shotTableData:m.createManualTable(id)};adapter.pushUndo();state().nodes.push(n);adapter.select([id]);save();return n;}
+  function createBlankTable(point){assertWrite();const id=adapter.uid(tableType),n={id,type:tableType,name:'智能分镜表',title:'智能分镜表',x:point.x,y:point.y,w:1120,h:390,shotTableData:m.createManualTable(id)};adapter.pushUndo();state().nodes.push(n);adapter.select([id]);save();return n;}
   function ensureTable(source){assertWrite();let existing=state().nodes.find(n=>n.type===tableType&&n.shotTableData?.source.nodeId===source.nodeId&&n.shotTableData?.source.resultId===source.resultId&&n.shotTableData?.source.sourceUrl===source.sourceUrl);if(existing){adapter.select([existing.id]);return existing;}
    if(!adapter.readSource(source))throw new Error('原视频已经改变，请重新打开');const n=node(source.nodeId);adapter.pushUndo();existing={id:adapter.uid(tableType),type:tableType,name:`${source.title||'视频'}·分镜表`,title:'分镜表',x:n.x+(n.w||260)+96,y:n.y,w:1120,h:390,shotTableData:m.createTable(source)};state().nodes.push(existing);state().connections.push({id:adapter.uid('c'),from:n.id,to:existing.id});adapter.select([existing.id]);save();return existing;
   }
@@ -39,7 +63,7 @@
    }
    adapter.pushUndo();n.shotTableData=next;patches.forEach(fn=>fn());if(!options.deferSave)save();return n.shotTableData;}
   function applyTask(ctx,task){if(!isCurrent(ctx))return false;const n=node(ctx.tableId);if(!n)return false;const d=m.normalizeTable(n.shotTableData);if(d.task.taskId&&d.task.taskId!==task.id)return false;if(d.task.status==='cancelled'&&task.status!=='cancelled')return false;
-   const statuses={queued:'running','awaiting-confirmation':'idle',succeeded:'ready'};d.task={...d.task,rowSnapshots:d.task.rowSnapshots||m.clone(ctx.rowSnapshots),taskId:task.id,status:statuses[task.status]||task.status,phase:task.phase,progressDetail:task.progressDetail||'',progress:task.progress||0,error:task.error||'',failureKind:task.failureKind,coverage:task.detected?.coverage||d.task.coverage,quote:task.quote};
+   const statuses={queued:'running','awaiting-confirmation':'idle',succeeded:'ready'};d.task={...d.task,transient:false,rowSnapshots:d.task.rowSnapshots||m.clone(ctx.rowSnapshots),taskId:task.id,status:statuses[task.status]||task.status,phase:task.phase,progressDetail:task.progressDetail||'',progress:task.progress||0,error:task.error||'',failureKind:task.failureKind,coverage:task.detected?.coverage||d.task.coverage,quote:task.quote};
    if(Array.isArray(task.rows)&&['ready','succeeded','cancelled'].includes(task.status)){
     const only=task.retryRowIds?.length?new Set(task.retryRowIds):null;
     const incoming=new Map(task.rows.map(r=>[r.id,r]));const merge=r=>{const fresh=incoming.get(r.id);if(!fresh||only&&!only.has(r.id))return r;
@@ -47,12 +71,21 @@
      if(task.speechOnly){if(!['ready','no-speech'].includes(task.speech?.status))return r;combined={...m.clone(r),cells:{...r.cells,dialogue:fresh.cells.dialogue||''},carriedOver:!!fresh.carriedOver};}
      else {combined={...m.clone(fresh),cells:{...r.cells,...fresh.cells}};if(only){combined.cells.dialogue=r.cells.dialogue;combined.carriedOver=r.carriedOver;}}
      if(snapshot&&JSON.stringify(r)!==baseline){Object.keys(r.cells).forEach(k=>{if(r.cells[k]!==snapshot.cells[k])combined.cells[k]=r.cells[k];});for(const k of ['imagePrompt','motionPrompt'])if(r[k]!==snapshot[k])combined[k]=r[k];d.task.error=[d.task.error,'分析期间有手工编辑，已保留编辑内容。'].filter(Boolean).join(' ');}return combined;};
-    d.rows=d.rows.length?d.rows.map(merge):m.clone(task.rows);if(!d.selectedRowIds.length&&ctx.tableNode.shotTableData.rows.length===0)d.selectedRowIds=d.rows.map(r=>r.id);
+    if(task.enabledFields){const fields=new Set(task.enabledFields),previous=d.rows;d.rows=task.rows.map((r,i)=>{const old=previous[i];if(!old)return m.clone(r);if(r.visionFailed)return {...m.clone(old),visionFailed:true,failureReason:r.failureReason};const combined={...m.clone(r),id:old.id,cells:{...old.cells}},before=d.task.rowSnapshots[old.id]&&JSON.parse(d.task.rowSnapshots[old.id]);for(const key of fields){const prompt=['imagePrompt','motionPrompt'].includes(key);if(before&&(prompt?old[key]!==before[key]:old.cells[key]!==before.cells[key])){if(prompt)combined[key]=old[key];d.task.error='分析期间有手工编辑，已保留编辑内容。';continue;}if(prompt)combined[key]=r[key]||'';else combined.cells[key]=r.cells[key]||'';}for(const key of ['imagePrompt','motionPrompt'])if(!fields.has(key))combined[key]=old[key]||'';return combined;});}
+    else d.rows=d.rows.length?d.rows.map(merge):m.clone(task.rows);if(!d.selectedRowIds.length&&ctx.tableNode.shotTableData.rows.length===0)d.selectedRowIds=d.rows.map(r=>r.id);
    }
-   if(task.detected)d.source.durationSeconds=m.quantize(task.detected.durationSeconds);if(task.context?.source_fingerprint)d.source.fingerprint=task.context.source_fingerprint;if(task.speech)d.speech=m.clone(task.speech);n.shotTableData=m.normalizeTable(d);adapter.save();adapter.render();return true;
+   if(task.detected)d.source.durationSeconds=m.quantize(task.detected.durationSeconds);if(task.context?.source_fingerprint&&!Object.keys(d.generationMap).length)d.source.fingerprint=task.context.source_fingerprint;if(task.speech)d.speech=m.clone(task.speech);if(task.enabledFields&&task.status==='ready'){d.revision=(Number(d.revision)||0)+1;editTable(n.id,d);return true;}n.shotTableData=m.normalizeTable(d);adapter.save();adapter.render();return true;
   }
   function materializeRows(id,selectedIds,settings,options={}){assertWrite();if(!settings?.providerId||!settings?.model)throw new Error('请手动选择图片平台和模型');if(adapter.validateImageSettings&&!adapter.validateImageSettings(settings))throw new Error('图片平台或模型已经停用，请重新选择');return buildRows(id,selectedIds,settings,options);}
-  function createRows(id,selectedIds){assertWrite();const table=node(id);if(!table?.shotTableData)throw new Error('镜头表已删除');if(table.shotTableData.task.status==='running')throw new Error('镜头仍在分析，请结束后创建节点');if(!table.shotTableData.rows.some(r=>selectedIds.includes(r.id)))throw new Error('请先选择镜头');let settings=adapter.defaultImageSettings?.(table)||{};if(!settings.providerId||!settings.model||adapter.validateImageSettings&&!adapter.validateImageSettings(settings))settings={};if(!adapter.createVideoChain)throw new Error('当前画布不支持视频节点');checkVideoChains(table,table.shotTableData.rows.filter(r=>selectedIds.includes(r.id)));const result=buildRows(id,selectedIds,settings,{deferSave:true,creationOnly:true});const videos=createVideoRows(id,selectedIds,{deferUndo:true});result.createdIds.push(...videos.createdIds);result.nodeIds.push(...videos.nodeIds);result.warnings.push(...videos.warnings);adapter.select(result.generatorIds);adapter.render();return result;}
+  function createRows(id,selectedIds){assertWrite();const table=node(id);if(!table?.shotTableData)throw new Error('镜头表已删除');if(table.shotTableData.task.status==='running')throw new Error('镜头仍在分析，请结束后创建节点');if(!table.shotTableData.rows.some(r=>selectedIds.includes(r.id)))throw new Error('请先选择镜头');let settings=adapter.defaultImageSettings?.(table)||{};if(!settings.providerId||!settings.model||adapter.validateImageSettings&&!adapter.validateImageSettings(settings))settings={};if(!adapter.createVideoChain)throw new Error('当前画布不支持视频节点');checkVideoChains(table,table.shotTableData.rows.filter(r=>selectedIds.includes(r.id)));const result=buildRows(id,selectedIds,settings,{deferSave:true,creationOnly:true});const videos=createVideoRows(id,selectedIds,{deferUndo:true});result.createdIds.push(...videos.createdIds);result.nodeIds.push(...videos.nodeIds);result.warnings.push(...videos.warnings);groupRows(table,selectedIds,result);adapter.select(result.generatorIds);adapter.render();return result;}
+  function groupRows(table,ids,result){
+   for(const row of table.shotTableData.rows.filter(r=>ids.includes(r.id))){const map=table.shotTableData.generationMap[`${table.shotTableData.source.fingerprint||table.shotTableData.source.sourceUrl}:${row.id}`];if(!map)continue;
+    const members=[...new Set([map.promptId,map.generatorId,map.outputId,map.video?.promptId,map.video?.generatorId,map.video?.outputId])].map(node).filter(Boolean);if(!members.length)continue;
+    let group=node(map.groupId)||state().nodes.find(n=>n.groupMode==='frame'&&n.shotGroupOrigin?.tableId===table.id&&n.shotGroupOrigin?.rowId===row.id);
+    if(!group){const bounds=members.map(n=>{const r=adapter.nodeBounds?.(n)||{};return {x:n.x,y:n.y,w:r.width||r.w||n.w||360,h:r.height||r.h||n.h||500};});const x=Math.min(...bounds.map(r=>r.x)),y=Math.min(...bounds.map(r=>r.y)),right=Math.max(...bounds.map(r=>r.x+r.w)),bottom=Math.max(...bounds.map(r=>r.y+r.h));group={id:adapter.uid('workgroup'),type:tableType==='smart-shot-table'?'smart-group':'group',groupMode:'frame',title:`镜头 ${row.index}`,name:`镜头 ${row.index}`,x:x-28,y:y-44,w:right-x+56,h:bottom-y+72,items:members.map(n=>n.id),images:[],created_at:Date.now(),shotGroupOrigin:{tableId:table.id,rowId:row.id}};state().nodes.push(group);result.createdIds.push(group.id);}
+    else group.items=[...new Set([...(group.items||[]),...members.map(n=>n.id)])];map.groupId=group.id;result.nodeIds.push(group.id);
+   }
+  }
   function buildRows(id,selectedIds,settings,options={}){assertWrite();const table=node(id);if(!table)throw new Error('镜头表已删除');const d=m.normalizeTable(table.shotTableData),rows=d.rows.filter(r=>selectedIds.includes(r.id));const result={generatorIds:[],createdIds:[],reusedIds:[],nodeIds:[],warnings:[]};if(!rows.length)return result;
    if(rows.some(r=>d.shotPromptMap?.[r.id]))throw new Error('这些镜头使用LLM提示词处理，请让创作助手创建逐镜配图节点，再运行对应图片节点');
    const empty=d.source.kind==='manual'&&rows.find(r=>!String(r.imagePrompt||r.cells.visual||'').trim());if(empty)throw new Error(`镜头 ${empty.index} 缺少画面或生图提示词，请先填写`);
@@ -133,7 +166,7 @@
    return {nodeIds:[collection.id],generatorIds:[],createdIds:[],reusedIds:[],notice:adapter.collectionNotice||'已整理所选镜头'};
   }
   function collectUrls(n){const d=n?.shotTableData;return d?[...new Set([d.source.sourceUrl,...d.rows.map(r=>r.keyframeUrl)].filter(v=>typeof v==='string'&&v.startsWith('/')))]:[];}
-  return {begin,context,isCurrent,landFrames,createBlankTable,ensureTable,editTable,applyTask,materializeRows,createRows,createVideoRows,organizeRows,focus:ids=>adapter.focus?.(ids),node,readonly,scale:()=>state().scale||1,runGenerators:ids=>adapter.runGenerators(ids),collectUrls};
+  return {setCollapsed,inputs,inputPreview:v=>adapter.inputPreview?.(v)||'',analysisSource:id=>adapter.analysisSource?.(node(id))||node(id)?.shotTableData?.source,begin,context,isCurrent,landFrames,createBlankTable,ensureTable,editTable,applyTask,materializeRows,createRows,createVideoRows,organizeRows,focus:ids=>adapter.focus?.(ids),node,readonly,scale:()=>state().scale||1,runGenerators:ids=>adapter.runGenerators(ids),collectUrls};
  }
  return {create};
 });

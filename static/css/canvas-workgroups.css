@@ -57,6 +57,8 @@
 .cw-tag {position:absolute!important;right:40px;top:8px;z-index:25;max-width:112px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:4px 9px;border:1px solid var(--cw-tag-color);border-radius:7px;background:var(--card-solid,var(--card));color:var(--text);font:inherit;font-size:11px;line-height:16px;box-shadow:inset 3px 0 var(--cw-tag-color);opacity:0;pointer-events:none;cursor:pointer;transition:opacity .12s;}
 .node:hover>.cw-tag,.image-node:hover>.cw-tag,.cw-tag:focus-visible {opacity:1;pointer-events:auto;}
 .cw-tag:hover {background:var(--soft)}
+/* 暂时隐藏节点分类标签入口，保留数据和编辑实现，后续可恢复。 */
+.cw-tag,.cw-tag-menu {display:none!important;}
 .cw-tag-menu {width:200px;max-height:350px;overflow:auto;right:auto;}
 .cw-tag-choices {display:grid;grid-template-columns:1fr 1fr;gap:3px;}
 .cw-tag-choices button {box-shadow:inset 3px 0 var(--cw-tag-color);font-size:12px;}

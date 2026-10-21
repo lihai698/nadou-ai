@@ -43,7 +43,7 @@ function renderNode(deps, node){
     const shotRow=node.shotTableOrigin&&deps.nodes.find(n=>n.id===node.shotTableOrigin.tableId)?.shotTableData?.rows.find(row=>row.id===node.shotTableOrigin.rowId);
     const shotStage=node.shotTableOrigin?.stage==='video'?'视频':'图片';
     const shotLabel={prompt:`${shotStage}提示词`,generator:shotStage==='视频'?'视频生成 API':'生图 API',result:`${shotStage}结果`}[node.shotTableOrigin?.role]||(shotStage==='视频'?'视频':'画面');
-    const displayTitle = shotRow ? deps.escapeHtml(`镜头 ${shotRow.index} · ${shotLabel}`) : node.type === 'shot-table' ? '分镜表' : node.depthCapture ? (node.depthCapture.role === 'pose' ? '骨骼姿态' : '灰度深度') : node.type === 'image' && node.url ? deps.nodeTitleForMedia(node) : title;
+    const displayTitle = shotRow ? deps.escapeHtml(`镜头 ${shotRow.index} · ${shotLabel}`) : node.type === 'shot-table' ? '智能分镜表' : node.depthCapture ? (node.depthCapture.role === 'pose' ? '骨骼姿态' : '灰度深度') : node.type === 'image' && node.url ? deps.nodeTitleForMedia(node) : title;
     // 失败徽章只在一键运行模式中显示，单节点失败已通过 alert 提示
     const showStatus = ['generator','midjourney','msgen','comfy','llm','video','rh'].includes(node.type) && node.runStatus
         && (node.runStatus !== 'failed' || node._cascadeFailed);
@@ -53,7 +53,7 @@ function renderNode(deps, node){
     })() : '';
     const submissionWarningHtml = node.submissionWarning
         ? `<button type="button" class="node-run-status failed node-submission-warning" style="border:0;cursor:pointer;font-family:inherit" title="${deps.escapeAttr(node.submissionWarning)}"><span class="dot"></span>${node.submissionUnknown ? '提交状态未知' : '部分受理'}</button>` : '';
-    el.innerHTML = `<div class="node-head"><span class="node-title">${displayTitle}</span><div style="display:flex;align-items:center;gap:8px">${statusHtml}${submissionWarningHtml}<button type="button" onclick="deleteNodeFromButton('${node.id}', event)" class="node-delete"><i data-lucide="x" class="w-4 h-4"></i></button></div></div>`;
+    el.innerHTML = `<div class="node-head"><span class="node-title">${displayTitle}</span><div style="display:flex;align-items:center;gap:8px">${statusHtml}${submissionWarningHtml}<button type="button" onclick="deleteNodeFromButton('${node.id}', event)" class="node-delete" title="删除节点" aria-label="删除节点"><i data-lucide="trash-2" class="w-4 h-4"></i></button></div></div>`;
     el.querySelector('.node-submission-warning')?.addEventListener('click', e => {
         e.stopPropagation();
         deps.showErrorModal(node.submissionWarning, deps.tr('canvas.apiFailed'));

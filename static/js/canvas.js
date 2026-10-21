@@ -3232,6 +3232,9 @@ function measureCanvasOriginalImageNodes(root=nodesEl){
 
 function classicEditorBridgeHost(){
     return {
+        get mediaRefsFromNode(){return mediaRefsFromNode;},
+        get canvasPreviewImgHtml(){return canvasPreviewImgHtml;},
+        get canvasVideoPreviewHtml(){return canvasVideoPreviewHtml;},
         get window(){return window;},
         get mediaKindForOutputItem(){return mediaKindForOutputItem;},
         get outputImageName(){return outputImageName;},
@@ -4877,6 +4880,7 @@ function syncConnectedOutputsFromGenerated(node, outputs){
 }
 function classicGeneratorInputHost(){
     return {
+        refreshStoryboardInputs:()=>globalThis.CanvasStoryboardWorkbench?.refreshInputs(globalThis.CanvasVideoDeconstructionBridge),
         get CANVAS_GENERATOR_TYPES(){return CANVAS_GENERATOR_TYPES;},
         get CANVAS_MEDIA_OUTPUT_TYPES(){return CANVAS_MEDIA_OUTPUT_TYPES;},
         get connections(){return CanvasWorkgroups.effectiveConnections(nodes,connections);},

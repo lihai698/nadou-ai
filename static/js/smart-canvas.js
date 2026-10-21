@@ -3508,6 +3508,7 @@ function smartSaveCoordinatorHost(){
     };
 }
 function scheduleSave(){
+    globalThis.CanvasStoryboardWorkbench?.refreshInputs(globalThis.CanvasVideoDeconstructionBridge);
     return SmartSaveCoordinator.scheduleSave(smartSaveCoordinatorHost());
 }
 function backupSmartDraft(){
@@ -6372,9 +6373,11 @@ function smartInputHost(){
     };
 }
 function renderInputPromptPreview(node){
+    globalThis.CanvasStoryboardWorkbench?.refreshInputs(globalThis.CanvasVideoDeconstructionBridge);
     return SmartInputThumbs.renderInputPromptPreview(smartInputHost(), node);
 }
 function renderInputThumbsRow(node){
+    globalThis.CanvasStoryboardWorkbench?.refreshInputs(globalThis.CanvasVideoDeconstructionBridge);
     return SmartInputThumbs.renderInputThumbsRow(smartInputHost(), node);
 }
 function bindInputThumbReferenceActions(){
@@ -8942,6 +8945,8 @@ function invalidateSmartVideoDeconstruction(){
 }
 function smartEditorBridgeHost(){
     return {
+        get smartPreviewImgHtml(){return smartPreviewImgHtml;},
+        get smartVideoPreviewHtml(){return smartVideoPreviewHtml;},
         get window(){return window;},
         get nodes(){return nodes;},
         get imageForDisplay(){return imageForDisplay;},

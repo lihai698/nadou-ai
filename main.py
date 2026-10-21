@@ -5584,6 +5584,9 @@ def video_deconstruction_media(_context=None):
 
 
 def validate_video_deconstruction_source(context, _user):
+    if context.get('storyboard_text'):
+        from backend.canvas_storyboard_analysis import validate_text_source
+        return validate_text_source(context, _user, load_canvas=load_canvas)
     document = load_canvas(context.get('canvas_id', ''))
     if document.get('readOnly') or document.get('readonly'):
         raise ValueError('只读画布不能拆解视频')
@@ -5603,7 +5606,12 @@ def validate_video_deconstruction_source(context, _user):
         table = next((n for n in document.get('nodes', []) if n.get('id') == table_id and n.get('type') in {'shot-table', 'smart-shot-table'}), None)
         if not table or table.get('shotTableData', {}).get('revision', 0) != context.get('table_revision', 0):
             raise ValueError('镜头表已变化，请保存后重新确认')
-    return {k: context[k] for k in ('canvas_id', 'node_id', 'result_id', 'source_url', 'operation_id', 'table_id', 'table_revision') if k in context}
+    canonical = {k: context[k] for k in ('canvas_id', 'node_id', 'result_id', 'source_url', 'operation_id', 'table_id', 'table_revision') if k in context}
+
+    if context.get('table_id'):
+        from backend.canvas_storyboard_analysis import validate_text_source
+        canonical['storyboard_inputs'] = validate_text_source(context, _user, load_canvas=load_canvas, allow_empty=True)
+    return canonical
 
 
 def video_speech_engine():
