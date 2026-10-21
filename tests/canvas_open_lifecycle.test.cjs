@@ -1,3 +1,4 @@
+const {installEditorBridges}=require('./canvas_editor_bridge_test_helpers.cjs');
 const {installClassicPreviewRuntime}=require('./canvas_preview_runtime_test_helpers.cjs');
 const {createTaskContext}=require('./canvas_task_test_helpers.cjs');
 const {test}=require('node:test');
@@ -31,6 +32,7 @@ function setup(){
         resumeCanvasImageTasks:()=>events.push(['resume',e.canvas.id]),resumeCanvasAudioTasks(){},showErrorModal:s=>events.push(['modal',s]),
         startCanvasRemotePolling:()=>events.push(['poll',e.canvas.id]),canvasListUrlForProject:id=>id,requestedCanvasListProject:()=> 'default',rememberedCanvasListProject:()=> 'default'});
     installClassicPreviewRuntime(e,source);
+    installEditorBridges(e,source);
     vm.runInContext(section('async function openCanvas(','function applyRemoteCanvasData('),e);
     return {e,events,requests,listeners,open:id=>e.openCanvas(id)};
 }

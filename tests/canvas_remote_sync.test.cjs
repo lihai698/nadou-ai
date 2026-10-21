@@ -1,3 +1,4 @@
+const {installEditorBridges}=require('./canvas_editor_bridge_test_helpers.cjs');
 const {installClassicPreviewRuntime}=require('./canvas_preview_runtime_test_helpers.cjs');
 const {createTaskContext}=require('./canvas_task_test_helpers.cjs');
 const {test}=require('node:test');
@@ -171,6 +172,7 @@ for(const kind of ['classic','smart']){
         const end=source.indexOf(kind==='classic'?'let models =':'function connectAssetLibrarySyncSocket(',begin);
         const e=createTaskContext({window:{addEventListener:(name,fn)=>{listeners[name]=fn;}},canvasOpenGeneration:0,openingCanvasId:'',canvas:{id:'c'},[kind+'RemoteSync']:h.api});
         if(kind==='classic')installClassicPreviewRuntime(e,source);
+        installEditorBridges(e,source,kind);
         vm.runInContext(source.slice(begin,end),e);
         const pending=h.api.syncNow();listeners.pagehide();gate.resolve(response());await pending;assert.deepEqual(h.events,[]);
         h.setRequest(null);listeners.pageshow({persisted:false});assert.equal(h.polls.length,1);

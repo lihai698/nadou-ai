@@ -3312,10 +3312,11 @@ function handleCanvasUpdatedMessage(data={}){ smartRemoteSync.handleMessage(data
 function startCanvasMetaPoll(){ smartRemoteSync.start(); }
 window.addEventListener('pagehide',()=>{
     smartTextSelection.suspend();
+    smartEditorBridges.suspend();
     smartRemoteSync.stop();
 });
 window.addEventListener('pageshow',event=>{
-    if(event.persisted) smartTextSelection.resume();
+    if(event.persisted){smartTextSelection.resume();smartEditorBridges.resume();}
     if(event.persisted && canvas){
         smartRemoteSync.start();
         smartRemoteSync.syncNow();
@@ -8939,74 +8940,46 @@ function invalidateSmartVideoDeconstruction(){
     window.CanvasVideoDeconstructionBridge?.begin();
     window.CanvasVideoDeconstructionUI?.closeAll(true);
 }
-function initSmartVideoDeconstructionBridge(){
-    if(!window.CanvasVideoDeconstructionHost || window.CanvasVideoDeconstructionBridge) return;
-    let generation=0;
-    const sourceFor=(nodeId,index,url,title)=>{
-        const node=nodes.find(item=>item.id===nodeId);
-        const item=imageForDisplay(node?.images?.[index]);
-        if(!node || !item?.url || item.url!==url || mediaKindForItem(item)!=='video') return null;
-        return {canvasId:canvasId,nodeId,resultId:item.id||item.resultId||item.url,sourceUrl:item.url,title:title||item.name||'视频'};
+function smartEditorBridgeHost(){
+    return {
+        get window(){return window;},
+        get nodes(){return nodes;},
+        get imageForDisplay(){return imageForDisplay;},
+        get mediaKindForItem(){return mediaKindForItem;},
+        get canvasId(){return canvasId;},
+        get canvas(){return canvas;},
+        get viewport(){return viewport;},
+        get uid(){return uid;},
+        get pushUndo(){return pushUndo;},
+        get saveCanvas(){return saveCanvas;},
+        get render(){return render;},
+        get nodeRect(){return nodeRect;},
+        get selectedId(){return selectedId;},
+        set selectedId(value){selectedId=value;},
+        get selectedIds(){return selectedIds;},
+        set selectedIds(value){selectedIds=value;},
+        get selectedImage(){return selectedImage;},
+        set selectedImage(value){selectedImage=value;},
+        get syncSelectionUi(){return syncSelectionUi;},
+        get smartSettingsForNode(){return smartSettingsForNode;},
+        get videoApiProviders(){return videoApiProviders;},
+        get providerVideoModels(){return providerVideoModels;},
+        get setPromptDraftForNode(){return setPromptDraftForNode;},
+        get cloneSmartSettings(){return cloneSmartSettings;},
+        get initialSmartSettings(){return initialSmartSettings;},
+        get escapeHtml(){return escapeHtml;},
+        get SmartViewport(){return SmartViewport;},
+        get smartViewportHost(){return smartViewportHost;},
+        get imageProviders(){return imageProviders;},
+        get providerImageModels(){return providerImageModels;},
+        get runGeneration(){return runGeneration;},
+        get setTimeout(){return setTimeout;},
+        get toast(){return toast;}
     };
-    const bridge=window.CanvasVideoDeconstructionHost.create({
-        tableType:'smart-shot-table',
-        getState:()=>({canvas:canvas ? {...canvas,id:canvasId} : {id:canvasId},nodes,connections:canvas?.connections||[],generation,scale:viewport.scale}),
-        uid,
-        pushUndo,
-        save:()=>saveCanvas(),
-        render,
-        landFrames:(ctx,result)=>{
-            const operation=result.operationId||result.id;
-            let group=nodes.find(n=>n.frameGroupOperationId===operation);
-            const prior=new Set((group?.images||[]).map(item=>item.frameIndex));
-            const fresh=(result.frames||[]).filter(f=>f.url&&!prior.has(f.index));
-            if(!fresh.length)return [];
-            pushUndo();
-            if(!group){const rect=nodeRect(ctx.sourceNode);group={id:uid('group'),type:'smart-group',title:`拆自${ctx.source.title||'视频'}`,x:rect.x+rect.width+96,y:rect.y,items:[],images:[],scale:1,frameGroupOperationId:operation,created_at:Date.now()};nodes.push(group);}
-            const images=fresh.map(f=>({url:f.url,name:`${ctx.source.title||'视频'}·${window.CanvasVideoDeconstructionModel.formatTime(f.seconds||0)}`,kind:'image',frameIndex:f.index,frameOperationId:operation}));
-            group.images.push(...images);
-            group.w=Math.min(4,group.images.length)*292+16;
-            group.h=Math.ceil(group.images.length/4)*222+60;
-            selectedId=group.id;selectedIds=[];selectedImage={nodeId:'',index:-1};
-            saveCanvas();render();return images;
-        },
-        readSource:source=>{const node=nodes.find(item=>item.id===source.nodeId);const index=(node?.images||[]).findIndex(item=>{const value=imageForDisplay(item);return value?.url===source.sourceUrl&&(value.id||value.resultId||value.url)===source.resultId;});return index>=0?sourceFor(source.nodeId,index,source.sourceUrl,source.title):null;},
-        select:ids=>{selectedIds=ids.slice();selectedId=ids.length===1?ids[0]:'';selectedImage={nodeId:'',index:-1};syncSelectionUi?.();},
-        defaultImageSettings:()=>{const s=smartSettingsForNode();return s.engine==='api'&&s.apiKind!=='video'?{...s,providerId:s.provider_id}:{};},
-        defaultVideoSettings:()=>{const s=smartSettingsForNode();return s.engine==='api'?s:{};},
-        nodeWidth:n=>nodeRect(n).width,
-        rowSpacing:540,
-        videoMedia:n=>(n.images||[]).map(imageForDisplay).filter(item=>item?.url&&mediaKindForItem(item)==='video').map(item=>({...item,kind:'video',sourceNodeId:n.id,sourceResultId:item.id||item.resultId||item.url})),
-        addShotCollection:({table,media,existing})=>{
-            if(existing&&existing.type!=='smart-group')throw new Error('原镜头分组已改变，请先核对');
-            const collection=existing||{id:uid('group'),type:'smart-group',x:Math.max(...nodes.map(n=>n.x+nodeRect(n).width))+96,y:table.y,w:900,h:320,title:'所选镜头视频 · 按镜号整理',items:[],images:[],scale:1,created_at:Date.now()};
-            collection.images=collection.images||[];for(const item of media){const key=JSON.stringify([item.rowId,item.url,item.sourceResultId]);if(!collection.images.some(i=>i.shotResultKey===key))collection.images.push({...item,shotResultKey:key});}
-            if(!existing)nodes.push(collection);return collection;
-        },
-        collectionNotice:'已按镜号整理到视频分组，可预览及批量下载。智能画布当前没有剪辑时间线；剪辑与成片导出请使用普通画布的剪辑节点。',
-        validateVideoSettings:s=>videoApiProviders().some(p=>p.id===s.videoProvider&&p.enabled!==false&&providerVideoModels(s.videoProvider).includes(s.videoModel)),
-        setVideoPrompt:(node,text)=>setPromptDraftForNode(node,text),
-        setImagePrompt:(node,text)=>setPromptDraftForNode(node,text),
-        createVideoChain:({row,promptText,id,table,settings,x,y,uid:makeId,imageNodeId})=>{
-            const video={id:makeId('smart'),type:'smart-image',x,y,w:316,h:260,promptDraftText:promptText,promptDraftHtml:escapeHtml(promptText),promptDraftTouched:true,title:`镜头 ${row.index} · 视频`,images:[],runSettings:{...cloneSmartSettings(initialSmartSettings),...settings,engine:'api',apiKind:'video',videoProvider:settings.videoProvider||'',videoModel:settings.videoModel||'',count:1},shotTableOrigin:{tableId:id,rowId:row.id,sourceFingerprint:table.shotTableData.source.fingerprint||table.shotTableData.source.sourceUrl,stage:'video',inlineOutput:true,imageNodeId,durationSeconds:row.durationSeconds,startSeconds:row.startSeconds,endSeconds:row.endSeconds},created_at:Date.now()};
-            return {nodes:[video],connections:[{from:imageNodeId,to:video.id,kind:'input'}],promptId:video.id,generatorId:video.id,outputId:video.id};
-        },
-        focus:ids=>SmartViewport.fitAllNodesViewport(smartViewportHost(),ids),
-        validateImageSettings:s=>{const provider=(imageProviders?.()||[]).find(p=>p.id===s.providerId);return !!provider && provider.enabled!==false && (providerImageModels?.(s.providerId)||[]).includes(s.model);},
-        createGenerationChain:({row,promptText,table,id,settings,x,y,uid:makeId,creationOnly})=>{
-            const image={id:makeId('smart'),type:'smart-image',x:creationOnly?x:x+380,y,w:316,h:260,title:`镜头 ${row.index} · 画面`,images:[],runSettings:{...cloneSmartSettings(initialSmartSettings),...settings,engine:'api',apiKind:'image',provider_id:settings.providerId||'',model:settings.model||'',ratio:settings.ratio||'square',resolution:settings.resolution||'1k',quality:settings.quality||'auto',count:1},shotTableOrigin:{tableId:id,rowId:row.id,sourceFingerprint:table.shotTableData.source.fingerprint||table.shotTableData.source.sourceUrl,durationSeconds:row.durationSeconds,motionPrompt:row.motionPrompt||row.cells.motion||''},created_at:Date.now()};
-            if(creationOnly){setPromptDraftForNode(image,promptText??(row.imagePrompt||row.cells.visual||''));Object.assign(image.shotTableOrigin,{stage:'image',inlineOutput:true});return {nodes:[image],connections:[],promptId:image.id,generatorId:image.id,outputId:image.id};}
-            const prompt={id:makeId('prompt'),type:'smart-prompt',x,y,w:316,h:210,title:'Prompt',text:promptText??(row.imagePrompt||row.cells.visual||''),promptSeparator:';',promptSplitEnabled:false,llmEnabled:false,created_at:Date.now()};
-            return {nodes:[prompt,image],connections:[{from:prompt.id,to:image.id,kind:'input'}],promptId:prompt.id,generatorId:image.id,outputId:image.id};
-        },
-        runGenerators:async ids=>{
-            const owner=canvasId,epoch=generation;
-            for(const id of ids){if(canvasId!==owner||generation!==epoch)break;const node=nodes.find(item=>item.id===id);if(!node)continue;selectedId=id;selectedIds=[];selectedImage={nodeId:'',index:-1};await runGeneration({shotTableRun:true});}
-        }
-    });
-    const begin=bridge.begin;bridge.begin=()=>{generation++;begin();};
-    bridge.sourceFor=sourceFor;bridge.saveNow=async()=>{for(let attempt=0;attempt<8;attempt++){if(await saveCanvas())return true;await new Promise(resolve=>setTimeout(resolve,220));}return false;};bridge.onError=e=>toast(e.message||'视频拆解操作失败');bridge.onNotice=text=>toast(text);
-    window.CanvasVideoDeconstructionBridge=bridge;
+}
+const smartEditorBridges=CanvasEditorBridges.create(smartEditorBridgeHost());
+function initSmartVideoDeconstructionBridge(){
+    return smartEditorBridges.initSmartVideoDeconstructionBridge();
 }
 window.onload = async () => {
     applyTheme(localStorage.getItem('studio_theme') || localStorage.getItem('canvas_theme') || 'light');

@@ -1,3 +1,4 @@
+const {installEditorBridges}=require('./canvas_editor_bridge_test_helpers.cjs');
 const {installClassicPreviewRuntime}=require('./canvas_preview_runtime_test_helpers.cjs');
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
@@ -25,6 +26,7 @@ test('legacy gate listeners are owned, suspendable and idempotent across page re
         window:{addEventListener:(name,fn)=>listeners[name]=fn},canvas:null,openingCanvasId:'',canvasOpenGeneration:0,
         classicRemoteSync:{stop(){}}});
     installClassicPreviewRuntime(e,source);
+    installEditorBridges(e,source);
     const init=source.match(/const classicLegacyGateBindings = [^\n]+/);
     assert.ok(init,'production explicit gate binding initialization');
     vm.runInContext(init[0].replace('const classicLegacyGateBindings','var classicLegacyGateBindings')+'\nclassicLegacyGateBindings.resume();classicLegacyGateBindings.resume();',e);

@@ -355,6 +355,7 @@ const classicRemoteSync = CanvasRemoteSync.createClassic({
 let lastCanvasUpdatedAt = 0;
 window.addEventListener('pagehide',()=>{
     classicTextSelection.suspend();
+    classicEditorBridges.suspend();
     classicPreviewRuntime.suspend();
     classicLegacyGateBindings.suspend();
     canvasOpenGeneration++;
@@ -363,6 +364,7 @@ window.addEventListener('pagehide',()=>{
 window.addEventListener('pageshow',event=>{
     if(event.persisted){
         classicTextSelection.resume();
+        classicEditorBridges.resume();
         scheduleCanvasImageResolutionSync(nodesEl,0);
         classicLegacyGateBindings.resume();
     }
@@ -3227,123 +3229,55 @@ function measureCanvasOriginalImageNodes(root=nodesEl){
     });
 }
 
+function classicEditorBridgeHost(){
+    return {
+        get window(){return window;},
+        get mediaKindForOutputItem(){return mediaKindForOutputItem;},
+        get outputImageName(){return outputImageName;},
+        get nodes(){return nodes;},
+        get canvas(){return canvas;},
+        get connections(){return connections;},
+        get viewport(){return viewport;},
+        get uid(){return uid;},
+        get pushUndo(){return pushUndo;},
+        get scheduleSave(){return scheduleSave;},
+        get render(){return render;},
+        get selected(){return selected;},
+        get refreshSelectionVisuals(){return refreshSelectionVisuals;},
+        get canvasAssistantCreationSettings(){return canvasAssistantCreationSettings;},
+        get nodeRect(){return nodeRect;},
+        get defaultNodeSize(){return defaultNodeSize;},
+        get videoApiProviders(){return videoApiProviders;},
+        get CanvasViewport(){return CanvasViewport;},
+        get classicViewportHost(){return classicViewportHost;},
+        get imageApiProviders(){return imageApiProviders;},
+        get runNodeCascade(){return runNodeCascade;},
+        get saveCanvas(){return saveCanvas;},
+        get setStatus(){return setStatus;},
+        get document(){return document;},
+        get clearTimeout(){return clearTimeout;},
+        get setTimeout(){return setTimeout;},
+        get nodesEl(){return nodesEl;},
+        get deleteNode(){return deleteNode;},
+        get refreshIcons(){return refreshIcons;},
+        get downloadUrl(){return downloadUrl;},
+        get loadCanvasAssetLibrary(){return loadCanvasAssetLibrary;},
+        get canvasAssetLibraries(){return canvasAssetLibraries;},
+        get localCanvasAssetLibrary(){return localCanvasAssetLibrary;},
+        get mediaKindForUpload(){return mediaKindForUpload;},
+        get FormData(){return FormData;},
+        get fetch(){return fetch;}
+    };
+}
+const classicEditorBridges=CanvasEditorBridges.create(classicEditorBridgeHost());
 function canvasClipMediaItems(canvasNodes, libraryItems=[], localItems=[]){
-    const current = (canvasNodes || []).flatMap(node => window.CanvasClipHost?.mediaForNode?.(node, canvasNodes) || []);
-    const all = [...current, ...(libraryItems || []), ...(localItems || [])];
-    const unique = new Map();
-    for(const item of all){
-        const url = item?.url || item?.renderUrl;
-        if(!url) continue;
-        const kind = item.kind || mediaKindForOutputItem(item);
-        if(!['image','video'].includes(kind)) continue;
-        if(unique.has(url)) continue;
-        unique.set(url, {
-            ...item,
-            kind, url,
-            name: item.name || outputImageName(url),
-            posterUrl: item.posterUrl || item.thumbnail || item.poster || '',
-            durationSeconds: item.durationSeconds || item.duration,
-            sourceResultId: item.sourceResultId || item.id || url,
-        });
-    }
-    return [...unique.values()];
+    return classicEditorBridges.canvasClipMediaItems(canvasNodes, libraryItems, localItems);
 }
 function initCanvasVideoDeconstructionBridge(){
-    if(!window.CanvasVideoDeconstructionHost || window.CanvasVideoDeconstructionBridge) return;
-    let generation=0;
-    const sourceFor=(nodeId,url,title)=>{
-        const n=nodes.find(n=>n.id===nodeId);
-        const item=window.CanvasClipHost.mediaForNode(n,nodes).find(x=>x.kind==='video'&&x.url===url);
-        return item ? {canvasId:canvas?.id,nodeId,resultId:item.sourceResultId,sourceUrl:item.url,title:title||item.name} : null;
-    };
-    const bridge=window.CanvasVideoDeconstructionHost.create({
-        getState:()=>({canvas,nodes,connections,generation,scale:viewport.scale}),
-        uid,pushUndo,save:scheduleSave,render,
-        readSource:source=>sourceFor(source.nodeId,source.sourceUrl)?.resultId===source.resultId?source:null,
-        select:ids=>{selected.clear();ids.forEach(id=>selected.add(id));refreshSelectionVisuals();},
-        defaultImageSettings:()=>{const s=canvasAssistantCreationSettings();return {...s,providerId:s.provider_id};},
-        defaultVideoSettings:()=>canvasAssistantCreationSettings(),
-        nodeWidth:n=>Math.max(nodeRect(n).w,n.w||defaultNodeSize(n.type).w||0),
-        rowSpacing:700,
-        videoMedia:n=>window.CanvasClipHost.mediaForNode(n,nodes),
-        prepareShotMedia:async media=>{
-            const resolved=[];
-            for(const item of media){const durationSeconds=item.durationSeconds||await window.CanvasClipBridge.probeDuration(item.url);if(!(durationSeconds>0))throw new Error(`无法读取${item.name}的真实时长，请确认视频可以播放后重试`);resolved.push({...item,durationSeconds});}
-            return resolved;
-        },
-        addShotCollection:({table,media,existing})=>{
-            if(existing&&existing.type!=='clip')throw new Error('原剪辑节点已改变，请先核对');
-            const collection=existing||{id:uid('clip'),type:'clip',x:Math.max(...nodes.map(n=>n.x+nodeRect(n).w))+96,y:table.y,w:760,h:196,clipData:window.CanvasClipModel.createData(),name:'分镜视频剪辑'};
-            let data=collection.clipData;for(const item of media)data=window.CanvasClipModel.addMedia(data,item);collection.clipData=data;
-            if(!existing)nodes.push(collection);return collection;
-        },
-        collectionNotice:'已按镜号加入剪辑时间线。重复整理保留剪辑修改；重新生成的结果作为新片段加入。请预览并调整节奏、对白和声音后导出。',
-        validateVideoSettings:s=>videoApiProviders().some(p=>p.id===s.videoProvider&&p.enabled!==false&&(p.video_models||[]).includes(s.videoModel)),
-        createVideoChain:({row,promptText,id,settings,x,y,uid:makeId,imageNodeId})=>{
-            const video={id:makeId('vid'),type:'video',x,y,viewAdjustPrompt:promptText,name:`镜头 ${row.index} · 视频`,apiProvider:settings.videoProvider||'',model:settings.videoModel||'',duration:settings.videoDuration||5,aspectRatio:settings.videoAspect||'16:9',resolution:settings.videoResolution||'',enhancePrompt:!!settings.videoEnhancePrompt,enableUpsample:!!settings.videoEnableUpsample,watermark:!!settings.videoWatermark,cameraFixed:!!settings.videoCameraFixed,generateAudio:!!settings.videoGenerateAudio,multimodal:!!settings.videoMultimodal,useFrameRoles:!!settings.videoUseFrameRoles,inputs:[],tempShLinks:[],running:false,shotTableOrigin:{tableId:id,rowId:row.id,stage:'video',inlineOutput:true,imageNodeId,durationSeconds:row.durationSeconds,startSeconds:row.startSeconds,endSeconds:row.endSeconds}};
-            return {nodes:[video],connections:[{id:makeId('c'),from:imageNodeId,to:video.id}],promptId:video.id,generatorId:video.id,outputId:video.id};
-        },
-        focus:ids=>CanvasViewport.fitAllNodesViewport(classicViewportHost(),ids),
-        validateImageSettings:s=>imageApiProviders().some(p=>p.id===s.providerId&&p.enabled!==false&&(p.image_models||[]).includes(s.model)),
-        runGenerators:async ids=>{
-            const owner=canvas?.id,epoch=generation;
-            // 原生级联执行有自己的任务、并发和恢复，不另起生图接口。
-            for(const id of ids){if(canvas?.id!==owner||generation!==epoch)break;await runNodeCascade(id);}
-        }
-    });
-    const begin=bridge.begin;bridge.begin=()=>{generation++;begin();};
-    bridge.sourceFor=sourceFor;bridge.saveNow=saveCanvas;bridge.onError=e=>setStatus(e.message);bridge.onNotice=text=>setStatus(text);
-    window.CanvasVideoDeconstructionBridge=bridge;
+    return classicEditorBridges.initCanvasVideoDeconstructionBridge();
 }
 function initCanvasClipBridge(){
-    if(!window.CanvasClipHost || window.CanvasClipBridge) return;
-    let generation=0;
-    const durations=new Map();
-    const probeDuration=url=>{
-        if(durations.has(url)) return durations.get(url);
-        const work=new Promise(resolve=>{
-            const video=document.createElement('video');
-            let settled=false;
-            const finish=value=>{
-                if(settled)return;settled=true;clearTimeout(timer);
-                video.onloadedmetadata=null;video.onerror=null;video.removeAttribute('src');video.load();resolve(value);
-            };
-            const timer=setTimeout(()=>finish(undefined),8000);
-            video.preload='metadata';video.muted=true;
-            video.onloadedmetadata=()=>finish(Number.isFinite(video.duration)&&video.duration>0?video.duration:undefined);
-            video.onerror=()=>finish(undefined);video.src=url;
-        });
-        durations.set(url,work);return work;
-    };
-    const bridge=window.CanvasClipHost.create({
-        getState:()=>({canvas,nodes,connections,generation,scale:viewport.scale}),
-        uid,pushUndo,save:scheduleSave,render,probeDuration,
-        onError:error=>setStatus(`剪辑素材同步失败：${error.message}`),
-        select:id=>{selected.clear();selected.add(id);nodesEl.querySelectorAll('.node').forEach(el=>el.classList.toggle('selected',el.dataset.id===id));},
-        deleteNode:id=>deleteNode(id),refreshIcons,download:downloadUrl,
-        listMedia:async()=>{
-            const loaded=await loadCanvasAssetLibrary({renderPanel:false});
-            if(!loaded)throw new Error('资产库加载失败，请重试');
-            const libraryItems=canvasAssetLibraries().flatMap(lib=>(lib.categories||[]).flatMap(cat=>cat.items||[]));
-            return canvasClipMediaItems(nodes, libraryItems, localCanvasAssetLibrary.items || []);
-        },
-        upload:async file=>{
-            const kind=mediaKindForUpload(file);
-            if(!['image','video'].includes(kind))throw new Error('剪辑节点只接收图片和视频');
-            const form=new FormData();form.append('files',file,file.name);
-            const response=await fetch('/api/local-assets/upload',{method:'POST',body:form});
-            const result=await response.json().catch(()=>({}));
-            if(!response.ok)throw new Error(result.detail||'素材上传失败');
-            const item=result.files?.[0];if(!item?.url)throw new Error('上传未返回有效素材，请重试');
-            return {kind,url:item.url,name:item.name||file.name,posterUrl:item.thumbnail||'',durationSeconds:item.durationSeconds||item.duration,sourceResultId:item.id||item.url};
-        },
-    });
-    bridge.begin=()=>{generation++;window.CanvasClipNode?.reconcile(bridge.getContext(),[]);};
-    bridge.probeDuration=probeDuration;
-    window.CanvasClipBridge=bridge;
-    document.addEventListener('pointerdown',event=>{
-        if(!event.target.closest('.clip-node,.clip-panel'))window.CanvasClipNode?.closeAll();
-    },true);
+    return classicEditorBridges.initCanvasClipBridge();
 }
 function render(){
     if(window.CanvasVideoDeconstructionBridge) window.CanvasVideoDeconstructionUI.reconcile(window.CanvasVideoDeconstructionBridge,nodes.filter(n=>n.type==='shot-table').map(n=>n.id));

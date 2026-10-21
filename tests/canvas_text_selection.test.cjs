@@ -1,3 +1,4 @@
+const {installEditorBridges}=require('./canvas_editor_bridge_test_helpers.cjs');
 const {installClassicPreviewRuntime}=require('./canvas_preview_runtime_test_helpers.cjs');
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
@@ -84,6 +85,7 @@ for(const kind of ['classic','smart']){
         const start=source.indexOf("window.addEventListener('pagehide'");
         const end=source.indexOf(kind==='classic'?'let models =':'function connectAssetLibrarySyncSocket(',start);
         if(kind==='classic')installClassicPreviewRuntime(e,source);
+        installEditorBridges(e,source,kind);
         vm.runInContext(source.slice(start,end),e);bind(el);
         listeners.pagehide();assert.equal(el.count('mousedown'),0);
         listeners.pageshow({persisted:true});listeners.pageshow({persisted:true});

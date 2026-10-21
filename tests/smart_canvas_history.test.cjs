@@ -47,6 +47,7 @@ function editor() {
     `, context);
     vm.runInContext(readFileSync(path.join(__dirname, '../static/js/canvas-audio.js'), 'utf8'),context);
     vm.runInContext(readFileSync(path.join(__dirname, '../static/js/smart-canvas-audio-host.js'), 'utf8'),context);
+    context.CanvasEditorBridges=require('../static/js/canvas-editor-bridges.js');
     vm.runInContext(section('function invalidateSmartVideoDeconstruction(){', 'function initSmartVideoDeconstructionBridge(){'),context);
     vm.runInContext(section('function smartHistoryHost(){', 'let comfyWorkflowCache ='), context);
     vm.runInContext(section('function scheduleSave(){', 'async function saveCanvas(){'), context);

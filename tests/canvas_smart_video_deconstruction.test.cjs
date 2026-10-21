@@ -6,6 +6,7 @@ const path=require('node:path');
 
 const smart=fs.readFileSync(path.join(__dirname,'../static/js/smart-canvas.js'),'utf8');
 const html=fs.readFileSync(path.join(__dirname,'../static/smart-canvas.html'),'utf8');
+const bridges=fs.readFileSync(path.join(__dirname,'../static/js/canvas-editor-bridges.js'),'utf8');
 const host=fs.readFileSync(path.join(__dirname,'../static/js/canvas-video-deconstruction-host.js'),'utf8');
 const model=fs.readFileSync(path.join(__dirname,'../static/js/canvas-video-deconstruction-model.js'),'utf8');
 const modelApi=require('../static/js/canvas-video-deconstruction-model.js');
@@ -16,6 +17,7 @@ function runtime(){
   const source={id:'v',type:'smart-image',x:10,y:20,w:316,images:[{id:'result',url:'/assets/v.mp4',kind:'video'}]};
   const state={window:{CanvasVideoDeconstructionHost:require('../static/js/canvas-video-deconstruction-host.js'),CanvasVideoDeconstructionModel:modelApi,CanvasVideoDeconstructionUI:{closeAll(){}}},nodes:[source],canvasId:'A',canvas:{id:'A',connections:[]},viewport:{scale:1},uid:p=>`${p}-${++serial}`,pushUndo:()=>undo++,saveCanvas:async()=>true,render(){},imageForDisplay:v=>v,mediaKindForItem:v=>v.kind,nodeRect:n=>({x:n.x,y:n.y,width:n.w||316}),syncSelectionUi(){},imageProviders:()=>[{id:'p',enabled:true}],providerImageModels:()=>['m'],cloneSmartSettings:v=>({...v}),initialSmartSettings:{},SIZE_MAP:{square:{}},API_RATIO_VALUES:{square:'1:1'},selectedId:'',selectedIds:[],selectedImage:{},runGeneration:async options=>{state.runs.push({id:state.selectedId,options});},runs:[],toast(){},Date,setTimeout};
   createTaskContext(state);
+  state.CanvasEditorBridges=require('../static/js/canvas-editor-bridges.js');
   vm.runInContext(smart.slice(smart.indexOf('function invalidateSmartVideoDeconstruction(){'),smart.indexOf('window.onload = async')),state);
   state.initSmartVideoDeconstructionBridge();
   state.host=state.window.CanvasVideoDeconstructionBridge;
@@ -35,9 +37,9 @@ test('智能画布加载视频拆解共用模块并提供入口扩展',()=>{
 test('智能画布镜头表使用专用节点类型和原生生图链适配器',()=>{
   assert.match(host,/adapter\.tableType\|\|'shot-table'/);
   assert.match(host,/adapter\.createGenerationChain/);
-  assert.match(smart,/tableType:'smart-shot-table'/);
-  assert.match(smart,/type:'smart-prompt'/);
-  assert.match(smart,/shotTableOrigin/);
+  assert.match(bridges,/tableType:'smart-shot-table'/);
+  assert.match(bridges,/type:'smart-prompt'/);
+  assert.match(bridges,/shotTableOrigin/);
 });
 
 test('复制映射识别普通与智能镜头表',()=>{
@@ -103,6 +105,7 @@ test('智能缩放接入传递宿主，首屏桥未初始化时不阻断加载',
 test('智能批量生成不读取其他选中节点的编辑器草稿',async()=>{
   const node={id:'generator'},state={nodes:[node],selectedNode:()=>node,smartNodeInFlight:()=>false,confirmSmartUnknownResubmission:()=>true,smartLoopContext:null,buildPromptRequest:()=>{throw Error('错误读取当前编辑器');},buildPromptRequestForNode:(target,refs)=>{assert.equal(target,node);assert.equal(refs.length,0);throw Error('已读取目标节点草稿');}};
   createTaskContext(state);
+  state.CanvasEditorBridges=require('../static/js/canvas-editor-bridges.js');
   vm.runInContext(smart.slice(smart.indexOf('async function runGeneration(options={}){'),smart.indexOf('\nasync function ',smart.indexOf('async function runGeneration(options={}){')+20)),state);
   await assert.rejects(state.runGeneration({shotTableRun:true}),/已读取目标节点草稿/);
 });

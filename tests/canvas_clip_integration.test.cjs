@@ -1,3 +1,4 @@
+const {installEditorBridges}=require('./canvas_editor_bridge_test_helpers.cjs');
 const {createTaskContext}=require('./canvas_task_test_helpers.cjs');
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
@@ -43,6 +44,7 @@ test('剪辑加号同时列出当前画布图片视频与资产库素材',()=>{
    if(node.type==='output')return (node.images||[]).map((item,i)=>({kind:item.kind||'image',url:item.url,name:item.name,sourceNodeId:node.id,sourceResultId:item.id||item.url}));
    return [];
  }}}});
+ installEditorBridges(c,source);
  vm.runInContext(source.slice(start,end),c);
  const result=vm.runInContext(`canvasClipMediaItems(
    [{id:'canvas-image',type:'image',url:'/assets/canvas.png',name:'画布图片'},

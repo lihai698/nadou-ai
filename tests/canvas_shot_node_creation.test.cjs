@@ -1,3 +1,4 @@
+const {installEditorBridges}=require('./canvas_editor_bridge_test_helpers.cjs');
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs'),vm=require('node:vm');
@@ -15,6 +16,7 @@ function fixture(smart=false,defaults={}){
  e.nodeRect=n=>({x:n.x,y:n.y,w:n.w||360,h:n.h||260,width:n.w||316,height:n.h||260});
  vm.createContext(e);
  const file=smart?'smart-canvas.js':'canvas.js',source=fs.readFileSync(require.resolve('../static/js/'+file),'utf8'),name=smart?'initSmartVideoDeconstructionBridge':'initCanvasVideoDeconstructionBridge';
+ installEditorBridges(e,source,smart?'smart':'classic');
  const start=source.indexOf('function '+name+'(');vm.runInContext(source.slice(start,source.indexOf('\n}',start)+2),e);e[name]();
  const host=e.window.CanvasVideoDeconstructionBridge;host.onError=x=>errors.push(x.message);
  const table=host.createBlankTable({x:0,y:0});host.editTable(table.id,d=>model.editManualRow(model.editManualRow(d,'add'),'add'));
