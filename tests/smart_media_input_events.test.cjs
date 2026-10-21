@@ -66,3 +66,15 @@ test('smart workflow picker and clipboard are inactive while suspended',async()=
     const ui=setup();ui.controller.mount();await ui.workflowInput.fire('click');ui.workflowInput.files=[{}];ui.controller.suspend();ui.controller.mount();await ui.workflowInput.fire('change');assert.equal(ui.calls.length,0);
     ui.controller.suspend();await ui.window.fire('paste',{clipboardData:{files:[{}]}});assert.equal(ui.calls.length,0);
 });
+
+
+test('workflow card dropped on a group or member imports a workflow, never a media card',async()=>{
+    const ui=setup();ui.controller.mount();const imports=[];let media=0;
+    ui.deps.importSmartWorkflowAssetUrl=async(...args)=>imports.push(args);
+    ui.deps.resolveSmartImageDropPayload=async()=>{media++;return {type:'none'};};
+    const event={target:{closest:()=>({className:'image-node cw-frame'})},dataTransfer:{getData:()=>JSON.stringify({url:'/assets/workflow.zip',name:'流程',kind:'workflow'})}};
+    await ui.shell.fire('drop',event);
+    await ui.controller.dropOnNode({...event,preventDefault(){},stopPropagation(){}},'one');
+    assert.deepEqual(imports,[['/assets/workflow.zip','流程',{x:10,y:20}],['/assets/workflow.zip','流程',{x:10,y:20}]]);
+    assert.equal(media,0);
+});

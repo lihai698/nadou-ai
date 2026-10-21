@@ -30,7 +30,7 @@ function handleKeyDown(deps, e, queuePaste){
         deps.toggleZoomPreview();
         return;
     }
-    if((e.ctrlKey || e.metaKey) && key === 'g') { e.preventDefault(); deps.groupSelectedImages(); }
+    if((e.ctrlKey || e.metaKey) && key === 'g' && !deps.isEditableTarget(e.target)) { e.preventDefault(); if(e.shiftKey) deps.ungroupWorkgroup(); else deps.groupSelectedImages(); return; }
     if((e.ctrlKey || e.metaKey) && key === 'c') {
         // 在输入框/可编辑元素里时，让浏览器原生 Ctrl+C 工作
         const tag = deps.document.activeElement?.tagName;

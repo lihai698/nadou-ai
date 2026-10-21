@@ -459,3 +459,6 @@ body.theme-dark .asset-card.active { border-color:rgba(248,250,252,.86); box-sha
 .theme-dark .storage-file-card.selected { border-color:rgba(232,232,234,.86); box-shadow:0 0 0 2px rgba(232,232,234,.12); }
 .theme-dark .storage-tabs { background:var(--soft); border-color:rgba(148,163,184,.2); }
 @media (max-width:860px){ .storage-dir-grid, .asset-pref-grid { grid-template-columns:1fr; } .asset-pref-wide { grid-column:1/-1; } .asset-pref-fold { grid-template-columns:1fr 18px; } .asset-pref-fold > em { grid-column:1/-1; grid-row:2; } .storage-file-head { align-items:stretch; flex-direction:column; } }
+
+/* Native workgroup drop target in the workflow manager. */
+.workgroup-drop-over {outline:2px solid var(--text);outline-offset:-3px;background:var(--soft)!important;}

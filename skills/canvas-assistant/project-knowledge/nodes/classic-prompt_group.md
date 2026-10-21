@@ -2,11 +2,11 @@
 
 ## overview
 
-由 connectSelectionToGenerator 的多提示词连接交互生成的 promptGroup，创建菜单之外的合法原生类型。items 按保存的节点编号引用提示词成员。
+旧画布保存的 promptGroup 仍是合法原生类型，保留其显示、输入、导入和复制能力。items 按保存的节点编号引用提示词成员。
 
 ## controls
 
-多提示词连接生成器可创建 promptGroup；Ctrl+G 和框选分组创建普通 group，不能混同。分组移动保留成员相对位置；复制时重映射成员编号，解除分组与删除成员的影响不同。
+多提示词框选现在从统一端口直接连接成员，不隐式新建 promptGroup；Ctrl+G/工具栏打组创建 groupMode=frame 的普通 group，不能混同。分组移动保留成员相对位置；复制时重映射成员编号，解除分组与删除成员的影响不同。
 
 默认状态UI核对（隔离公开样例，不代表供应商执行已验证）：
 ```text

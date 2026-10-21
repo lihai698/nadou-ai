@@ -3,6 +3,7 @@
     'use strict';
 
     function setCanvasGroupMembers(deps, group, memberIds){
+        if(group?.groupMode==='frame')throw new Error('工作组成员请通过画布解组后重新框选，不能使用素材组成员编辑');
         const targets = memberIds.map(id => deps.nodes.find(n => n.id === id));
         if(group.type !== 'group' || targets.some(n => !n || n.id === group.id || ['group','promptGroup'].includes(n.type))) throw new Error('原生分组成员无效');
         group.items = [...memberIds];
@@ -40,29 +41,8 @@
         deps.scheduleSave();
     }
 
-    function connectSelectionToGenerator(deps, kind, genId){
-        const ids = [...deps.selected];
-        let source = null;
-        if(kind === 'images'){
-            const imgs = ids.map(id => deps.nodes.find(n => n.id === id)).filter(n => n?.type === 'image' && n.url);
-            if(!imgs.length) return;
-            const box = deps.nodeBounds(imgs.map(n => n.id));
-            source = {id:deps.uid('grp'), type:'group', x:box.x - 24, y:box.y - 58, w:box.w + 48, h:box.h + 90, items:imgs.map(n => n.id)};
-        } else {
-            const prompts = ids.map(id => deps.nodes.find(n => n.id === id)).filter(n => n?.type === 'prompt');
-            if(!prompts.length) return;
-            const box = deps.nodeBounds(prompts.map(n => n.id));
-            source = {id:deps.uid('pg'), type:'promptGroup', x:box.x - 24, y:box.y - 58, w:box.w + 48, h:box.h + 90, items:prompts.map(n => n.id)};
-        }
-        deps.nodes.push(source);
-        deps.connections.push({id:deps.uid('c'), from:source.id, to:genId});
-        deps.selected.clear();
-        deps.selected.add(source.id);
-        deps.syncGeneratorInputs();
-    }
-
     function handoffExistingInputsToGroup(deps, group, children){
-        if(!group || group.type !== 'group' || group.groupMode === 'workflow') return false;
+        if(!group || group.type !== 'group' || ['workflow','frame'].includes(group.groupMode)) return false;
         const childIds = new Set((children || []).filter(n => ['image','prompt'].includes(n?.type)).map(n => n.id));
         if(!childIds.size) return false;
         const targetIds = new Set();
@@ -112,7 +92,7 @@
             });
         };
         pairs.forEach(({childType, groupType, workflow=false}) => {
-            const groups = deps.nodes.filter(n => n.type === groupType && (n.groupMode === 'workflow') === workflow);
+            const groups = deps.nodes.filter(n => n.type === groupType && n.groupMode !== 'frame' && (n.groupMode === 'workflow') === workflow);
             const children = movedNodes.filter(n => n && (childType ? n.type === childType : !['group','promptGroup'].includes(n.type)));
             if(!children.length || !groups.length) return;
             children.forEach(child => {
@@ -141,7 +121,7 @@
         }
     }
 
-    const api={setCanvasGroupMembers, groupSelectedImages, connectSelectionToGenerator, handoffExistingInputsToGroup, updateGroupMembership};
+    const api={setCanvasGroupMembers, groupSelectedImages, handoffExistingInputsToGroup, updateGroupMembership};
     if(typeof module!=='undefined' && module.exports) module.exports=api;
     root.CanvasGroupEdit=api;
 })(typeof globalThis!=='undefined' ? globalThis : window);

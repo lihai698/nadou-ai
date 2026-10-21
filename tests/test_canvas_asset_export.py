@@ -73,6 +73,19 @@ class CanvasAssetExportTests(unittest.IsolatedAsyncioTestCase):
         url = self.asset('原图.png')
         response = await self.client.post('/api/canvas-assets/download', json={'urls': [url]})
         self.assertEqual(self.archive(response), {'原图.png': b'fixture-media'})
+
+    async def test_zip_includes_utf8_prompts_and_media_with_unique_names(self):
+        url = self.asset('镜头.mp4', b'video-fixture')
+        response = await self.client.post('/api/canvas-assets/download', json={'items': [
+            {'kind': 'text', 'text': '图片提示词：完整中文', 'name': '提示词'},
+            {'kind': 'text', 'text': '视频提示词：向前推镜', 'name': '提示词.txt'},
+            {'url': url, 'name': '镜头.mp4'},
+        ]})
+        self.assertEqual(self.archive(response), {
+            '提示词.txt': '图片提示词：完整中文'.encode('utf-8'),
+            '提示词-2.txt': '视频提示词：向前推镜'.encode('utf-8'),
+            '镜头.mp4': b'video-fixture',
+        })
         self.assertEqual(response.headers['content-disposition'],
                          "attachment; filename*=UTF-8''canvas-output-images.zip")
 

@@ -4,6 +4,7 @@
 
     function applyViewport(deps){
         deps.world.style.transform = `translate(${deps.viewport.x}px, ${deps.viewport.y}px) scale(${deps.viewport.scale})`;
+        deps.updateWorkgroupViewport?.();
         if(deps.window.CanvasVideoDeconstructionBridge) deps.window.CanvasVideoDeconstructionUI.updateScale(deps.window.CanvasVideoDeconstructionBridge);
         scheduleMinimapRender(deps);
         deps.scheduleCanvasImageResolutionSync(deps.nodesEl, 120);

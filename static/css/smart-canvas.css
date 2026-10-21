@@ -1224,8 +1224,6 @@ input[type=range].smart-range::-webkit-slider-thumb { -webkit-appearance:none; w
 .toast.show { opacity:1; transform:translateY(0); }
 .selection-box { position:absolute; z-index:18; border:1px solid var(--strong); background:rgba(15,23,42,.08); border-radius:10px; pointer-events:none; display:none; }
 .theme-dark .selection-box { background:rgba(248,250,252,.1); }
-.smart-selection-group { position:absolute; z-index:0; box-sizing:border-box; border:1px solid var(--strong); background:rgba(15,23,42,.08); border-radius:10px; pointer-events:none; }
-.theme-dark .smart-selection-group { background:rgba(248,250,252,.1); }
 .composer-actions { grid-area:run; display:flex; justify-content:flex-end; gap:6px; }
 .preview-icon-btn { width:34px; height:34px; border-radius:12px; display:inline-flex; align-items:center; justify-content:center; color:var(--muted); background:var(--card); border:1px solid var(--line); }
 .preview-icon-btn:hover { background:var(--strong); color:var(--strong-text); }

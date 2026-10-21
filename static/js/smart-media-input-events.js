@@ -35,10 +35,14 @@ function create(host){
         input.style.position='fixed';input.style.left='-9999px';input.style.top='-9999px';input.style.opacity='0';
         deps.document.body.appendChild(input);input.click();
     }
+    function workflowDrop(event){
+        try{const asset=JSON.parse(event.dataTransfer?.getData('application/x-smart-asset')||'{}');return asset.kind==='workflow'&&asset.url?asset:null;}catch{return null;}
+    }
     async function dropOnNode(event,nodeId){
         const isCurrent=capture();
         event.preventDefault();event.stopPropagation();
         if(!isCurrent())return;
+        const workflow=workflowDrop(event);if(workflow){await deps.importSmartWorkflowAssetUrl(workflow.url,workflow.name||'workflow',deps.screenToWorld(event));return;}
         const payload=await deps.resolveSmartImageDropPayload(event.dataTransfer);
         if(!isCurrent()||!deps.nodes.some(node=>node.id===nodeId)||payload.type==='none')return;
         await deps.handleSmartImageDropPayload(payload,nodeId);
@@ -46,7 +50,9 @@ function create(host){
     async function dropOnBoard(event){
         const isCurrent=capture();
         event.preventDefault();
-        if(!isCurrent()||event.target.closest('.image-node'))return;
+        if(!isCurrent())return;
+        const workflow=workflowDrop(event);if(workflow){await deps.importSmartWorkflowAssetUrl(workflow.url,workflow.name||'workflow',deps.screenToWorld(event));return;}
+        if(event.target.closest('.image-node'))return;
         const point=deps.screenToWorld(event),raw=event.dataTransfer.getData('application/x-smart-asset');
         if(raw){
             try{const asset=JSON.parse(raw);if(asset?.url){deps.pushUndo();deps.createImageNodeAt(point,[deps.assetNodeImageFromItem(asset)],{skipUndo:true});}return;}catch{}

@@ -448,7 +448,6 @@ html.studio-theme-dark body .gate-actions,
 html.studio-theme-dark body .trash-note,
 html.studio-theme-dark body .emoji-picker,
 html.studio-theme-dark body .create-menu,
-html.studio-theme-dark body .selection-hub,
 html.studio-theme-dark body .output-preview,
 body.studio-theme-dark .canvas-preview-mark,
 body.studio-theme-dark .canvas-delete,
@@ -461,7 +460,6 @@ body.studio-theme-dark .gate-actions,
 body.studio-theme-dark .trash-note,
 body.studio-theme-dark .emoji-picker,
 body.studio-theme-dark .create-menu,
-body.studio-theme-dark .selection-hub,
 body.studio-theme-dark .output-preview {
     background: #111722 !important;
     border-color: #2a3444 !important;

@@ -605,6 +605,8 @@ def prepare_native_action(canvas,args,action_id,*,workflow_fields=None,creation_
         for field in special:
             if field in args: public[field]=copy.deepcopy(args[field])
 
+        if node.get('groupMode') == 'frame' and action in {'run', 'group_members'}:
+            _error('工作组请使用画布的整组执行或解组工具栏；素材组聚合动作不适用于工作组', 409)
         if action=='run':
             if node.get('shotPromptOrigin') and t in {'generator','smart-image'}:
                 from backend.canvas_assistant_shot_prompts import validate_shot_image

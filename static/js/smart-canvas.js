@@ -818,6 +818,9 @@ async function exportSelectedSmartWorkflow(includeResources=false){
 function insertSmartWorkflowIntoCanvas(imported){
     return SmartWorkflowTransfer.insertSmartWorkflowIntoCanvas(smartWorkflowTransferHost(), imported);
 }
+async function importSmartWorkflowAssetUrl(url,name='workflow',point){
+    return SmartWorkflowTransfer.importSmartWorkflowAssetUrl(smartWorkflowTransferHost(),url,name,point);
+}
 async function importSmartWorkflowFile(file){
     return SmartWorkflowTransfer.importSmartWorkflowFile(smartWorkflowTransferHost(), file);
 }
@@ -1195,7 +1198,7 @@ function syncSelectionUi(){
     return SmartSelection.syncSelectionUi(smartLayoutHost());
 }
 function syncSelectionGroup(){
-    return SmartSelection.syncSelectionGroup(smartLayoutHost());
+    return smartWorkgroups().render();
 }
 function isNodeSelected(id){
     return SmartSelection.isNodeSelected(smartLayoutHost(), id);
@@ -1209,6 +1212,7 @@ function isEditableTarget(target){
 }
 function smartLayoutHost(){
     return {
+        renderWorkgroups:()=>smartWorkgroups().render(),
         get EMPTY_UPLOAD_NODE_HEIGHT(){return EMPTY_UPLOAD_NODE_HEIGHT;},
         get EMPTY_UPLOAD_NODE_WIDTH(){return EMPTY_UPLOAD_NODE_WIDTH;},
         get MEDIA_GROUP_DEFAULT_SCALE(){return MEDIA_GROUP_DEFAULT_SCALE;},
@@ -1320,10 +1324,12 @@ function smartGroupMembers(node){
     });
 }
 function smartGroupCompactMembers(node){
+    if(CanvasWorkgroups.isFrame(node)) return [];
     return smartGroupMembers(node).filter(member => member?.type === 'smart-prompt' || member?.type === 'smart-loop');
 }
 function isSmartGroupCompactMember(node){
-    return Boolean(node && (node.type === 'smart-prompt' || node.type === 'smart-loop') && smartGroupContainingNode(node.id));
+    const group=node&&smartGroupContainingNode(node.id);
+    return Boolean(node && (node.type === 'smart-prompt' || node.type === 'smart-loop') && group && !CanvasWorkgroups.isFrame(group));
 }
 // 分组当前缩放比例（1=原始）。分组就像“画布中的画布”：缩放分组时组内所有成员（含提示词）整体等比缩放+
 // 重排。缩放过程用每次手势开始时的快照实时计算（见 resize 处理），不存持久基准，避免移动成员后再缩放位置回退。
@@ -1358,9 +1364,10 @@ function smartGroupContainingNode(nodeId){
 // 用于连线合并/隐藏：同一作用域内部的连线属于分组内部关系，无需画出。
 function smartGroupScopeId(nodeId){
     const group = smartGroupContainingNode(nodeId);
+    if(CanvasWorkgroups.isFrame(group)) return '';
     if(group) return group.id;
     const node = nodes.find(n => n.id === nodeId);
-    return isSmartGroupNode(node) ? node.id : '';
+    return isSmartGroupNode(node) && !CanvasWorkgroups.isFrame(node) ? node.id : '';
 }
 // 汇总分组内所有图片成员的图片，按阅读顺序（先行后列：成员当前 y 再 x）排成一维序列。
 // 返回 [{nodeId, index, source, item}]——source 是成员节点里真实的图片对象（写回自然尺寸用），
@@ -1604,6 +1611,7 @@ function smartViewportHost(){
         get world(){return world;},
         get zoomPreviewState(){return zoomPreviewState;},
         set zoomPreviewState(value){zoomPreviewState=value;},
+        updateWorkgroupViewport:()=>smartWorkgroupController?.updateViewport(),
         closeCreateMenu:(...args)=>closeCreateMenu(...args),
         nodeRect:(...args)=>nodeRect(...args),
         safeScale:(...args)=>safeScale(...args),
@@ -2929,6 +2937,7 @@ function smartAssetPanelHost(){
         deleteLocalAssetFromPanel:(...args)=>deleteLocalAssetFromPanel(...args),
         escapeHtml:(...args)=>escapeHtml(...args),
         fetch:(...args)=>fetch(...args),
+        importSmartWorkflowAssetUrl:(...args)=>importSmartWorkflowAssetUrl(...args),
         handleCanvasUpdatedMessage:(...args)=>handleCanvasUpdatedMessage(...args),
         hasCanvasImageDrag:(...args)=>hasCanvasImageDrag(...args),
         hasSmartImageDropData:(...args)=>hasSmartImageDropData(...args),
@@ -3391,7 +3400,7 @@ function canvasImageDragPayload(node, index=0){
 // 让它们显示为卡片内的缩略图网格（新模型）。一次性、幂等。
 function migrateSmartGroupImageMembers(){
     let changed = false;
-    nodes.filter(isSmartGroupNode).forEach(group => {
+    nodes.filter(n=>isSmartGroupNode(n)&&!CanvasWorkgroups.isFrame(n)).forEach(group => {
         const imageMemberIds = (Array.isArray(group.items) ? group.items : [])
             .map(id => nodes.find(n => n.id === id))
             .filter(m => m && isSmartImageNode(m) && (m.images || []).some(img => img?.url))
@@ -4771,6 +4780,7 @@ function refreshRunTimerPills(){
 }
 function smartNodeViewHost(){
     return {
+        renderWorkgroupFrame:node=>smartWorkgroups().renderFrame(node),
         measureSmartNodeImages:()=>measureSmartNodeImages(),
         handleSmartImageDropEvent:(...args)=>smartMediaInputController.dropOnNode(...args),
         get MEDIA_GROUP_MAX_VISIBLE_ROWS(){return MEDIA_GROUP_MAX_VISIBLE_ROWS;},
@@ -5100,7 +5110,7 @@ function pruneSmartGroupMembershipsForNode(node){
     // 分组合并已改为“释放被拖分组、只并入其成员”，所以这里只需处理单个节点的退组。
     let changed = false;
     nodes.forEach(group => {
-        if(!isSmartGroupNode(group) || !Array.isArray(group.items) || !group.items.includes(node.id)) return;
+        if(!isSmartGroupNode(group) || CanvasWorkgroups.isFrame(group) || !Array.isArray(group.items) || !group.items.includes(node.id)) return;
         group.items = group.items.filter(id => id !== node.id);
         changed = true;
     });
@@ -6416,6 +6426,7 @@ function smartMediaInputHost(){
         handleFiles:(...args)=>handleFiles(...args),
         handleSmartImageDropPayload:(...args)=>handleSmartImageDropPayload(...args),
         importSmartWorkflowFile:(...args)=>importSmartWorkflowFile(...args),
+        importSmartWorkflowAssetUrl:(...args)=>importSmartWorkflowAssetUrl(...args),
         resolveSmartImageDropPayload:(...args)=>resolveSmartImageDropPayload(...args),
         screenToWorld:(...args)=>screenToWorld(...args),
         setSmartDropCopyEffect:(...args)=>setSmartDropCopyEffect(...args),
@@ -6782,11 +6793,15 @@ function addConnection(fromId, toId, kind='flow'){
     return SmartConnectionEdit.addConnection(smartNodeEditHost(), fromId, toId, kind);
 }
 function connectInputNode(fromId, toId){
+    if(CanvasWorkgroups.isFrame(nodes.find(n=>n.id===fromId))||CanvasWorkgroups.isFrame(nodes.find(n=>n.id===toId))){
+        if(!smartWorkgroupCanConnect(fromId,toId))return false;
+        addConnection(fromId,toId,'input');return true;
+    }
     return SmartConnectionEdit.connectInputNode(smartNodeEditHost(), fromId, toId);
 }
 function smartGraphHost(){
     return {
-        get canvas(){return canvas;},
+        get canvas(){return canvas?{...canvas,connections:CanvasWorkgroups.effectiveConnections(nodes,canvas.connections)}:canvas;},
         get canvasUsesConnections(){return canvasUsesConnections;},
         get nodes(){return nodes;},
         directImageInputsFor:(...args)=>directImageInputsFor(...args),
@@ -7512,7 +7527,7 @@ async function runPromptLLMNode(nodeId, options={}){
     const storyOrigin=node.storyAnalysisOrigin || node.shotPromptOrigin;
     const storyResultField=node.shotPromptOrigin ? "shotPromptResult" : "storyAnalysisResult";
     const storySourceText=storyOrigin ? nodes.find(n=>n.id===storyOrigin.sourceNodeId)?.text : undefined;
-    if(!message){ toast(tr('smart.promptLlmNeedText')); return; }
+    if(!message){if(options.groupRun)throw new Error(tr('smart.promptLlmNeedText'));toast(tr('smart.promptLlmNeedText')); return; }
     const systemPrompt = [node.llmSystemEnabled ? (node.llmSystemPrompt || '').trim() : '',instruction].filter(Boolean).join('\n\n');
     if(!options.assistantNativeActionId) node.llmEnabled = true;
     node.running = true;
@@ -7575,6 +7590,7 @@ async function runPromptLLMNode(nodeId, options={}){
             throw e;
         }
         scheduleSave();
+        if(options.groupRun)throw e;
         toast((e.message || tr('smart.promptLlmFailed')).slice(0, 160));
     } finally {
         node.running = false;
@@ -8026,9 +8042,46 @@ function finishSelection(event){
     return SmartSelection.finishSelection(smartLayoutHost(), event);
 }
 function groupSelectedNodes(){
-    return SmartGroupEdit.groupSelectedNodes(smartNodeEditHost());
+    return smartWorkgroups().group();
+}
+let smartWorkgroupController=null;
+function smartWorkgroups(){
+    if(smartWorkgroupController)return smartWorkgroupController;
+    smartWorkgroupController=CanvasWorkgroups.createController({
+        document,world,smart:true,fetch:(...args)=>fetch(...args),
+        nodes:()=>nodes,connections:()=>canvas?.connections||[],setNodes:value=>{nodes=value;},setConnections:value=>{canvas.connections=value;},
+        selectedIds:selectedNodeIds,select:ids=>{savePromptDraftForCurrent();selectedIds=ids.length>1?ids:[];selectedId=ids.length===1?ids[0]:'';selectedImage={nodeId:'',index:-1};},
+        active:()=>Boolean(canvas),context:()=>canvas?.id,scale:()=>viewport.scale,rect:nodeRect,uid,pushUndo,
+        render,save:scheduleSave,links:scheduleConnectionLayerRefresh,icons:()=>window.lucide?.createIcons(),notify:toast,selectionChanged:syncSelectionUi,
+        canConnect:(from,to)=>smartWorkgroupCanConnect(from,to),connect:connectInputNode,
+        createOptions:[['smart-image','上传 / 生成节点'],['smart-prompt','提示词']],
+        createNode:(type,e,options={})=>{const p=screenToWorld(e);return type==='smart-image'?createImageNodeAt(p,[],{select:false,...options}):createPromptNode(p.x,p.y,{select:false,...options});},
+        workflowDropTarget:event=>{const panel=document.elementFromPoint(event.clientX,event.clientY)?.closest('#assetPanel');const cat=activeWorkflowAssetCategory();return panel&&assetTab==='workflow'&&cat?{library_id:activeAssetLibraryId,category_id:cat.id}:null;},
+        runnable:n=>n?.type==='smart-image'&&Boolean(n.runSettings||n.shotTableOrigin)||n?.type==='smart-prompt'&&Boolean(n.llmEnabled),busy:n=>Boolean(n.running||n.pending||smartUnknownSubmissionForNode(n)),
+        stop:()=>requestSmartCascadeStop(),
+        execute:async(group,ids,state)=>{
+            const plan=CanvasWorkgroups.executionPlan(ids,CanvasWorkgroups.effectiveConnections(nodes,canvas.connections||[]),resolveSmartCascadeLoop);
+            savePromptDraftForCurrent();const canvasId=canvas.id,runKey='group-'+group.id,runState={runKey,stopRequested:false,submissionUnknown:false};smartCascadeRuns.set(runKey,runState);syncSmartCascadeLegacyState(runKey);
+            const previousLoop=smartLoopContext;
+            try{for(const batch of plan){const loop=batch.loop,total=loop?.count||1,start=Math.max(1,Number(loop?.node?.loopStart)||1),stride=loop?.node?.imageInput?Math.max(1,Math.min(100,Number(loop.node.imageBatchSize)||1)):1;
+                for(let round=0;round<total;round++){const ctx={runState,roundOutputs:new Map(),forceWorkflow:true,workgroupRun:true,...(loop?{nodeId:loop.node.id,index:start+round*stride,total:start+(total-1)*stride}:{})};smartLoopContext=ctx;
+                    for(const id of batch.ids){if(state.stop||runState.stopRequested||canvas?.id!==canvasId)throw new Error('已停止或画布已切换');const node=nodes.find(n=>n.id===id);if(!node)throw new Error('组内节点已删除');if(node.type==='smart-prompt')await runPromptLLMNode(id,{groupRun:true});else await runCascadeStepIntoNode(node,node,workflowInputImagesFor(node,false,ctx),ctx);if(node.jimengPending||node.submissionUnknown||node.pending)throw new Error('当前节点任务尚未完成，后续节点已暂停');scheduleSave();}}}}
+            finally{smartLoopContext=previousLoop;smartCascadeRuns.delete(runKey);syncSmartCascadeLegacyState();}
+        },
+        assets:n=>imagesForNode(n),text:n=>n.type==='smart-prompt'?promptTextItemsForNode(n).join('\n\n'):n.audioOutputText||'',
+        workflowPayload:(list,edges)=>({nodes:list.map(serializableSmartNode),connections:edges}),
+        libraryChanged:()=>{loadAssetLibrary();}
+    });return smartWorkgroupController;
+}
+function smartWorkgroupCanConnect(fromId,toId){
+    if(fromId===toId)return false;
+    if(CanvasWorkgroups.leaves(nodes,fromId).includes(toId)||CanvasWorkgroups.leaves(nodes,toId).includes(fromId))return false;
+    const edges=CanvasWorkgroups.effectiveConnections(nodes,canvas?.connections||[]),pairs=CanvasWorkgroups.effectiveConnections(nodes,[{from:fromId,to:toId,kind:'input'}],canvas?.connections||[]);
+    try{CanvasWorkgroups.order(nodes.filter(n=>!CanvasWorkgroups.isFrame(n)),edges.concat(pairs));}catch(e){return false;}
+    return pairs.some(c=>{const from=nodes.find(n=>n.id===c.from),to=nodes.find(n=>n.id===c.to);return from&&to&&!['smart-shot-table','smart-loop'].includes(to.type)&&from.type!=='smart-shot-table';});
 }
 function ungroupNode(groupId){
+    if(CanvasWorkgroups.isFrame(nodes.find(n=>n.id===groupId)))return smartWorkgroups().dissolve(groupId);
     return SmartGroupEdit.ungroupNode(smartNodeEditHost(), groupId);
 }
 function mergeImageNodesIntoGroup(sourceId, targetId){
@@ -8066,7 +8119,7 @@ function smartGroupTargetForDraggedNode(draggedNode){
     const cx = r.x + r.width / 2;
     const cy = r.y + r.height / 2;
     const groups = nodes
-        .filter(node => isSmartGroupNode(node) && !excluded.has(node.id))
+        .filter(node => isSmartGroupNode(node) && !CanvasWorkgroups.isFrame(node) && !excluded.has(node.id))
         .map(group => ({group, rect:nodeRect(group)}))
         .filter(item => cx >= item.rect.x && cx <= item.rect.x + item.rect.width && cy >= item.rect.y && cy <= item.rect.y + item.rect.height);
     if(!groups.length) return null;

@@ -5,6 +5,7 @@
     function applyViewport(deps){
         if(deps.window.CanvasVideoDeconstructionBridge) deps.window.CanvasVideoDeconstructionUI?.updateScale(deps.window.CanvasVideoDeconstructionBridge);
         deps.world.style.transform = `translate(${deps.viewport.x}px, ${deps.viewport.y}px) scale(${deps.viewport.scale})`;
+        deps.updateWorkgroupViewport?.();
         // world 被 transform:scale 缩放后，其内部带 backdrop-filter 的卡片（参数设置/合成卡等）
         // 会被部分浏览器（Chrome/Edge 等 Blink 内核）当作独立合成层先按 1x 栅格化、再整体缩放，
         // 缩小时位图被降采样 → 组件发虚。缩放态下关闭这些 backdrop-filter（底色本身已接近不透明，

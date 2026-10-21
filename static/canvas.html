@@ -21,11 +21,11 @@
     <script src="/static/js/theme.js?v=2026.10.08.1.1792186296"></script>
     <script src="/static/js/touch-mouse.js?v=2026.10.08.1.1792186296"></script>
     <script src="/static/js/i18n.js?v=2026.10.08.1.1792519032"></script>
-    <link rel="stylesheet" href="/static/css/canvas.css?v=2026.10.08.1.1792522296">
+    <link rel="stylesheet" href="/static/css/canvas.css?v=20261021-workgroups-3">
     <link rel="stylesheet" href="/static/css/canvas-depth-capture.css?v=2026.10.08.1.1792522813">
     <link rel="stylesheet" href="/static/css/canvas-view-adjust.css?v=2026.10.08.1.1792186296">
-    <link rel="stylesheet" href="/static/css/studio-layout.css?v=2026.10.08.1.1792522334">
-    <link rel="stylesheet" href="/static/css/theme.css?v=2026.10.08.1.1792186296">
+    <link rel="stylesheet" href="/static/css/studio-layout.css?v=20261021-workgroups-3">
+    <link rel="stylesheet" href="/static/css/theme.css?v=20261021-workgroups-3">
     <link rel="stylesheet" href="/static/css/canvas-assistant.css?v=2026.10.08.1.1792186296">
     <link rel="stylesheet" href="/static/css/canvas-clip.css?v=2026.10.08.1.1792186296">
 </head>
@@ -66,7 +66,6 @@
         <div id="board" class="board editor-only">
             <div id="dropOverlay" class="drop-overlay" data-i18n="canvas.dropImage">拖放图片到画布</div>
             <div id="selectionBox" class="selection-box"></div>
-            <div id="selectionHub" class="selection-hub"></div>
             <div id="createMenu" class="create-menu">
                 <button id="clearCurrentCanvasBtn" class="menu-btn" type="button" title="清空当前画布" aria-label="清空当前画布"><i data-lucide="trash-2" class="w-4 h-4"></i><span>清空当前画布</span></button>
                 <div class="menu-divider"></div>
@@ -389,13 +388,15 @@
     <script src="/static/js/canvas-image-params.js?v=2026.10.08.1.1792269932"></script>
     <script src="/static/js/canvas-node-params.js?v=2026.10.08.1.1792269763"></script>
     <script src="/static/js/canvas-workflow-params.js?v=2026.10.08.1.1792270516"></script>
-    <script src="/static/js/canvas-workflow-transfer.js?v=2026.10.08.1.1792315810"></script>
+    <script src="/static/js/canvas-workflow-transfer.js?v=20261021-workgroups-4"></script>
     <script src="/static/js/canvas-workflow-config.js?v=2026.10.08.1.1792271323"></script>
     <script src="/static/js/canvas-node-edit.js?v=2026.10.08.1.1792271708"></script>
-    <script src="/static/js/canvas-group-edit.js?v=2026.10.08.1.1792271708"></script>
+    <script src="/static/js/canvas-group-edit.js?v=20261021-workgroups-3"></script>
     <script src="/static/js/canvas-layout.js?v=2026.10.08.1.1792272392"></script>
-    <script src="/static/js/canvas-interaction.js?v=2026.10.08.1.1792310010"></script>
-    <script src="/static/js/canvas-viewport.js?v=2026.10.08.1.1792530463"></script>
+    <link rel="stylesheet" href="/static/css/canvas-workgroups.css?v=20261021-workgroups-5">
+    <script src="/static/js/canvas-workgroups.js?v=20261021-workgroups-5"></script>
+    <script src="/static/js/canvas-interaction.js?v=20261021-workgroups-3"></script>
+    <script src="/static/js/canvas-viewport.js?v=20261021-workgroups-3"></script>
     <script src="/static/js/canvas-node-view.js?v=2026.10.08.1.1792534021"></script>
     <script src="/static/js/canvas-generation-view.js?v=shot-direct-20261021-4"></script>
     <script src="/static/js/canvas-text-view.js?v=2026.10.08.1.1792274724"></script>
@@ -408,7 +409,7 @@
     <script src="/static/js/canvas-editor-grid.js?v=2026.10.08.1.1792325443"></script>
     <script src="/static/js/canvas-prompt-template.js?v=2026.10.08.1.1792286689"></script>
     <script src="/static/js/canvas-log.js?v=2026.10.08.1.1792287142"></script>
-    <script src="/static/js/canvas-asset-panel.js?v=2026.10.08.1.1792287961"></script>
+    <script src="/static/js/canvas-asset-panel.js?v=20261021-workgroups-4"></script>
     <script src="/static/js/canvas-generator-input.js?v=shot-direct-20261021-4"></script>
     <script src="/static/js/canvas-save-coordinator.js?v=2026.10.08.1.1792291743"></script>
     <script src="/static/js/canvas-open-coordinator.js?v=2026.10.08.1.1792293134"></script>
@@ -424,10 +425,10 @@
     <script src="/static/js/canvas-media-drop.js?v=2026.10.08.1.1792305536"></script>
     <script src="/static/js/canvas-upload-coordination.js?v=2026.10.08.1.1792312281"></script>
     <script src="/static/js/canvas-node-menu.js?v=2026.10.08.1.1792307502"></script>
-    <script src="/static/js/canvas-asset-manager.js?v=2026.10.08.1.1792307080"></script>
-    <script src="/static/js/canvas-media-input-events.js?v=2026.10.08.1.1792312043"></script>
-    <script src="/static/js/canvas-keyboard-events.js?v=2026.10.08.1.1792311329"></script>
-    <script src="/static/js/canvas-pointer-events.js?v=2026.10.08.1.1792310486"></script>
+    <script src="/static/js/canvas-asset-manager.js?v=20261021-workgroups-3"></script>
+    <script src="/static/js/canvas-media-input-events.js?v=20261021-workgroups-4"></script>
+    <script src="/static/js/canvas-keyboard-events.js?v=20261021-workgroups-3"></script>
+    <script src="/static/js/canvas-pointer-events.js?v=20261021-workgroups-3"></script>
     <script src="/static/js/canvas-graph-rules.js?v=shot-direct-20261021-4"></script>
     <script src="/static/js/canvas-task-results.js?v=2026.10.08.1.1792534021"></script>
     <script src="/static/js/canvas-task-runtime.js?v=2026.10.08.1.1792534021"></script>
@@ -437,6 +438,6 @@
     <script src="/static/js/canvas-media-sources.js?v=20261021-media-sources"></script>
     <script src="/static/js/canvas-history.js?v=20261021-history"></script>
     <script src="/static/js/canvas-browser-utilities.js?v=20261021-browser-utilities"></script>
-    <script src="/static/js/canvas.js?v=20261021-browser-utilities"></script>
+    <script src="/static/js/canvas.js?v=20261021-workgroups-5"></script>
 </body>
 </html>

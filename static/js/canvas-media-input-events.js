@@ -35,7 +35,7 @@ async function handleDrop(deps, e){
         try {
             const payload = JSON.parse(e.dataTransfer.getData('application/x-canvas-asset') || '{}');
             if(payload?.url) {
-                if(String(payload.kind || '').toLowerCase() === 'workflow') await deps.importWorkflowAssetUrl(payload.url, payload.name || 'workflow');
+                if(String(payload.kind || '').toLowerCase() === 'workflow') await deps.importWorkflowAssetUrl(payload.url, payload.name || 'workflow', deps.screenToWorld(e.clientX,e.clientY));
                 else deps.createImageCardFromUrl(payload.url, deps.screenToWorld(e.clientX, e.clientY), payload.name || 'asset');
             }
         } catch(err) {}

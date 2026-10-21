@@ -241,6 +241,9 @@ function createTaskContext(...args){
     vm.runInContext(readFileSync(path.join(__dirname,'../static/js/canvas-text-selection.js'),'utf8'),context);
     vm.runInContext('var classicTextSelection=CanvasTextSelection.create(); var smartTextSelection=CanvasTextSelection.create();',context);
     vm.runInContext(transport,context);
+    vm.runInContext(readFileSync(path.join(__dirname,'../static/js/canvas-workgroups.js'),'utf8'),context);
+    // Fragment fixtures exclude the UI controller; graph/layout modules remain production code.
+    vm.runInContext('var classicWorkgroupController=null,smartWorkgroupController=null; function classicWorkgroups(){return {render(){}};} function smartWorkgroups(){return {render(){}};}',context);
     for(const [file,host,moduleName] of [
         ['canvas.js','classicOpenCoordinatorHost','canvas-open-coordinator'],
         ['smart-canvas.js','smartOpenCoordinatorHost','smart-open-coordinator'],

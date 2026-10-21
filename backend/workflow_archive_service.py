@@ -197,6 +197,9 @@ async def export_canvas_workflow_to_library(payload, *, asset_library_workflow_c
     item["node_count"] = meta.get("node_count") or len(payload.nodes or [])
     item["connection_count"] = meta.get("connection_count") or len(payload.connections or [])
     item["resource_count"] = len(meta.get("resources") or [])
+    cover_url = str(getattr(payload, "cover_url", "") or "").strip()
+    if cover_url.startswith(("/assets/", "/output/", "/api/storage-files/local/")) and ".." not in urllib.parse.unquote(cover_url):
+        item["cover_url"] = cover_url
     cat.setdefault("items", []).append(item)
     save_asset_library(lib)
     return {"library": lib, "item": item}

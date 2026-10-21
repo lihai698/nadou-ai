@@ -252,7 +252,6 @@ const nodeInputMenu = document.getElementById('nodeInputMenu');
 const nodeOutputMenu = document.getElementById('nodeOutputMenu');
 const imageNodeMenu = document.getElementById('imageNodeMenu');
 const selectionBox = document.getElementById('selectionBox');
-const selectionHub = document.getElementById('selectionHub');
 const gateStatus = document.getElementById('gateStatus');
 const gateCreateBtn = document.getElementById('gateCreateBtn');
 const gateCreateSmartBtn = document.getElementById('gateCreateSmartBtn');
@@ -1125,7 +1124,6 @@ function setCanvasMode(open){
         nodesEl.innerHTML = '';
         linksEl.innerHTML = '';
         linkControlsEl.innerHTML = '';
-        selectionHub.classList.remove('open');
     } else if(currentCanvasTitle) {
         currentCanvasTitle.textContent = canvas?.title || tr('canvas.untitled');
         currentCanvasTime.textContent = formatCanvasTime(canvas?.updated_at || canvas?.created_at);
@@ -1142,6 +1140,7 @@ function setCreateMode(active, kind='classic'){
 }
 function classicLayoutHost(){
     return {
+        renderWorkgroups:()=>classicWorkgroups().render(),
         get CANVAS_GENERATOR_TYPES(){return CANVAS_GENERATOR_TYPES;},
         get board(){return board;},
         get canvas(){return canvas;},
@@ -1179,7 +1178,6 @@ function classicLayoutHost(){
         get window(){return window;},
         get workflowTransferModal(){return workflowTransferModal;},
         canConnect:(...args)=>canConnect(...args),
-        connectSelectionToGenerator:(...args)=>connectSelectionToGenerator(...args),
         connectedClusterIds:(...args)=>connectedClusterIds(...args),
         defaultNodeSize:(...args)=>defaultNodeSize(...args),
         duplicateNodesForAltDrag:(...args)=>duplicateNodesForAltDrag(...args),
@@ -1188,6 +1186,7 @@ function classicLayoutHost(){
         portPoint:(...args)=>portPoint(...args),
         pushUndo:(...args)=>pushUndo(...args),
         render:(...args)=>render(...args),
+        updateWorkgroupViewport:()=>classicWorkgroupController?.updateViewport(),
         renderLinks:(...args)=>renderLinks(...args),
         renderSelectionHub:(...args)=>renderSelectionHub(...args),
         sanitizeConnections:(...args)=>sanitizeConnections(...args),
@@ -1205,7 +1204,6 @@ function classicLayoutHost(){
         updateWorkflowTransferMeta:(...args)=>updateWorkflowTransferMeta(...args)
     ,
         set connections(value){connections=value;},
-        get selectionHub(){return selectionHub;},
         applyViewport:(...args)=>applyViewport(...args),
         closeCreateMenu:(...args)=>closeCreateMenu(...args),
         cubicPoint:(...args)=>cubicPoint(...args),
@@ -1261,6 +1259,7 @@ function classicViewportHost(){
         closeCreateMenu:(...args)=>closeCreateMenu(...args),
         closeLinkCreateMenu:(...args)=>closeLinkCreateMenu(...args),
         defaultNodeSize:(...args)=>defaultNodeSize(...args),
+        updateWorkgroupViewport:()=>classicWorkgroupController?.updateViewport(),
         renderLinks:(...args)=>renderLinks(...args),
         renderSelectionHub:(...args)=>renderSelectionHub(...args),
         requestAnimationFrame:(...args)=>requestAnimationFrame(...args),
@@ -3847,6 +3846,7 @@ function classicNodeViewHost(){
     };
 }
 function renderNode(node){
+    if(CanvasWorkgroups.isFrame(node)) return classicWorkgroups().renderFrame(node);
     return CanvasNodeView.renderNode(classicNodeViewHost(), node);
 }
 function bindOutputWrap(wrap, node){
@@ -5026,7 +5026,7 @@ function classicGeneratorInputHost(){
     return {
         get CANVAS_GENERATOR_TYPES(){return CANVAS_GENERATOR_TYPES;},
         get CANVAS_MEDIA_OUTPUT_TYPES(){return CANVAS_MEDIA_OUTPUT_TYPES;},
-        get connections(){return connections;},
+        get connections(){return CanvasWorkgroups.effectiveConnections(nodes,connections);},
         get generatorInputSyncTimer(){return generatorInputSyncTimer;},
         set generatorInputSyncTimer(value){generatorInputSyncTimer=value;},
         get loopContext(){return loopContext;},
@@ -5592,7 +5592,7 @@ function classicGraphHost(){
     return {
         get CANVAS_GENERATOR_TYPES(){return CANVAS_GENERATOR_TYPES;},
         get CANVAS_MEDIA_OUTPUT_TYPES(){return CANVAS_MEDIA_OUTPUT_TYPES;},
-        get connections(){return connections;},
+        get connections(){return CanvasWorkgroups.effectiveConnections(nodes,connections);},
         get nodes(){return nodes;},
         canvasApiAudioMode:(...args)=>canvasApiAudioMode(...args),
         loopCount:(...args)=>loopCount(...args)
@@ -5804,8 +5804,8 @@ function addGenerationLog({run, outputs=[], runMs=0, error=''}){
 function renderCanvasLog(){
     return CanvasLog.renderCanvasLog(classicLogHost());
 }
-async function importWorkflowAssetUrl(url, name='workflow'){
-    return CanvasWorkflowTransfer.importWorkflowAssetUrl(classicWorkflowTransferHost(), url, name);
+async function importWorkflowAssetUrl(url, name='workflow', point){
+    return CanvasWorkflowTransfer.importWorkflowAssetUrl(classicWorkflowTransferHost(), url, name, point);
 }
 function openCanvasLog(event){
     return CanvasLog.openCanvasLog(classicLogHost(), event);
@@ -6311,7 +6311,39 @@ function setCanvasGroupMembers(group, memberIds){
     return CanvasGroupEdit.setCanvasGroupMembers(classicNodeEditHost(), group, memberIds);
 }
 function groupSelectedImages(){
-    return CanvasGroupEdit.groupSelectedImages(classicNodeEditHost());
+    return classicWorkgroups().group();
+}
+let classicWorkgroupController = null;
+function classicWorkgroups(){
+    if(classicWorkgroupController) return classicWorkgroupController;
+    classicWorkgroupController = CanvasWorkgroups.createController({
+        document,world:nodesEl,smart:false,fetch:(...args)=>fetch(...args),
+        nodes:()=>nodes,connections:()=>connections,setNodes:value=>{nodes=value;},setConnections:value=>{connections=value;},
+        selectedIds:()=>[...selected],select:ids=>{selected.clear();ids.forEach(id=>selected.add(id));},
+        active:()=>Boolean(canvas),context:()=>canvas?.id,scale:()=>viewport.scale,rect:nodeRect,uid,pushUndo,
+        render,save:scheduleSave,sync:syncGeneratorInputs,links:renderLinks,icons:refreshIcons,notify:setStatus,selectionChanged:refreshSelectionVisuals,
+        canConnect,connect:(from,to)=>{connections.push({id:uid('c'),from,to});syncLatestGeneratedOutputToConnection(from,to);},
+        createOptions:[['generator','图片 / 音频 API'],['video','视频 API'],['comfy','ComfyUI'],['rh','RunningHub'],['llm','文字 LLM'],['prompt','提示词']],
+        createNode:(type,e,options={})=>CanvasNodeEdit.createNodeByType({...classicNodeEditHost(),...(options.skipUndo?{pushUndo:()=>{}}:{})},type,screenToWorld(e.clientX,e.clientY)),
+        workflowDropTarget:event=>{const panel=document.elementFromPoint(event.clientX,event.clientY)?.closest('#canvasAssetPanel');const cat=activeCanvasAssetCategory();return panel&&cat?.type==='workflow'?{library_id:activeCanvasAssetLibraryId,category_id:cat.id}:null;},
+        runnable:n=>canvasRunTypes().includes(n?.type),busy:n=>Boolean(n.running||n.submissionUnknown||cascadeRunningIds.has(n.id)),
+        stop:id=>requestCascadeStop(id),
+        execute:async (group,ids,state)=>{
+            if(!confirmOrphanUnknownCanvasSubmission())throw new Error('请先处理提交状态未知的任务');
+            const plan=CanvasWorkgroups.executionPlan(ids,CanvasWorkgroups.effectiveConnections(nodes,connections),resolveCascadeLoop);
+            const canvasId=canvas.id,context=beginCascade(group.id,ids,{serial:true,mode:'group'});
+            const previousLoop=loopContext;
+            try{for(const batch of plan){const loop=batch.loop,total=loop?.count||1,start=Math.max(1,Number(loop?.node?.loopStart)||1),stride=loop?.node?.imageInput?Math.max(1,Math.min(100,Number(loop.node.imageBatchSize)||1)):1;
+                for(let round=0;round<total;round++){loopContext=loop?{nodeId:loop.node.id,index:start+round*stride,total:start+(total-1)*stride}:null;
+                    for(const id of batch.ids){if(state.stop||canvas?.id!==canvasId)throw cascadeAbortError('已停止或画布已切换');await runOneCascadePass([id],{cascadeTargetId:group.id});ensureCascadeActive(group.id,context.message);}}}finalizeCascade(group.id,'done',{order:ids});}
+            catch(e){finalizeCascade(group.id,isCascadeAbortError(e)?'stopped':'failed',{order:ids});throw e;}
+            finally{loopContext=previousLoop;}
+        },
+        assets:n=>mediaRefsFromNode(n),text:n=>n.type==='prompt'?n.text||'':n.type==='llm'?n.outputText||'':n.audioOutputText||'',
+        workflowPayload:(list,edges)=>({nodes:serializableCanvasNodes(list),connections:edges}),
+        libraryChanged:data=>{canvasAssetLibrary=data.library||canvasAssetLibrary;renderCanvasAssetLibrary();}
+    });
+    return classicWorkgroupController;
 }
 function nodeBounds(ids){
     return CanvasLayout.nodeBounds(classicLayoutHost(), ids);
@@ -6327,15 +6359,8 @@ function finishSelection(){
     return CanvasInteraction.finishSelection(classicLayoutHost());
 }
 function renderSelectionHub(){
-    return CanvasInteraction.renderSelectionHub(classicLayoutHost());
+    return classicWorkgroups().render();
 }
-function startSelectionLink(e, kind){
-    return CanvasInteraction.startSelectionLink(classicLayoutHost(), e, kind);
-}
-function connectSelectionToGenerator(kind, genId){
-    return CanvasGroupEdit.connectSelectionToGenerator(classicNodeEditHost(), kind, genId);
-}
-
 function classicHistoryHost(){
     return {
         get canvas(){return canvas;},
@@ -6523,6 +6548,14 @@ function wouldCreateGeneratorCycle(fromId, toId){
     return CanvasGraphRules.wouldCreateGeneratorCycle(classicGraphHost(), fromId, toId);
 }
 function canConnect(fromId, toId){
+    const from=nodes.find(n=>n.id===fromId),to=nodes.find(n=>n.id===toId);
+    if(CanvasWorkgroups.isFrame(from)||CanvasWorkgroups.isFrame(to)){
+        if(fromId===toId)return false;
+        if(CanvasWorkgroups.leaves(nodes,fromId).includes(toId)||CanvasWorkgroups.leaves(nodes,toId).includes(fromId))return false;
+        const pairs=CanvasWorkgroups.effectiveConnections(nodes,[{from:fromId,to:toId}],connections);
+        try{CanvasWorkgroups.order(nodes.filter(n=>!CanvasWorkgroups.isFrame(n)),CanvasWorkgroups.effectiveConnections(nodes,connections).concat(pairs));}catch(e){return false;}
+        return pairs.some(c=>CanvasGraphRules.canConnect(classicGraphHost(),c.from,c.to));
+    }
     return CanvasGraphRules.canConnect(classicGraphHost(), fromId, toId);
 }
 function sanitizeConnections(){
@@ -6693,6 +6726,7 @@ function classicPointerHost(){
         isZoomPreviewIgnoredTarget:(...args)=>isZoomPreviewIgnoredTarget(...args),
         minimapEventToWorld:(...args)=>minimapEventToWorld(...args),
         openCreateMenu:(...args)=>openCreateMenu(...args),
+        updateWorkgroupViewport:()=>classicWorkgroupController?.updateViewport(),
         renderLinks:(...args)=>renderLinks(...args),
         renderSelectionHub:(...args)=>renderSelectionHub(...args),
         scheduleViewportSave:(...args)=>scheduleViewportSave(...args),
@@ -6727,7 +6761,6 @@ function classicPointerHost(){
         get selectDrag(){return selectDrag;},
         set selectDrag(value){selectDrag=value;},
         get selectionBox(){return selectionBox;},
-        get selectionHub(){return selectionHub;},
         set tempLink(value){tempLink=value;},
         setCanvasMouseMove:(...args)=>setCanvasMouseMove(...args),
         setCanvasMouseUp:(...args)=>setCanvasMouseUp(...args)
@@ -6793,6 +6826,7 @@ classicMediaInputController.mount();
 
 function classicKeyboardHost(){
     return {
+        ungroupWorkgroup:()=>[...selected].forEach(id=>classicWorkgroups().dissolve(id)),
         clearTimeout:(...args)=>clearTimeout(...args),
         get canvasOpenGeneration(){return canvasOpenGeneration;},
         get assetManagerModal(){return assetManagerModal;},

@@ -6,7 +6,7 @@
         e.preventDefault();
         e.stopPropagation();
         if(deps.document.activeElement && deps.document.activeElement !== deps.document.body) deps.document.activeElement.blur();
-        deps.selectDrag = {sx:e.clientX, sy:e.clientY, x:e.clientX, y:e.clientY, autoGroup:Boolean(e.ctrlKey || e.metaKey)};
+        deps.selectDrag = {sx:e.clientX, sy:e.clientY, x:e.clientX, y:e.clientY};
         deps.document.body.classList.add('canvas-selecting');
         deps.selectionBox.style.display = 'block';
         updateSelectionBox(deps, e.clientX, e.clientY);
@@ -27,7 +27,6 @@
 
     function finishSelection(deps){
         if(!deps.selectDrag) return;
-        const autoGroup = deps.selectDrag.autoGroup;
         const rect = deps.selectionBox.getBoundingClientRect();
         deps.selectionBox.style.display = 'none';
         deps.selected.clear();
@@ -40,8 +39,7 @@
         deps.document.body.classList.remove('canvas-selecting');
         deps.setCanvasMouseMove(null);
         deps.setCanvasMouseUp(null);
-        if(autoGroup && deps.selected.size > 1) deps.groupSelectedImages();
-        else deps.render();
+        deps.render();
         if(deps.workflowTransferModal?.classList.contains('open')) deps.updateWorkflowTransferMeta();
     }
 
@@ -252,48 +250,9 @@
         return bestDistance <= 48 ? best : null;
     }
 
-    function startSelectionLink(deps, e, kind){
-        e.preventDefault();
-        e.stopPropagation();
-        const p = deps.screenToWorld(e.clientX, e.clientY);
-        deps.tempLink = {from:`selection:${kind}`, x1:p.x, y1:p.y, x2:p.x, y2:p.y};
-        deps.setCanvasMouseMove(e2 => { const next = deps.screenToWorld(e2.clientX, e2.clientY); deps.tempLink.x2 = next.x; deps.tempLink.y2 = next.y; deps.renderLinks(); });
-        deps.setCanvasMouseUp(e2 => {
-            const targetPort = nearestPort(deps, e2.clientX, e2.clientY, 'in');
-            const target = targetPort?.closest('.generator-node');
-            if(target) deps.connectSelectionToGenerator(kind, target.dataset.id);
-            deps.tempLink = null;
-            deps.setCanvasMouseMove(null);
-            deps.setCanvasMouseUp(null);
-            deps.render();
-            deps.scheduleSave();
-        });
-    }
-
     function renderSelectionHub(deps){
-    deps.selectionHub.innerHTML = '';
-    deps.selectionHub.classList.remove('open');
-    const targets = [...deps.selected].filter(id => deps.nodes.some(node => node.id === id));
-    if(targets.length < 2) return;
-    const groupButton = deps.document.createElement('button');
-    groupButton.type = 'button';
-    groupButton.className = 'tool-btn';
-    groupButton.title = `${deps.tr('canvas.group')} (Ctrl+G)`;
-    groupButton.innerHTML = `<i data-lucide="group" class="w-3.5 h-3.5"></i><span>${deps.escapeHtml(deps.tr('canvas.group'))}</span>`;
-    groupButton.onmousedown = event => event.stopPropagation();
-    groupButton.onclick = deps.groupSelectedImages;
-    deps.selectionHub.appendChild(groupButton);
-    deps.selectionHub.classList.add('open');
-    const box = deps.nodeBounds([...deps.selected]);
-    const x = box.x * deps.viewport.scale + deps.viewport.x;
-    const y = box.y * deps.viewport.scale + deps.viewport.y;
-    const boardRect = deps.board.getBoundingClientRect();
-    const boardScale = boardRect.width / deps.board.clientWidth || 1;
-    const safeTop = (deps.document.querySelector('.topbar').getBoundingClientRect().bottom - boardRect.top) / boardScale + 8;
-    deps.selectionHub.style.left = `${Math.max(10, Math.min(x, deps.board.clientWidth - deps.selectionHub.offsetWidth - 10))}px`;
-    deps.selectionHub.style.top = `${Math.max(safeTop, Math.min(y - deps.selectionHub.offsetHeight - 8, deps.board.clientHeight - deps.selectionHub.offsetHeight - 10))}px`;
-    deps.refreshIcons();
-}
+        deps.renderWorkgroups?.();
+    }
 
 function refreshSelectionVisuals(deps){
     deps.nodesEl.querySelectorAll('.node').forEach(el => {
@@ -421,7 +380,7 @@ function startBoardPan(deps, e, opts={}){
     return true;
 }
 
-    const api={startSelection, updateSelectionBox, finishSelection, startNodeDrag, onNodeDrag, startNodeResize, onNodeResize, endDrag, startLink, nearestPort, startSelectionLink, renderSelectionHub, refreshSelectionVisuals, knifeHitsConnection, applyKnifeCut, setKnifeMode, startKnifeDrag, continueKnifeDrag, isEditableTarget, isZoomPreviewIgnoredTarget, startBoardPan};
+    const api={startSelection, updateSelectionBox, finishSelection, startNodeDrag, onNodeDrag, startNodeResize, onNodeResize, endDrag, startLink, nearestPort, renderSelectionHub, refreshSelectionVisuals, knifeHitsConnection, applyKnifeCut, setKnifeMode, startKnifeDrag, continueKnifeDrag, isEditableTarget, isZoomPreviewIgnoredTarget, startBoardPan};
     if(typeof module!=='undefined' && module.exports) module.exports=api;
     root.CanvasInteraction=api;
 })(typeof globalThis!=='undefined' ? globalThis : window);

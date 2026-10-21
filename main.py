@@ -1897,6 +1897,7 @@ class CanvasWorkflowExportRequest(BaseModel):
     library_id: str = ""
     category_id: str = ""
     name: str = ""
+    cover_url: str = ""
 
 class SmartCanvasGroupExportItem(BaseModel):
     kind: str = ""

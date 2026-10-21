@@ -19,6 +19,7 @@
     }
 
     function smartGroupLayoutSize(deps, node){
+        if(node?.groupMode==='frame') return {width:node.w||300,height:node.h||220};
         const explicitW = Number(node?.w);
         const explicitH = Number(node?.h);
         const width = Number.isFinite(explicitW) && explicitW >= deps.SMART_GROUP_MIN_WIDTH ? explicitW : deps.SMART_GROUP_DEFAULT_WIDTH;

@@ -46,6 +46,7 @@ function assetNodeImageFromItem(deps, item, fallbackName='asset'){
 }
 
 function assetThumbHtml(deps, item){
+    if(item?.cover_url) return `<div class="asset-thumb-wrap"><img src="${deps.escapeAttr(item.cover_url)}" alt="${deps.escapeAttr(item.name || '工作流')}" loading="lazy"></div>`;
     const url = deps.escapeAttr(item.url || '');
     const thumb = item.thumbnail || item.thumb || item.preview || item.url || '';
     const kind = assetMediaKind(deps, item);
@@ -98,7 +99,7 @@ function renderAssetLibrary(deps){
     if(deps.assetAddCategoryBtn) deps.assetAddCategoryBtn.disabled = Boolean(smartClass);
     if(deps.assetRenameCategoryBtn) deps.assetRenameCategoryBtn.disabled = !cat || Boolean(smartClass) || (localMode && (cat.id === '__root__' || !cat.id));
     deps.assetGrid.innerHTML = items.length ? items.map(item => `
-        <div class="asset-item ${workflowMode ? 'workflow-asset-item' : ''}" draggable="${workflowMode ? 'false' : 'true'}" data-asset-id="${deps.escapeHtml(item.id)}" data-url="${deps.escapeHtml(item.url)}" data-name="${deps.escapeHtml(item.name || 'asset')}" data-kind="${deps.escapeHtml(assetMediaKind(deps, item))}">
+        <div class="asset-item ${workflowMode ? 'workflow-asset-item' : ''}" draggable="true" data-asset-id="${deps.escapeHtml(item.id)}" data-url="${deps.escapeHtml(item.url)}" data-name="${deps.escapeHtml(item.name || 'asset')}" data-kind="${deps.escapeHtml(assetMediaKind(deps, item))}">
             ${assetThumbHtml(deps, item)}
             <div class="asset-meta">
                 <span class="asset-name" ${localMode ? `data-rename-local-asset="${deps.escapeHtml(item.id)}"` : ''} title="${deps.escapeHtml(item.name || '')}">${deps.escapeHtml(item.name || 'asset')}</span>
@@ -352,6 +353,11 @@ function bindAssetItemEvents(deps){
 }
 
 function bindWorkflowAssetItemEvents(deps){
+    deps.assetGrid.querySelectorAll('.workflow-asset-item').forEach(card=>{
+        card.addEventListener('dragstart',event=>{event.dataTransfer.effectAllowed='copy';event.dataTransfer.setData('application/x-smart-asset',JSON.stringify({url:card.dataset.url,name:card.dataset.name,kind:'workflow'}));});
+        card.addEventListener('dblclick',event=>{if(!event.target.closest('button,input'))deps.importSmartWorkflowAssetUrl(card.dataset.url,card.dataset.name||'workflow');});
+        card.title='拖入画布或双击引用工作流';
+    });
     deps.assetGrid.querySelectorAll('[data-rename-workflow-asset]').forEach(btn => {
         btn.onclick = async e => {
             e.preventDefault();

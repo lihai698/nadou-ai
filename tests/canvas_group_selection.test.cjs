@@ -33,8 +33,16 @@ function editor(initialNodes, initialConnections = [], ids = []) {
         },
         querySelectorAll:() => context.nodes.map(n => ({dataset:{id:n.id},getBoundingClientRect:() => ({left:n.x,top:n.y,right:n.x+n.w,bottom:n.y+n.h})})),
     };
-    vm.runInContext(section('function groupSelectedImages(){','function renderSelectionHub(){')
+    vm.runInContext(section('function nodeBounds(ids){','function renderSelectionHub(){')
         + section('function handoffExistingInputsToGroup(','function portPoint('), context);
+    const workgroups=require('../static/js/canvas-workgroups.js').createController({
+        document:context.document,nodes:()=>context.nodes,connections:()=>context.connections,
+        setNodes:value=>{context.nodes=value;},setConnections:value=>{context.connections=value;},
+        selectedIds:()=>[...context.selected],select:ids=>{context.selected=new Set(ids);},
+        pushUndo:context.pushUndo,uid:context.uid,rect:context.nodeRect,render(){},save(){},notify(){},
+    });
+    context.groupSelectedImages=()=>workgroups.group();
+    context.materialGroup=()=>context.CanvasGroupEdit.groupSelectedImages(context);
     return {context, run:code => vm.runInContext(code,context), state:() => JSON.parse(JSON.stringify({nodes:context.nodes,connections:context.connections}))};
 }
 const nodes = [
@@ -58,14 +66,13 @@ test('分组包含选中的图片、生成器和输出，完整包围且保留�
     assert.equal(e.context.undoCount, 1);
 });
 
-test('Ctrl 框选多个节点结束时自动成组，R 框选仍只多选', () => {
+test('Ctrl 与 R 框选结束都只保留选区，等待明确点击打组', () => {
     for(const autoGroup of [true,false]) {
         const e = editor(nodes, links);
         e.context.selectDrag = {autoGroup};
         e.run('finishSelection()');
-        assert.equal(e.state().nodes.filter(n => n.type === 'group').length, autoGroup ? 1 : 0);
-        if(autoGroup) assert.deepEqual(e.state().nodes.at(-1).items, nodes.map(n => n.id));
-        else assert.deepEqual([...e.context.selected], nodes.map(n => n.id));
+        assert.equal(e.state().nodes.filter(n => n.type === 'group').length, 0);
+        assert.deepEqual([...e.context.selected], nodes.map(n => n.id));
     }
 });
 
@@ -83,7 +90,7 @@ test('只框选单个节点不自动成组，已选中的组再次分组不重�
 test('原有图片提示词素材组仍接管输入连线', () => {
     const initial = [nodes[0],{id:'prompt',type:'prompt',x:100,y:400,w:220,h:130,text:'hello'},nodes[1]];
     const e = editor(initial, links.slice(0,1), ['image','prompt']);
-    e.run('groupSelectedImages()');
+    e.run('materialGroup()');
     const state=e.state(), group=state.nodes.at(-1);
     assert.deepEqual(group.items,['image','prompt']);
     assert.equal(state.connections.length,1);
@@ -93,7 +100,7 @@ test('原有图片提示词素材组仍接管输入连线', () => {
 
 test('工作流组成员拖入拖出更新所有节点类型，保留原连线', () => {
     const e = editor(nodes,links,nodes.map(n => n.id));
-    e.run('groupSelectedImages()');
+    e.run('materialGroup()');
     e.run("nodes.find(n=>n.id==='generator').x=1800;updateGroupMembership([nodes.find(n=>n.id==='generator')]);");
     assert.ok(!e.state().nodes.at(-1).items.includes('generator'));
     e.run("nodes.find(n=>n.id==='generator').x=430;updateGroupMembership([nodes.find(n=>n.id==='generator')]);");

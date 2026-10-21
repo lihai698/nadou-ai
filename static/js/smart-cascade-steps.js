@@ -76,8 +76,9 @@
         const runSettings = deps.smartLoopRoundSettings({...deps.cloneSmartSettings(deps.settings), ...deps.cloneSmartSettings(deps.smartSettingsForNode(requestNode) || {})}, ctx);
         deps.settings = runSettings;
         const outpaintSize = deps.validOutpaintSize(requestNode);
-        const selfRefs = sourceNode?.type === 'smart-loop' ? [] : deps.selfReferenceImagesForNode(sourceNode, false, ctx).filter(img => img?.url);
-        const sourceRefs = (selfRefs.length ? selfRefs : deps.defaultReferenceImagesFor(requestNode, false, ctx)).filter(img => img?.url);
+        const freshGroupInput = ctx?.workgroupRun && inputRefs?.length;
+        const selfRefs = sourceNode?.type === 'smart-loop' || freshGroupInput ? [] : deps.selfReferenceImagesForNode(sourceNode, false, ctx).filter(img => img?.url);
+        const sourceRefs = (freshGroupInput ? inputRefs : selfRefs.length ? selfRefs : deps.defaultReferenceImagesFor(requestNode, false, ctx)).filter(img => img?.url);
         const refsForRequest = sourceRefs.length
             ? sourceRefs
             : (inputRefs && inputRefs.length ? inputRefs : null);

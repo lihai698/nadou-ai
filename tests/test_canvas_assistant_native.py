@@ -7,6 +7,16 @@ from backend.canvas_assistant_native import native_catalog, prepare_native_actio
 
 
 class NativeActionTests(unittest.TestCase):
+    def test_workgroup_is_not_executed_or_rewritten_as_a_material_group(self):
+        for kind, node_type in [('classic', 'group'), ('smart', 'smart-group')]:
+            canvas = {'id': 'c', 'kind': kind, 'updated_at': 1, 'nodes': [
+                {'id': 'g', 'type': node_type, 'groupMode': 'frame', 'items': []}], 'connections': []}
+            for action in ['run', 'group_members']:
+                args = {'action': action, 'nodeId': 'g', **({'maxCalls': 1} if action == 'run' else {'memberIds': []})}
+                with self.subTest(kind=kind, action=action), self.assertRaises(HTTPException):
+                    prepare_native_action(canvas, args, 'frame-guard')
+            self.assertEqual(canvas['nodes'][0]['groupMode'], 'frame')
+
     def test_catalog_describes_actual_authorization_and_type_specific_run_limits(self):
         for kind in ('classic','smart'):
             for row in native_catalog(kind):

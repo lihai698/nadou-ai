@@ -37,6 +37,7 @@ function render(deps){
         .slice()
         .sort((a, b) => (deps.isSmartGroupNode(a) ? 0 : 1) - (deps.isSmartGroupNode(b) ? 0 : 1))
         .map(node => {
+        if(node.groupMode === 'frame') return {node, html:deps.renderWorkgroupFrame(node).outerHTML};
         const imgs = node.images || [];
         const isShotTable = node.type === 'smart-shot-table';
         const shotRow=nodeById.get(node.shotTableOrigin?.tableId)?.shotTableData?.rows.find(row=>row.id===node.shotTableOrigin.rowId);

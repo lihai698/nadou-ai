@@ -185,14 +185,14 @@
         return {nodes:[], connections:[]};
     }
 
-    function insertWorkflowIntoCanvas(deps, imported){
+    function insertWorkflowIntoCanvas(deps, imported, point){
         const srcNodes = (imported.nodes || []).filter(Boolean);
         const srcConnections = (imported.connections || []).filter(Boolean);
         if(!deps.canvas || !srcNodes.length) throw new Error('工作流中没有可导入的节点');
         deps.pushUndo();
         const minX = Math.min(...srcNodes.map(n => Number(n.x || 0)));
         const minY = Math.min(...srcNodes.map(n => Number(n.y || 0)));
-        const target = deps.lastMouseBoard && Number.isFinite(deps.lastMouseBoard.x) ? deps.lastMouseBoard : deps.defaultPoint(0, 0);
+        const target = point || (deps.lastMouseBoard && Number.isFinite(deps.lastMouseBoard.x) ? deps.lastMouseBoard : deps.defaultPoint(0, 0));
         const dx = target.x - minX;
         const dy = target.y - minY;
         const idMap = new Map();
@@ -230,7 +230,7 @@
         deps.setStatus(`已导入 ${newNodes.length} 个节点`);
     }
 
-    async function importWorkflowFile(deps, file){
+    async function importWorkflowFile(deps, file, point){
         if(!deps.canvas || !file) return;
         const isCurrent = deps.captureMediaInputContext();
         if(!isCurrent()) return;
@@ -243,7 +243,7 @@
             if(!isCurrent()) return;
             const imported = normalizeImportedWorkflow(deps, data);
             const importedUrls = deps.canvasLocalAssetUrls(imported.nodes, []);
-            insertWorkflowIntoCanvas(deps, imported);
+            insertWorkflowIntoCanvas(deps, imported, point);
             await deps.refreshMissingCanvasAssets();
             if(!isCurrent()) return;
             deps.render();
@@ -258,7 +258,7 @@
         }
     }
 
-    async function importWorkflowAssetUrl(deps, url, name='workflow'){
+    async function importWorkflowAssetUrl(deps, url, name='workflow', point){
         if(!deps.canvas || !url) return;
         const isCurrent = deps.captureMediaInputContext();
         if(!isCurrent()) return;
@@ -268,7 +268,7 @@
             const blob = await res.blob();
             if(!isCurrent()) return;
             const fileName = name && /\.(json|zip)$/i.test(name) ? name : (url.split('/').pop()?.split('?')[0] || `${name || 'workflow'}.zip`);
-            await importWorkflowFile(deps, new deps.File([blob], fileName, {type:blob.type || 'application/octet-stream'}));
+            await importWorkflowFile(deps, new deps.File([blob], fileName, {type:blob.type || 'application/octet-stream'}), point);
         } catch(err) {
             if(!isCurrent()) return;
             deps.showErrorModal(err.message || '导入工作流资产失败', '导入工作流');

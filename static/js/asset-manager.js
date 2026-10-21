@@ -714,6 +714,7 @@ function assetThumb(item){
     return `<img src="${escapeAttr(assetPreviewUrl(item.url, 256))}" alt="${escapeAttr(item.name || 'asset')}" loading="lazy" decoding="async">`;
 }
 function workflowThumb(item){
+    if(item.cover_url) return `<img src="${escapeAttr(assetPreviewUrl(item.cover_url, 256))}" alt="${escapeAttr(item.name || '工作流')}" loading="lazy" decoding="async">`;
     return `<div class="asset-file-icon workflow-file-icon"><i data-lucide="workflow"></i>${renderSystemLabel(workflowKindLabel(item))}</div>`;
 }
 function isLocalMediaFile(file){
@@ -4723,7 +4724,48 @@ document.addEventListener('change', event => {
         localCaptionModel = event.target.value || '';
     }
 });
+// Cross-window workgroup drops use the same export dialog and library records as canvases.
+let workflowImportDialog=null;
+function workgroupDropTarget(event){
+    if(activeTab!=='workflows')return null;
+    const category=event.target.closest?.('[data-workflow-cat]');
+    return category||event.target.closest?.('.asset-content');
+}
+function isWorkgroupDrag(event){
+    return Array.from(event.dataTransfer?.types||[]).includes(window.CanvasWorkgroups?.workflowDragType);
+}
+function clearWorkgroupDrop(){
+    root.querySelectorAll('.workgroup-drop-over').forEach(el=>el.classList.remove('workgroup-drop-over'));
+}
+root.addEventListener('dragover',event=>{
+    if(!isWorkgroupDrag(event))return;
+    event.preventDefault();clearWorkgroupDrop();
+    const target=workgroupDropTarget(event);
+    event.dataTransfer.dropEffect=target?'copy':'none';target?.classList.add('workgroup-drop-over');
+});
+root.addEventListener('dragleave',event=>{
+    if(!root.contains(event.relatedTarget))clearWorkgroupDrop();
+});
+root.addEventListener('drop',event=>{
+    if(!isWorkgroupDrag(event))return;
+    event.preventDefault();clearWorkgroupDrop();
+    const target=workgroupDropTarget(event);if(!target)return;
+    if(workflowImportDialog?.isConnected){setStatus('请先保存或取消当前工作流');return;}
+    try{
+        const value=window.CanvasWorkgroups.readWorkflowDrag(event.dataTransfer,location.origin);
+        const category=target.dataset.workflowCat;
+        const cat=category?workflowCategories().find(c=>c.id===category&&c.__libraryId===target.dataset.workflowCatLib):activeWorkflowCategory();
+        if(!cat)throw new Error('请先创建一个工作流分组');
+        workflowImportDialog=window.CanvasWorkgroups.showWorkflowDialog({
+            document,fetch:(url,options)=>fetch(url,options),icons:()=>lucide.createIcons(),notify:setStatus,
+            libraryChanged:data=>{assetLibrary=data.library||assetLibrary;activeWorkflowLibraryId=cat.__libraryId;activeWorkflowCategoryId=cat.id;selectedWorkflowId=data.item?.id||'';render();}
+        },{title:value.title,count:value.payload.nodes.filter(n=>!window.CanvasWorkgroups.isFrame(n)).length,
+            payload:()=>value.payload,target:{library_id:cat.__libraryId,category_id:cat.id},onClose:()=>{workflowImportDialog=null;}});
+    }catch(err){setStatus(err.message||'工作组导入失败');}
+});
+
 root.addEventListener('dragover', event => {
+    if(isWorkgroupDrag(event))return;
     const drop = event.target.closest?.('#assetDrop, #localUploadDrop, #workflowDrop');
     if(!drop) return;
     event.preventDefault();
@@ -4733,6 +4775,7 @@ root.addEventListener('dragleave', event => {
     event.target.closest?.('#assetDrop, #localUploadDrop, #workflowDrop')?.classList.remove('drag-over');
 });
 root.addEventListener('drop', event => {
+    if(isWorkgroupDrag(event))return;
     const drop = event.target.closest?.('#assetDrop, #localUploadDrop, #workflowDrop');
     if(!drop) return;
     event.preventDefault();

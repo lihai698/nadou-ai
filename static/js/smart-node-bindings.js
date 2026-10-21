@@ -297,6 +297,7 @@ function bindLoopNodeControls(deps, el, node){
 
 function bindNodeEvents(deps){
     deps.world.querySelectorAll('.image-node').forEach(el => {
+        if(el.classList.contains('cw-frame')) return;
         const id = el.dataset.id;
         const nodeForControls = deps.nodes.find(n => n.id === id);
         el.querySelectorAll('[data-depth-action]').forEach(button => {

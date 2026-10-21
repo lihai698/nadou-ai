@@ -26,6 +26,22 @@ async def download_canvas_assets(payload, *, output_file_from_url,
     raw_items = payload.items or [{"url": url} for url in payload.urls]
     with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:
         for raw in raw_items[:1000]:
+            if isinstance(raw, dict) and raw.get("kind") == "text":
+                content = str(raw.get("text") or "")
+                if not content.strip():
+                    continue
+                base = sanitize_export_filename(str(raw.get("name") or f"prompt-{count + 1}.txt"), "prompt.txt")
+                if not base.lower().endswith(".txt"):
+                    base += ".txt"
+                name, ext = os.path.splitext(base)
+                archive_name, suffix = base, 2
+                while archive_name in used_names:
+                    archive_name = f"{name}-{suffix}{ext}"
+                    suffix += 1
+                used_names.add(archive_name)
+                zf.writestr(archive_name, content.encode("utf-8"))
+                count += 1
+                continue
             if isinstance(raw, dict):
                 text = str(raw.get("url") or "").strip()
                 requested_name = str(raw.get("name") or "").strip()

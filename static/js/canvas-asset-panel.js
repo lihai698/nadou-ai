@@ -93,6 +93,7 @@ function canvasAssetItemKind(deps, item){
 }
 
 function canvasAssetThumbHtml(deps, item){
+    if(item?.cover_url) return `<div class="canvas-asset-thumb-wrap"><img src="${deps.escapeAttr(item.cover_url)}" alt="${deps.escapeAttr(item.name || '工作流')}" loading="lazy"></div>`;
     const kind = canvasAssetItemKind(deps, item);
     const url = deps.escapeAttr(item?.url || '');
     const thumbUrl = item?.thumbnail || item?.url || '';
@@ -232,7 +233,7 @@ function renderCanvasAssetLibrary(deps){
     if(deps.canvasAssetAddCategoryBtn) deps.canvasAssetAddCategoryBtn.disabled = localMode;
     if(deps.canvasAssetDropZone) {
         deps.canvasAssetDropZone.style.display = localMode ? 'none' : 'flex';
-        deps.canvasAssetDropZone.textContent = catType === 'workflow' ? '工作流分组支持上传/导出工作流，双击卡片导入画布' : '拖入图片或输出保存到当前分组';
+        deps.canvasAssetDropZone.textContent = catType === 'workflow' ? '拖入工作组保存 · 拖出或双击卡片引用' : '拖入图片或输出保存到当前分组';
     }
     const items = cat?.items || [];
     deps.canvasAssetGrid.innerHTML = items.length ? items.map(item => `

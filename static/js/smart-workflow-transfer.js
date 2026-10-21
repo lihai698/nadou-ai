@@ -138,14 +138,14 @@
         }
     }
 
-    function insertSmartWorkflowIntoCanvas(deps, imported){
+    function insertSmartWorkflowIntoCanvas(deps, imported, point){
         const srcNodes = (imported.nodes || []).filter(Boolean);
         const srcConnections = (imported.connections || []).filter(Boolean);
         if(!deps.canvas || !srcNodes.length) throw new Error('工作流中没有可导入的节点');
         deps.pushUndo();
         const minX = Math.min(...srcNodes.map(n => Number(n.x || 0)));
         const minY = Math.min(...srcNodes.map(n => Number(n.y || 0)));
-        const target = deps.viewportCenter();
+        const target = point || deps.viewportCenter();
         const dx = target.x - minX;
         const dy = target.y - minY;
         const idMap = new Map();
@@ -163,11 +163,12 @@
             if(copy.type === 'smart-group' && Array.isArray(copy.items)){
                 copy.items = copy.items.map(id => idMap.get(id)).filter(Boolean);
             }
+            if(Array.isArray(copy.inputNodeIds))copy.inputNodeIds=copy.inputNodeIds.map(id=>idMap.get(id)).filter(Boolean);
             deps.remapSmartViewAdjustRefs(copy, idMap);
         });
         deps.remapSmartDepthCopies(newNodes, idMap);
         const newConnections = srcConnections
-            .map(conn => ({...JSON.parse(JSON.stringify(conn)), from:idMap.get(conn.from), to:idMap.get(conn.to)}))
+            .map(conn => ({...JSON.parse(JSON.stringify(conn)), id:deps.uid('c'), from:idMap.get(conn.from), to:idMap.get(conn.to)}))
             .filter(conn => conn.from && conn.to);
         deps.nodes.push(...newNodes);
         deps.canvas.connections = [...(deps.canvas.connections || []), ...newConnections];
@@ -180,7 +181,7 @@
         deps.toast(`已导入 ${newNodes.length} 个节点`);
     }
 
-    async function importSmartWorkflowFile(deps, file){
+    async function importSmartWorkflowFile(deps, file, point){
         if(!deps.canvas || !file) return;
         const isCurrent=deps.captureMediaInputContext();
         if(!isCurrent())return;
@@ -194,7 +195,7 @@
             if(!isCurrent())return;
             const imported = normalizeImportedSmartWorkflow(deps, data);
             const importedUrls = importedSmartLocalAssetUrls(deps, imported.nodes);
-            insertSmartWorkflowIntoCanvas(deps, imported);
+            insertSmartWorkflowIntoCanvas(deps, imported, point);
             closeSmartWorkflowTransferModal(deps);
             if(importedUrls.length){
                 try {
@@ -218,7 +219,19 @@
         }
     }
 
-    const api={smartCanvasAssistantExportWorkflow, smartWorkflowFilename, selectedSmartWorkflowPayload, normalizeImportedSmartWorkflow, importedSmartLocalAssetUrls, openSmartWorkflowTransferModal, closeSmartWorkflowTransferModal, updateSmartWorkflowTransferMeta, exportSelectedSmartWorkflow, insertSmartWorkflowIntoCanvas, importSmartWorkflowFile};
+    async function importSmartWorkflowAssetUrl(deps, url, name='workflow', point){
+        if(!deps.canvas || !url)return;
+        const isCurrent=deps.captureMediaInputContext();if(!isCurrent())return;
+        try{
+            const response=await deps.fetch(url,{cache:'no-store'});
+            if(!response.ok)throw new Error('读取工作流资产失败');
+            const blob=await response.blob();if(!isCurrent())return;
+            const fileName=/\.(json|zip)$/i.test(name)?name:(url.split('/').pop()?.split('?')[0]||name+'.zip');
+            await importSmartWorkflowFile(deps,new File([blob],fileName,{type:blob.type||'application/octet-stream'}),point);
+        }catch(error){if(isCurrent())deps.toast(error.message||'导入工作流资产失败');}
+    }
+
+    const api={importSmartWorkflowAssetUrl, smartCanvasAssistantExportWorkflow, smartWorkflowFilename, selectedSmartWorkflowPayload, normalizeImportedSmartWorkflow, importedSmartLocalAssetUrls, openSmartWorkflowTransferModal, closeSmartWorkflowTransferModal, updateSmartWorkflowTransferMeta, exportSelectedSmartWorkflow, insertSmartWorkflowIntoCanvas, importSmartWorkflowFile};
     if(typeof module!=='undefined' && module.exports) module.exports=api;
     root.SmartWorkflowTransfer=api;
 })(typeof globalThis!=='undefined' ? globalThis : window);

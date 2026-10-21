@@ -17,6 +17,7 @@
     }
 
     function absorbImageNodeIntoSmartGroup(deps, group, child){
+        if(group?.groupMode==='frame'||child?.groupMode==='frame')return false;
         const add = (child.images || []).map(img => deps.stripImageGenerationMeta({...img}));
         if(!add.length) return false;
         group.images = [...(group.images || []), ...add];
@@ -29,6 +30,7 @@
     }
 
     function setSmartGroupMemberIds(deps, group, memberIds){
+        if(group?.groupMode==='frame')throw new Error('工作组成员请通过画布解组后重新框选，不能使用素材组成员编辑');
         const targets = memberIds.map(id => deps.nodes.find(n => n.id === id));
         if(!deps.isSmartGroupNode(group) || targets.some(n => !n || !['smart-prompt','smart-loop'].includes(n.type)) || new Set(memberIds).size !== memberIds.length) throw new Error('智能分组只允许现有提示词或循环成员');
         group.items = [];
@@ -37,6 +39,7 @@
     }
 
     function addNodeToSmartGroup(deps, group, child){
+        if(group?.groupMode==='frame'||child?.groupMode==='frame')return false;
         if(!deps.isSmartGroupNode(group) || !child || child.id === group.id) return false;
         const items = Array.isArray(group.items) ? group.items.slice() : [];
         const zoom = deps.smartGroupZoom(group);

@@ -89,6 +89,7 @@ function renderImageAssetManager(deps){
 }
 
 function workflowAssetThumbHtml(deps, item){
+    if(item?.cover_url) return `<img src="${deps.escapeAttr(item.cover_url)}" alt="${deps.escapeAttr(item.name || '工作流')}" loading="lazy">`;
     return `<div class="asset-manager-card-text workflow-manager-thumb"><i data-lucide="workflow" class="w-6 h-6"></i><span>${deps.escapeHtml(item?.format === 'json' ? 'JSON 工作流' : 'ZIP 工作流包')}</span></div>`;
 }
 

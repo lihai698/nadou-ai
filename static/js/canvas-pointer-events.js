@@ -128,10 +128,7 @@ function finishTransientInput(deps){
         deps.selectDrag=null;deps.knifeActive=false;deps.knifeChanged=false;deps.knifeNeedsRender=false;
         deps.knifePoint=null;deps.knifeTrail=[];deps.isRKeyDown=false;
         if(deps.selectionBox)deps.selectionBox.style.display='none';
-        if(deps.selectionHub){
-            deps.selectionHub.querySelectorAll('button').forEach(button=>{button.onclick=null;});
-            deps.selectionHub.innerHTML='';deps.selectionHub.classList.remove('open');
-        }
+
         deps.document.body.classList.remove('canvas-knife','canvas-node-drag','canvas-node-resize','canvas-selecting','canvas-board-pan');
         if(contentChanged&&!finalized){deps.localCanvasDirty=true;deps.backupClassicDraft();}
         if(viewportChanged)deps.saveLocalViewport();
