@@ -523,9 +523,7 @@ WORKFLOW_ZIP_MAX_UNCOMPRESSED_BYTES = UPLOAD_MAX_BATCH_BYTES
 
 
 def _upload_limit_error(filename="文件", *, batch=False):
-    if batch:
-        return HTTPException(status_code=413, detail=f"本次上传总大小超过 {UPLOAD_MAX_BATCH_BYTES // (1024 * 1024)}MB")
-    return HTTPException(status_code=413, detail=f"{filename or '文件'}超过 {UPLOAD_MAX_FILE_BYTES // (1024 * 1024)}MB，无法上传")
+    return upload_service._upload_limit_error(filename, batch=batch, HTTPException=HTTPException, UPLOAD_MAX_BATCH_BYTES=UPLOAD_MAX_BATCH_BYTES, UPLOAD_MAX_FILE_BYTES=UPLOAD_MAX_FILE_BYTES)
 
 
 async def read_upload_file_limited(file: UploadFile, *, batch_state=None):
@@ -533,42 +531,11 @@ async def read_upload_file_limited(file: UploadFile, *, batch_state=None):
 
 
 def _base64_payload_size_hint(value):
-    original = str(value or "")
-    text = original
-    if len(text) > BASE64_UPLOAD_MAX_TEXT_LENGTH:
-        raise _upload_limit_error("Base64 数据")
-    if text.startswith("data:"):
-        _, _, text = text.partition(",")
-    # Base64 的长度上界足够保守，实际解码后仍会再次精确检查。
-    if len(text) > ((BASE64_UPLOAD_MAX_BYTES + 2) // 3) * 4:
-        raise _upload_limit_error("Base64 数据")
-    return original
+    return upload_service._base64_payload_size_hint(value, BASE64_UPLOAD_MAX_TEXT_LENGTH=BASE64_UPLOAD_MAX_TEXT_LENGTH, BASE64_UPLOAD_MAX_BYTES=BASE64_UPLOAD_MAX_BYTES, _upload_limit_error=_upload_limit_error)
 
 
 async def read_httpx_response_limited(response, *, batch_state=None, filename="远程文件"):
-    """分块读取 httpx 响应，避免远程素材通过 response.content 无上限进内存。"""
-    content_length = response.headers.get("Content-Length")
-    try:
-        announced = int(content_length) if content_length else 0
-    except (TypeError, ValueError):
-        announced = 0
-    if announced > UPLOAD_MAX_FILE_BYTES:
-        raise _upload_limit_error(filename)
-    chunks = []
-    total = 0
-    async for chunk in response.aiter_bytes(UPLOAD_READ_CHUNK_BYTES):
-        if not chunk:
-            continue
-        total += len(chunk)
-        if total > UPLOAD_MAX_FILE_BYTES:
-            raise _upload_limit_error(filename)
-        if batch_state is not None:
-            batch_total = int(batch_state.get("total", 0)) + len(chunk)
-            if batch_total > UPLOAD_MAX_BATCH_BYTES:
-                raise _upload_limit_error(batch=True)
-            batch_state["total"] = batch_total
-        chunks.append(chunk)
-    return b"".join(chunks)
+    return await upload_service.read_httpx_response_limited(response, batch_state=batch_state, filename=filename, UPLOAD_MAX_FILE_BYTES=UPLOAD_MAX_FILE_BYTES, UPLOAD_READ_CHUNK_BYTES=UPLOAD_READ_CHUNK_BYTES, UPLOAD_MAX_BATCH_BYTES=UPLOAD_MAX_BATCH_BYTES, _upload_limit_error=_upload_limit_error)
 
 
 def validate_workflow_zip_limits(archive):
