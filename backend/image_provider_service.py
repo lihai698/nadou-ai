@@ -220,3 +220,61 @@ async def generate_ai_image(prompt, size, quality, model, reference_images=None,
     if dispatch.route == "tudou-grok":
         return await generate_tudou_grok_image(prompt, size, model, reference_images, provider, aspect_ratio)
     return await generate_openai_image(prompt, size, quality, model, reference_images, provider, on_remote_accept)
+
+
+def image_task_url_for_provider(provider, task_id, *, AI_BASE_URL, is_tudou_async_image_mode, normalize_image_request_mode, is_apimart_provider):
+    base_url = (provider.get("base_url") if provider else AI_BASE_URL).rstrip("/")
+    if is_tudou_async_image_mode(provider):
+        return f"{base_url}/tasks/{task_id}" if base_url.endswith("/v1") else f"{base_url}/v1/tasks/{task_id}"
+    # 异步生图（openai-video-proxy）模式优先于 apimart 协议判断：
+    # 提交走 /v1/videos，轮询必须走 /v1/videos/{id}；否则 protocol=apimart 的平台会错走 /v1/tasks/{id}
+    if normalize_image_request_mode((provider or {}).get("image_request_mode")) == "openai-video-proxy":
+        return f"{base_url}/videos/{task_id}" if base_url.endswith("/v1") else f"{base_url}/v1/videos/{task_id}"
+    if is_apimart_provider(provider):
+        return f"{base_url}/tasks/{task_id}" if base_url.endswith("/v1") else f"{base_url}/v1/tasks/{task_id}"
+    return f"{base_url}/images/tasks/{task_id}" if base_url.endswith("/v1") else f"{base_url}/v1/images/tasks/{task_id}"
+
+
+async def fetch_image_task_payload(client, task_id, provider=None, *, image_task_url_for_provider, httpx_request_with_transient_retries, api_headers):
+    task_url = image_task_url_for_provider(provider, task_id)
+    response = await httpx_request_with_transient_retries(
+        client,
+        "GET",
+        task_url,
+        attempts=3,
+        headers=api_headers(provider=provider),
+    )
+    response.raise_for_status()
+    return response.json()
+
+
+async def wait_for_image_task(client, task_id, provider=None, *, is_apimart_provider, is_tudou_async_image_mode, TUDOU_ASYNC_IMAGE_TASK_TIMEOUT, APIMART_IMAGE_TASK_TIMEOUT, IMAGE_TASK_TIMEOUT, TUDOU_ASYNC_IMAGE_POLL_INTERVAL, APIMART_IMAGE_POLL_INTERVAL, IMAGE_POLL_INTERVAL, TUDOU_ASYNC_IMAGE_INITIAL_POLL_DELAY, APIMART_IMAGE_INITIAL_POLL_DELAY, time, asyncio, fetch_image_task_payload, image_task_status, extract_image, HTTPException, IMAGE_TASK_SUCCESS_STATUSES, IMAGE_TASK_FAILED_STATUSES, image_task_fail_reason, provider_error_summary, _safe_upstream_text):
+    is_apimart = is_apimart_provider(provider)
+    is_tudou_async = is_tudou_async_image_mode(provider)
+    timeout = TUDOU_ASYNC_IMAGE_TASK_TIMEOUT if is_tudou_async else APIMART_IMAGE_TASK_TIMEOUT if is_apimart else IMAGE_TASK_TIMEOUT
+    interval = TUDOU_ASYNC_IMAGE_POLL_INTERVAL if is_tudou_async else APIMART_IMAGE_POLL_INTERVAL if is_apimart else IMAGE_POLL_INTERVAL
+    initial_delay = TUDOU_ASYNC_IMAGE_INITIAL_POLL_DELAY if is_tudou_async else APIMART_IMAGE_INITIAL_POLL_DELAY if is_apimart else 0
+    deadline = time.monotonic() + timeout
+    last_payload = {}
+    while time.monotonic() < deadline:
+        if initial_delay:
+            await asyncio.sleep(min(initial_delay, max(0.0, deadline - time.monotonic())))
+            initial_delay = 0
+            if time.monotonic() >= deadline:
+                break
+        last_payload = await fetch_image_task_payload(client, task_id, provider)
+        status = image_task_status(last_payload)
+        if not status:
+            try:
+                if extract_image(last_payload):
+                    return last_payload
+            except HTTPException:
+                pass
+        if status in IMAGE_TASK_SUCCESS_STATUSES:
+            return last_payload
+        if status in IMAGE_TASK_FAILED_STATUSES:
+            raise HTTPException(status_code=502, detail=f"生图任务失败：{image_task_fail_reason(last_payload)}")
+        await asyncio.sleep(min(interval, max(0.0, deadline - time.monotonic())))
+    summary = provider_error_summary(last_payload)
+    extra = f"，最后状态：{summary}" if summary else ""
+    raise HTTPException(status_code=504, detail=f"生图任务超时（已等待 {int(timeout)} 秒），task_id={_safe_upstream_text(task_id, 120)}{extra}")

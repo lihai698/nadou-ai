@@ -533,3 +533,10 @@ def public_runninghub_app_info(data, api_key="", *, _UPSTREAM_SECRET_JSON_RE, re
             if key in _RUNNINGHUB_APP_FIELD_KEYS
         })
     return {"nodeInfoList": fields}
+
+
+def image_task_fail_reason(payload, *, image_task_data, provider_error_summary):
+    task_data = image_task_data(payload)
+    error = task_data.get("error") if isinstance(task_data.get("error"), dict) else {}
+    reason = task_data.get("fail_reason") or task_data.get("message") or error.get("message") or (payload.get("message") if isinstance(payload, dict) else "")
+    return provider_error_summary(reason, fallback="生图任务失败")

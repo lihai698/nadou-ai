@@ -3168,22 +3168,10 @@ async def generate_jimeng_video(payload: CanvasVideoRequest, provider):
     return await jimeng_execution_service.generate_jimeng_video(payload, provider, HTTPException=HTTPException, _notify_canvas_video_remote_accept=_notify_canvas_video_remote_accept, jimeng_append_model_resolution_args=jimeng_append_model_resolution_args, jimeng_cli_path_arg=jimeng_cli_path_arg, jimeng_multiframe_resolution=jimeng_multiframe_resolution, jimeng_multiframe_transition_prompts=jimeng_multiframe_transition_prompts, jimeng_poll_seconds=jimeng_poll_seconds, jimeng_prepare_local_media=jimeng_prepare_local_media, jimeng_store_outputs=jimeng_store_outputs, jimeng_submit_id=jimeng_submit_id, jimeng_transition_duration=jimeng_transition_duration, jimeng_video_duration=jimeng_video_duration, jimeng_video_model_for_command=jimeng_video_model_for_command, jimeng_video_ratio=jimeng_video_ratio, jimeng_video_ref_role=jimeng_video_ref_role, jimeng_video_ref_url=jimeng_video_ref_url, jimeng_video_submit_poll_seconds=jimeng_video_submit_poll_seconds, run_jimeng_cli=run_jimeng_cli)
 
 def image_task_url_for_provider(provider, task_id):
-    base_url = (provider.get("base_url") if provider else AI_BASE_URL).rstrip("/")
-    if is_tudou_async_image_mode(provider):
-        return f"{base_url}/tasks/{task_id}" if base_url.endswith("/v1") else f"{base_url}/v1/tasks/{task_id}"
-    # 异步生图（openai-video-proxy）模式优先于 apimart 协议判断：
-    # 提交走 /v1/videos，轮询必须走 /v1/videos/{id}；否则 protocol=apimart 的平台会错走 /v1/tasks/{id}
-    if normalize_image_request_mode((provider or {}).get("image_request_mode")) == "openai-video-proxy":
-        return f"{base_url}/videos/{task_id}" if base_url.endswith("/v1") else f"{base_url}/v1/videos/{task_id}"
-    if is_apimart_provider(provider):
-        return f"{base_url}/tasks/{task_id}" if base_url.endswith("/v1") else f"{base_url}/v1/tasks/{task_id}"
-    return f"{base_url}/images/tasks/{task_id}" if base_url.endswith("/v1") else f"{base_url}/v1/images/tasks/{task_id}"
+    return image_provider_service.image_task_url_for_provider(provider, task_id, AI_BASE_URL=AI_BASE_URL, is_tudou_async_image_mode=is_tudou_async_image_mode, normalize_image_request_mode=normalize_image_request_mode, is_apimart_provider=is_apimart_provider)
 
 def image_task_fail_reason(payload):
-    task_data = image_task_data(payload)
-    error = task_data.get("error") if isinstance(task_data.get("error"), dict) else {}
-    reason = task_data.get("fail_reason") or task_data.get("message") or error.get("message") or (payload.get("message") if isinstance(payload, dict) else "")
-    return provider_error_summary(reason, fallback="生图任务失败")
+    return upstream_public_policy.image_task_fail_reason(payload, image_task_data=image_task_data, provider_error_summary=provider_error_summary)
 
 async def httpx_request_with_transient_retries(client, method, url, attempts=2, retry_delay=1.2, **kwargs):
     attempts = max(1, int(attempts or 1))
@@ -3210,47 +3198,10 @@ async def httpx_request_with_transient_retries(client, method, url, attempts=2, 
     raise httpx.HTTPError(f"请求失败：{method} {redact_url_for_log(url)[:512]}")
 
 async def fetch_image_task_payload(client, task_id, provider=None):
-    task_url = image_task_url_for_provider(provider, task_id)
-    response = await httpx_request_with_transient_retries(
-        client,
-        "GET",
-        task_url,
-        attempts=3,
-        headers=api_headers(provider=provider),
-    )
-    response.raise_for_status()
-    return response.json()
+    return await image_provider_service.fetch_image_task_payload(client, task_id, provider, image_task_url_for_provider=image_task_url_for_provider, httpx_request_with_transient_retries=httpx_request_with_transient_retries, api_headers=api_headers)
 
 async def wait_for_image_task(client, task_id, provider=None):
-    is_apimart = is_apimart_provider(provider)
-    is_tudou_async = is_tudou_async_image_mode(provider)
-    timeout = TUDOU_ASYNC_IMAGE_TASK_TIMEOUT if is_tudou_async else APIMART_IMAGE_TASK_TIMEOUT if is_apimart else IMAGE_TASK_TIMEOUT
-    interval = TUDOU_ASYNC_IMAGE_POLL_INTERVAL if is_tudou_async else APIMART_IMAGE_POLL_INTERVAL if is_apimart else IMAGE_POLL_INTERVAL
-    initial_delay = TUDOU_ASYNC_IMAGE_INITIAL_POLL_DELAY if is_tudou_async else APIMART_IMAGE_INITIAL_POLL_DELAY if is_apimart else 0
-    deadline = time.monotonic() + timeout
-    last_payload = {}
-    while time.monotonic() < deadline:
-        if initial_delay:
-            await asyncio.sleep(min(initial_delay, max(0.0, deadline - time.monotonic())))
-            initial_delay = 0
-            if time.monotonic() >= deadline:
-                break
-        last_payload = await fetch_image_task_payload(client, task_id, provider)
-        status = image_task_status(last_payload)
-        if not status:
-            try:
-                if extract_image(last_payload):
-                    return last_payload
-            except HTTPException:
-                pass
-        if status in IMAGE_TASK_SUCCESS_STATUSES:
-            return last_payload
-        if status in IMAGE_TASK_FAILED_STATUSES:
-            raise HTTPException(status_code=502, detail=f"生图任务失败：{image_task_fail_reason(last_payload)}")
-        await asyncio.sleep(min(interval, max(0.0, deadline - time.monotonic())))
-    summary = provider_error_summary(last_payload)
-    extra = f"，最后状态：{summary}" if summary else ""
-    raise HTTPException(status_code=504, detail=f"生图任务超时（已等待 {int(timeout)} 秒），task_id={_safe_upstream_text(task_id, 120)}{extra}")
+    return await image_provider_service.wait_for_image_task(client, task_id, provider, is_apimart_provider=is_apimart_provider, is_tudou_async_image_mode=is_tudou_async_image_mode, TUDOU_ASYNC_IMAGE_TASK_TIMEOUT=TUDOU_ASYNC_IMAGE_TASK_TIMEOUT, APIMART_IMAGE_TASK_TIMEOUT=APIMART_IMAGE_TASK_TIMEOUT, IMAGE_TASK_TIMEOUT=IMAGE_TASK_TIMEOUT, TUDOU_ASYNC_IMAGE_POLL_INTERVAL=TUDOU_ASYNC_IMAGE_POLL_INTERVAL, APIMART_IMAGE_POLL_INTERVAL=APIMART_IMAGE_POLL_INTERVAL, IMAGE_POLL_INTERVAL=IMAGE_POLL_INTERVAL, TUDOU_ASYNC_IMAGE_INITIAL_POLL_DELAY=TUDOU_ASYNC_IMAGE_INITIAL_POLL_DELAY, APIMART_IMAGE_INITIAL_POLL_DELAY=APIMART_IMAGE_INITIAL_POLL_DELAY, time=time, asyncio=asyncio, fetch_image_task_payload=fetch_image_task_payload, image_task_status=image_task_status, extract_image=extract_image, HTTPException=HTTPException, IMAGE_TASK_SUCCESS_STATUSES=IMAGE_TASK_SUCCESS_STATUSES, IMAGE_TASK_FAILED_STATUSES=IMAGE_TASK_FAILED_STATUSES, image_task_fail_reason=image_task_fail_reason, provider_error_summary=provider_error_summary, _safe_upstream_text=_safe_upstream_text)
 
 def output_storage(category="output"):
     return resolve_output_storage(category, _current_storage_dirs())
