@@ -1,3 +1,4 @@
+const {installClassicPreviewRuntime}=require('./canvas_preview_runtime_test_helpers.cjs');
 const {createTaskContext}=require('./canvas_task_test_helpers.cjs');
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
@@ -29,6 +30,7 @@ function setup(){
         refreshMissingCanvasAssets:async()=>{},setCanvasMode(){},renderCanvasList(){},render:()=>events.push(['render',e.canvas.id]),
         resumeCanvasImageTasks:()=>events.push(['resume',e.canvas.id]),resumeCanvasAudioTasks(){},showErrorModal:s=>events.push(['modal',s]),
         startCanvasRemotePolling:()=>events.push(['poll',e.canvas.id]),canvasListUrlForProject:id=>id,requestedCanvasListProject:()=> 'default',rememberedCanvasListProject:()=> 'default'});
+    installClassicPreviewRuntime(e,source);
     vm.runInContext(section('async function openCanvas(','function applyRemoteCanvasData('),e);
     return {e,events,requests,listeners,open:id=>e.openCanvas(id)};
 }

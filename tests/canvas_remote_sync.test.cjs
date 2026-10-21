@@ -1,3 +1,4 @@
+const {installClassicPreviewRuntime}=require('./canvas_preview_runtime_test_helpers.cjs');
 const {createTaskContext}=require('./canvas_task_test_helpers.cjs');
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
@@ -169,6 +170,7 @@ for(const kind of ['classic','smart']){
         const begin=source.indexOf("window.addEventListener('pagehide'");assert.ok(begin>=0,'page lifecycle listeners exist');
         const end=source.indexOf(kind==='classic'?'let models =':'function connectAssetLibrarySyncSocket(',begin);
         const e=createTaskContext({window:{addEventListener:(name,fn)=>{listeners[name]=fn;}},canvasOpenGeneration:0,openingCanvasId:'',canvas:{id:'c'},[kind+'RemoteSync']:h.api});
+        if(kind==='classic')installClassicPreviewRuntime(e,source);
         vm.runInContext(source.slice(begin,end),e);
         const pending=h.api.syncNow();listeners.pagehide();gate.resolve(response());await pending;assert.deepEqual(h.events,[]);
         h.setRequest(null);listeners.pageshow({persisted:false});assert.equal(h.polls.length,1);

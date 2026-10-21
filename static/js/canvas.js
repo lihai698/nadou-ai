@@ -50,15 +50,29 @@ function canvasMediaPreviewUrl(url, size=512){
 function canvasPreviewImgHtml(url, size=512, attrs=''){
     return CanvasMediaSources.canvasPreviewImgHtml(classicMediaSourceHost(), url, size, attrs);
 }
+function classicPreviewRuntimeHost(){
+    return {
+        get Image(){return Image;},
+        canvasOriginalMediaUrl:(...args)=>canvasOriginalMediaUrl(...args),
+        get document(){return document;},
+        canvasVideoPlayerHtml:(...args)=>canvasVideoPlayerHtml(...args),
+        canvasVideoFallbackHtml:(...args)=>canvasVideoFallbackHtml(...args),
+        get viewport(){return viewport;},
+        get board(){return board;},
+        get nodesEl(){return nodesEl;},
+        canvasViewportWantsHighRes:(...args)=>canvasViewportWantsHighRes(...args),
+        canvasImageNearViewport:(...args)=>canvasImageNearViewport(...args),
+        canvasDisplayMediaUrl:(...args)=>canvasDisplayMediaUrl(...args),
+        clearTimeout:(...args)=>clearTimeout(...args),
+        canvasImageEditorIsOpen:(...args)=>canvasImageEditorIsOpen(...args),
+        setTimeout:(...args)=>setTimeout(...args),
+        preloadCanvasSelectedHighRes:(...args)=>preloadCanvasSelectedHighRes(...args),
+        syncCanvasSelectedImageResolution:(...args)=>syncCanvasSelectedImageResolution(...args)
+    };
+}
+const classicPreviewRuntime=CanvasPreviewRuntime.create(classicPreviewRuntimeHost());
 function loadCanvasOriginalImageDimensions(url){
-    const src = String(url || '');
-    if(!src || /^data:/i.test(src) || /^blob:/i.test(src)) return Promise.resolve(null);
-    return new Promise(resolve => {
-        const img = new Image();
-        img.onload = () => resolve(img.naturalWidth && img.naturalHeight ? {w:img.naturalWidth, h:img.naturalHeight} : null);
-        img.onerror = () => resolve(null);
-        img.src = src;
-    });
+    return classicPreviewRuntime.loadCanvasOriginalImageDimensions(url);
 }
 function canvasVideoPreviewHtml(url, size=512, attrs=''){
     return CanvasMediaSources.canvasVideoPreviewHtml(classicMediaSourceHost(), url, size, attrs);
@@ -70,136 +84,38 @@ function canvasVideoPlayerHtml(url, attrs=''){
     return CanvasMediaSources.canvasVideoPlayerHtml(classicMediaSourceHost(), url, attrs);
 }
 function canvasActivateVideoPreview(img){
-    if(!img) return false;
-    const target = img.matches?.('img[data-preview-kind="video"]') ? img : img.querySelector?.('img[data-preview-kind="video"]');
-    if(!target) {
-        const fallback = img.matches?.('video[data-url]') ? img : img.querySelector?.('video[data-url]');
-        if(fallback){
-            fallback.controls = true;
-            fallback.muted = false;
-            fallback.play?.().catch(() => {});
-            return true;
-        }
-        return false;
-    }
-    const original = canvasOriginalMediaUrl(target.dataset.originalSrc || target.dataset.url || target.getAttribute('src') || '');
-    if(!original) return false;
-    const tpl = document.createElement('template');
-    tpl.innerHTML = canvasVideoPlayerHtml(original, target.dataset.videoPlayerAttrs || '');
-    const video = tpl.content.firstElementChild;
-    if(!video) return false;
-    target.replaceWith(video);
-    video.parentElement?.querySelector?.('.canvas-video-play')?.style?.setProperty('display', 'none');
-    video.play?.().catch(() => {});
-    return true;
+    return classicPreviewRuntime.canvasActivateVideoPreview(img);
 }
 function isCanvasPreviewImage(img){
-    return img?.tagName?.toLowerCase?.() === 'img'
-        && img.dataset?.previewSrc
-        && img.dataset?.originalSrc
-        && img.dataset.previewSrc !== img.dataset.originalSrc
-        && img.getAttribute('src') !== img.dataset.originalSrc;
+    return classicPreviewRuntime.isCanvasPreviewImage(img);
 }
 function bindCanvasPreviewImageFallbacks(root=document){
-    root.querySelectorAll?.('img[data-preview-src][data-original-src]:not([data-preview-fallback-bound])').forEach(img => {
-        img.dataset.previewFallbackBound = '1';
-        const fallback = () => {
-            if(!img.parentElement) return;
-            const original = img.dataset.originalSrc || img.dataset.url || '';
-            if(img.dataset.previewKind === 'video'){
-                const video = document.createElement('template');
-                video.innerHTML = canvasVideoFallbackHtml(original, img.dataset.videoFallbackAttrs || '');
-                img.replaceWith(video.content.firstElementChild);
-                return;
-            }
-            if(original && img.getAttribute('src') !== original) img.src = original;
-        };
-        img.addEventListener('error', fallback);
-        // 动态输入列表可能在绑定前就收到预览接口的错误响应。
-        if(img.complete && !img.naturalWidth) fallback();
-    });
+    return classicPreviewRuntime.bindCanvasPreviewImageFallbacks(root);
 }
-const CANVAS_SELECTED_HIGH_RES_DELAY = 320;
-const CANVAS_HIGH_RES_ZOOM_THRESHOLD = 0.86;
-let canvasSelectedHighResTimer = 0;
-let canvasSelectedHighResSeq = 0;
-let canvasImageResolutionSyncTimer = 0;
-const canvasSelectedHighResLoaded = new Set();
-const canvasSelectedHighResLoading = new Map();
+
+
+
+
+
+
+
 function canvasImageEditorIsOpen(){
-    return Boolean(document.getElementById('imageEditModal')?.classList.contains('open'));
+    return classicPreviewRuntime.canvasImageEditorIsOpen();
 }
 function preloadCanvasSelectedHighRes(src){
-    if(!src || canvasSelectedHighResLoaded.has(src)) return Promise.resolve(true);
-    if(canvasSelectedHighResLoading.has(src)) return canvasSelectedHighResLoading.get(src);
-    const task = new Promise(resolve => {
-        const img = new Image();
-        img.decoding = 'async';
-        img.onload = async () => {
-            try { if(img.decode) await img.decode(); } catch(e) {}
-            canvasSelectedHighResLoaded.add(src);
-            resolve(true);
-        };
-        img.onerror = () => resolve(false);
-        img.src = src;
-    }).finally(() => canvasSelectedHighResLoading.delete(src));
-    canvasSelectedHighResLoading.set(src, task);
-    return task;
+    return classicPreviewRuntime.preloadCanvasSelectedHighRes(src);
 }
 function canvasViewportWantsHighRes(){
-    return Number(viewport?.scale || 1) >= CANVAS_HIGH_RES_ZOOM_THRESHOLD;
+    return classicPreviewRuntime.canvasViewportWantsHighRes();
 }
 function canvasImageNearViewport(img){
-    if(!img?.isConnected || !board) return false;
-    const boardRect = board.getBoundingClientRect();
-    const rect = img.getBoundingClientRect();
-    const margin = 220;
-    return rect.right >= boardRect.left - margin && rect.left <= boardRect.right + margin
-        && rect.bottom >= boardRect.top - margin && rect.top <= boardRect.bottom + margin;
+    return classicPreviewRuntime.canvasImageNearViewport(img);
 }
 function syncCanvasSelectedImageResolution(root=nodesEl){
-    const selectedImages = [];
-    const wantHighRes = canvasViewportWantsHighRes();
-    root.querySelectorAll?.('.node img[data-preview-src][data-original-src]').forEach(img => {
-        if(img.dataset.previewKind === 'video') return;
-        const preview = img.dataset.previewSrc || '';
-        const original = img.dataset.originalSrc || img.dataset.url || '';
-        if(!wantHighRes || !canvasImageNearViewport(img)){
-            delete img.dataset.selectedHighResTarget;
-            if(preview && img.getAttribute('src') !== preview) img.src = preview;
-            return;
-        }
-        const target = canvasDisplayMediaUrl(original);
-        if(!target) return;
-        img.dataset.selectedHighResTarget = target;
-        if(canvasSelectedHighResLoaded.has(target)){
-            if(img.getAttribute('src') !== target) img.src = target;
-            return;
-        }
-        if(preview && img.getAttribute('src') !== preview) img.src = preview;
-        selectedImages.push({img, target});
-    });
-    if(canvasSelectedHighResTimer) clearTimeout(canvasSelectedHighResTimer);
-    const seq = ++canvasSelectedHighResSeq;
-    if(!selectedImages.length || canvasImageEditorIsOpen()) return;
-    canvasSelectedHighResTimer = setTimeout(async () => {
-        canvasSelectedHighResTimer = 0;
-        if(seq !== canvasSelectedHighResSeq || canvasImageEditorIsOpen()) return;
-        await Promise.all(selectedImages.map(item => preloadCanvasSelectedHighRes(item.target)));
-        if(seq !== canvasSelectedHighResSeq || canvasImageEditorIsOpen()) return;
-        selectedImages.forEach(({img, target}) => {
-            if(!img.isConnected || img.dataset.selectedHighResTarget !== target) return;
-            if(!canvasViewportWantsHighRes() || !canvasImageNearViewport(img)) return;
-            if(canvasSelectedHighResLoaded.has(target) && img.getAttribute('src') !== target) img.src = target;
-        });
-    }, CANVAS_SELECTED_HIGH_RES_DELAY);
+    return classicPreviewRuntime.syncCanvasSelectedImageResolution(root);
 }
 function scheduleCanvasImageResolutionSync(root=nodesEl, delay=120){
-    if(canvasImageResolutionSyncTimer) clearTimeout(canvasImageResolutionSyncTimer);
-    canvasImageResolutionSyncTimer = setTimeout(() => {
-        canvasImageResolutionSyncTimer = 0;
-        syncCanvasSelectedImageResolution(root);
-    }, Math.max(0, Number(delay) || 0));
+    return classicPreviewRuntime.scheduleCanvasImageResolutionSync(root, delay);
 }
 function applyLanguage(lang){
     if(lang && window.StudioI18n) StudioI18n.set(lang);
@@ -439,6 +355,7 @@ const classicRemoteSync = CanvasRemoteSync.createClassic({
 let lastCanvasUpdatedAt = 0;
 window.addEventListener('pagehide',()=>{
     classicTextSelection.suspend();
+    classicPreviewRuntime.suspend();
     classicLegacyGateBindings.suspend();
     canvasOpenGeneration++;
     classicRemoteSync.stop();
@@ -446,6 +363,7 @@ window.addEventListener('pagehide',()=>{
 window.addEventListener('pageshow',event=>{
     if(event.persisted){
         classicTextSelection.resume();
+        scheduleCanvasImageResolutionSync(nodesEl,0);
         classicLegacyGateBindings.resume();
     }
     if(event.persisted && openingCanvasId){

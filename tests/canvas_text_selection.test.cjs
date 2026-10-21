@@ -1,3 +1,4 @@
+const {installClassicPreviewRuntime}=require('./canvas_preview_runtime_test_helpers.cjs');
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const {readFileSync}=require('node:fs');
@@ -82,6 +83,7 @@ for(const kind of ['classic','smart']){
         const source=readFileSync(path.join(__dirname,`../static/js/${kind==='classic'?'canvas':'smart-canvas'}.js`),'utf8');
         const start=source.indexOf("window.addEventListener('pagehide'");
         const end=source.indexOf(kind==='classic'?'let models =':'function connectAssetLibrarySyncSocket(',start);
+        if(kind==='classic')installClassicPreviewRuntime(e,source);
         vm.runInContext(source.slice(start,end),e);bind(el);
         listeners.pagehide();assert.equal(el.count('mousedown'),0);
         listeners.pageshow({persisted:true});listeners.pageshow({persisted:true});
