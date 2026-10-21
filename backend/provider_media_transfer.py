@@ -510,3 +510,22 @@ def fetch_remote_media_bytes(url: str, timeout: float = 30.0, max_bytes: int = 2
                 raise HTTPException(status_code=413, detail="文件太大，无法下载")
             chunks.append(chunk)
         return b"".join(chunks), content_type
+
+
+def valid_video_image_input(value: str):
+    if not isinstance(value, str):
+        return False
+    value = value.strip()
+    return (
+        value.startswith("http://") or
+        value.startswith("https://") or
+        value.startswith("asset://") or
+        (value.startswith("data:image/") and ";base64," in value)
+    )
+
+
+def valid_apimart_video_image_input(value: str):
+    if not isinstance(value, str):
+        return False
+    value = value.strip()
+    return value.startswith("http://") or value.startswith("https://") or value.startswith("asset://")

@@ -180,3 +180,9 @@ def normalize_volcengine_size(size, model="", *, parse_size_pair, is_volcengine_
             break
     return f"{snapped_w}x{snapped_h}"
 
+
+def modelscope_size(value, fallback='1024x1024', *, re, HTTPException):
+    size = str(value or fallback).strip().lower().replace("*", "x")
+    if re.fullmatch(r"\d{2,5}x\d{2,5}", size):
+        return size
+    raise HTTPException(status_code=400, detail=f"ModelScope size 格式不正确：{value or fallback}，应为 WxH，例如 1024x1024")

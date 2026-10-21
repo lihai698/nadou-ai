@@ -464,3 +464,12 @@ async def query_runninghub_video_task_once(provider, remote_task_id, *, HTTPExce
         )
 
 
+def video_api_root(provider, *, AI_BASE_URL, is_volcengine_provider):
+    base_url = (provider.get("base_url") or AI_BASE_URL).rstrip("/")
+    if is_volcengine_provider(provider):
+        if base_url.endswith("/api/v3"):
+            base_url = base_url[: -len("/api/v3")]
+        return base_url
+    if base_url.endswith("/v1") or base_url.endswith("/v2"):
+        base_url = base_url.rsplit("/", 1)[0]
+    return base_url

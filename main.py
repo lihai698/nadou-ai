@@ -35,6 +35,7 @@ from backend import runninghub_model_registry_service
 from backend import prompt_library_service
 from backend import image_provider_service
 from backend import image_size_rules
+from backend import provider_protocols
 from backend import tudou_provider_service
 from backend import midjourney_service
 from backend import video_provider_service
@@ -2520,34 +2521,13 @@ def api_headers(json_body=True, provider=None, model=""):
     return headers
 
 def looks_like_vision_chat_model(model):
-    lc = str(model or "").strip().lower()
-    if not lc:
-        return False
-    vision_keys = [
-        "vision", "vl-", "-vl-", "internvl", "qvq", "qwen-vl",
-        "doubao-vision", "glm-4v", "minicpm-v",
-    ]
-    return any(key in lc for key in vision_keys)
+    return provider_protocols.looks_like_vision_chat_model(model)
 
 def preferred_chat_model(provider):
-    values = [str(item or "").strip() for item in (provider.get("chat_models") or [CHAT_MODEL])]
-    models = [item for item in values if item]
-    if not models:
-        return CHAT_MODEL
-    if is_volcengine_provider(provider):
-        endpoint_models = [item for item in models if item.lower().startswith("ep-")]
-        if endpoint_models:
-            return endpoint_models[0]
-        text_like_models = [item for item in models if not looks_like_vision_chat_model(item)]
-        if text_like_models:
-            return text_like_models[0]
-    return models[0]
+    return provider_protocols.preferred_chat_model(provider, CHAT_MODEL=CHAT_MODEL, is_volcengine_provider=is_volcengine_provider, looks_like_vision_chat_model=looks_like_vision_chat_model)
 
 def modelscope_size(value, fallback="1024x1024"):
-    size = str(value or fallback).strip().lower().replace("*", "x")
-    if re.fullmatch(r"\d{2,5}x\d{2,5}", size):
-        return size
-    raise HTTPException(status_code=400, detail=f"ModelScope size 格式不正确：{value or fallback}，应为 WxH，例如 1024x1024")
+    return image_size_rules.modelscope_size(value, fallback, re=re, HTTPException=HTTPException)
 
 def unwrap_apimart_response(raw):
     return upstream_response_codec.unwrap_apimart_response(raw)
@@ -2629,40 +2609,25 @@ async def post_openai_responses_stream(client, url, headers, body):
     return await responses_service.post_openai_responses_stream(client, url, headers, body, HTTPException=HTTPException, _responses_wrap=_responses_wrap, extract_images=extract_images, image_payload_from_string=image_payload_from_string, write_diagnostic=write_diagnostic)
 
 def is_apimart_provider(provider):
-    base_url = str((provider or {}).get("base_url") or "").lower()
-    return provider_protocol(provider) == "apimart" or "apimart.ai" in base_url
+    return provider_protocols.is_apimart_provider(provider, provider_protocol=provider_protocol)
 
 def detect_image_request_mode(base_url="", models=None):
-    base = str(base_url or "").strip().lower()
-    if "apihub.agnes-ai.com" in base:
-        return "openai-json"
-    for model in models or []:
-        if str(model or "").strip().lower().startswith("agnes-image-"):
-            return "openai-json"
-    return ""
+    return provider_protocols.detect_image_request_mode(base_url, models)
 
 def effective_image_request_mode(provider, model=""):
-    detected = detect_image_request_mode((provider or {}).get("base_url"), [model])
-    if detected:
-        return detected
-    return normalize_image_request_mode((provider or {}).get("image_request_mode"))
+    return provider_protocols.effective_image_request_mode(provider, model, detect_image_request_mode=detect_image_request_mode, normalize_image_request_mode=normalize_image_request_mode)
 
 def is_gemini_provider(provider):
-    return provider_protocol(provider) == "gemini"
+    return provider_protocols.is_gemini_provider(provider, provider_protocol=provider_protocol)
 
 def is_tudou_provider(provider):
-    if not isinstance(provider, dict):
-        return False
-    return str(provider.get("id") or "").strip().lower() == "tudou" or is_tudou_base_url(provider.get("base_url") or "")
+    return provider_protocols.is_tudou_provider(provider, is_tudou_base_url=is_tudou_base_url)
 
 def is_tudou_async_image_mode(provider, model=""):
-    return (
-        normalize_image_request_mode((provider or {}).get("image_request_mode")) == "tudou-async"
-        and (not model or is_tudou_async_image_model(model))
-    )
+    return provider_protocols.is_tudou_async_image_mode(provider, model, normalize_image_request_mode=normalize_image_request_mode, is_tudou_async_image_model=is_tudou_async_image_model)
 
 def is_tudou_async_image_model(model):
-    return str(model or "").strip().lower().startswith("gpt-image-2")
+    return provider_protocols.is_tudou_async_image_model(model)
 
 def tudou_image_model_for_request(model):
     return tudou_provider_service.tudou_image_model_for_request(model)
@@ -2683,25 +2648,25 @@ async def generate_tudou_async_image(prompt, size, quality, model, reference_ima
     return await tudou_provider_service.generate_tudou_async_image(prompt, size, quality, model, reference_images, provider, aspect_ratio, resolution, on_remote_accept, HTTPException=HTTPException, api_headers=api_headers, extract_image=extract_image, extract_task_id=extract_task_id, httpx=httpx, provider_endpoint_url=provider_endpoint_url, tudou_async_reference_images=tudou_async_reference_images, tudou_async_resolution=tudou_async_resolution, tudou_async_size=tudou_async_size, upstream_error_summary=upstream_error_summary, upstream_response_error_summary=upstream_response_error_summary, wait_for_image_task=wait_for_image_task)
 
 def is_tudou_grok_image_model(model):
-    return str(model or "").strip().lower().startswith("grok-imagine-image")
+    return provider_protocols.is_tudou_grok_image_model(model)
 
 def is_tudou_grok_video_model(model):
-    return str(model or "").strip().lower().startswith("grok-imagine-video")
+    return provider_protocols.is_tudou_grok_video_model(model)
 
 def is_volcengine_provider(provider):
-    return provider_protocol(provider) == "volcengine"
+    return provider_protocols.is_volcengine_provider(provider, provider_protocol=provider_protocol)
 
 def is_runninghub_provider(provider):
-    return provider_protocol(provider) == "runninghub" or str((provider or {}).get("id") or "").strip().lower() == "runninghub"
+    return provider_protocols.is_runninghub_provider(provider, provider_protocol=provider_protocol)
 
 def is_jimeng_provider(provider):
-    return provider_protocol(provider) == "jimeng" or str((provider or {}).get("id") or "").strip().lower() == "jimeng"
+    return provider_protocols.is_jimeng_provider(provider, provider_protocol=provider_protocol)
 
 def is_codex_provider(provider):
-    return provider_protocol(provider) == "codex"
+    return provider_protocols.is_codex_provider(provider, provider_protocol=provider_protocol)
 
 def is_gemini_cli_provider(provider):
-    return provider_protocol(provider) == "gemini-cli"
+    return provider_protocols.is_gemini_cli_provider(provider, provider_protocol=provider_protocol)
 
 def codex_env_value(key):
     return os.getenv(key, "") or read_api_env_value(key)
@@ -2915,18 +2880,13 @@ async def gemini_cli_chat_text(payload, history_messages=None):
 def is_yuli_provider(provider):
     # 玉玉API（yuli.host）的视频接口走自有格式（/v1/video/create + /v1/video/query），
     # 与通用 OpenAI /v1/videos/generations 不同，需单独识别。
-    base_url = str((provider or {}).get("base_url") or "").lower()
-    return "yuli.host" in base_url
+    return provider_protocols.is_yuli_provider(provider)
 
 def is_lingjing_provider(provider):
-    base_url = str((provider or {}).get("base_url") or "").lower()
-    provider_id = str((provider or {}).get("id") or "").strip().lower()
-    return provider_id == "lingjing" or "apistudio.vip" in base_url
+    return provider_protocols.is_lingjing_provider(provider)
 
 def is_agnes_provider(provider, model=""):
-    base_url = str((provider or {}).get("base_url") or "").lower()
-    model_id = str(model or "").strip().lower()
-    return "apihub.agnes-ai.com" in base_url or model_id.startswith("agnes-video-")
+    return provider_protocols.is_agnes_provider(provider, model)
 
 # ---- 数字人/真人认证：平台无关分发 ----
 # 认证是一个跨平台功能。每个平台用不同的资产 API 实现，但对外是统一入口。
@@ -2935,16 +2895,10 @@ def is_agnes_provider(provider, model=""):
 AVATAR_SUPPORTED_PLATFORMS = {"apimart", "volcengine"}  # 已接入官方资产 API 的平台
 
 def avatar_platform_for_provider(provider) -> str:
-    if not provider:
-        return ""
-    if is_apimart_provider(provider):
-        return "apimart"
-    if is_volcengine_provider(provider):
-        return "volcengine"
-    return ""
+    return provider_protocols.avatar_platform_for_provider(provider, is_apimart_provider=is_apimart_provider, is_volcengine_provider=is_volcengine_provider)
 
 def provider_supports_avatar(provider) -> bool:
-    return avatar_platform_for_provider(provider) in AVATAR_SUPPORTED_PLATFORMS
+    return provider_protocols.provider_supports_avatar(provider, avatar_platform_for_provider=avatar_platform_for_provider, AVATAR_SUPPORTED_PLATFORMS=AVATAR_SUPPORTED_PLATFORMS)
 
 def jimeng_env_value(key):
     return os.getenv(key, "") or read_api_env_value(key)
@@ -3822,39 +3776,16 @@ def looks_like_image_media_url(value: str) -> bool:
     return media_reference_service.looks_like_image_media_url(value, urllib=urllib)
 
 def volcengine_content_role(role: str, kind: str = "image") -> Optional[str]:
-    value = str(role or "").strip().lower()
-    allowed = {
-        "first_frame", "last_frame", "reference_image",
-        "reference_video", "reference_audio", "video", "audio", "image"
-    }
-    if value in allowed:
-        if value == "audio" and kind == "audio":
-            return "reference_audio"
-        return "reference_video" if value == "video" and kind == "video" else value
-    if kind == "audio":
-        return "reference_audio"
-    if kind == "video":
-        return "reference_video"
-    # 修复：未显式指定 role 的纯生图请求不应兜底为 reference_image，
-    # 否则火山后端会误判为 r2v(参考图生视频)，导致 seedance/seedream 等生图模型失败。
-    return None
+    return video_request_service.volcengine_content_role(role, kind)
 
 def volcengine_video_duration(duration) -> int:
-    try:
-        value = int(duration)
-    except Exception:
-        value = 5
-    return max(1, min(60, value))
+    return video_request_service.volcengine_video_duration(duration)
 
 def volcengine_video_resolution(value: str) -> str:
-    text = str(value or "").strip().lower()
-    aliases = {"": "", "auto": "", "480": "480p", "720": "720p", "1080": "1080p"}
-    text = aliases.get(text, text)
-    return text if text in {"480p", "720p", "1080p"} else ""
+    return video_request_service.volcengine_video_resolution(value)
 
 def is_volcengine_seedance2_model(model: str) -> bool:
-    value = str(model or "").strip().lower().replace("_", "-").replace(".", "-")
-    return "seedance-2-0" in value
+    return video_request_service.is_volcengine_seedance2_model(model)
 
 def probe_local_audio_duration_seconds(value: str) -> Optional[float]:
     return media_reference_service.probe_local_audio_duration_seconds(value, math=math, output_file_from_url=output_file_from_url, shutil=shutil, subprocess=subprocess)
@@ -3872,37 +3803,13 @@ def modelscope_image_url(value, max_size=1536):
     return media_reference_service.modelscope_image_url(value, max_size, reference_to_data_url=reference_to_data_url)
 
 def valid_video_image_input(value: str) -> bool:
-    if not isinstance(value, str):
-        return False
-    value = value.strip()
-    return (
-        value.startswith("http://") or
-        value.startswith("https://") or
-        value.startswith("asset://") or
-        (value.startswith("data:image/") and ";base64," in value)
-    )
+    return provider_media_transfer.valid_video_image_input(value)
 
 def valid_apimart_video_image_input(value: str) -> bool:
-    if not isinstance(value, str):
-        return False
-    value = value.strip()
-    return value.startswith("http://") or value.startswith("https://") or value.startswith("asset://")
+    return provider_media_transfer.valid_apimart_video_image_input(value)
 
 def apply_trusted_asset_prompt_index(prompt: str, image_count: int, video_count: int, audio_count: int) -> str:
-    """可信素材模式下，按平台规则在 prompt 里补「图片N/视频N/音频N」索引。
-    若用户已手动引用了某类素材（如已写「图片1」），则不重复追加该类。"""
-    text = str(prompt or "").strip()
-    segments = []
-    for label, count in (("图片", image_count), ("视频", video_count), ("音频", audio_count)):
-        if count <= 0:
-            continue
-        if any(f"{label}{i}" in text for i in range(1, count + 1)):
-            continue
-        segments.append("、".join(f"{label}{i}" for i in range(1, count + 1)))
-    if not segments:
-        return text
-    hint = "参考素材：" + "，".join(segments) + "。"
-    return f"{text}\n{hint}" if text else hint
+    return video_request_service.apply_trusted_asset_prompt_index(prompt, image_count, video_count, audio_count)
 
 def public_base_url() -> str:
     # 实时读 API/.env 且文件优先：公网隧道重启后地址会变，隧道脚本只改 .env；
@@ -3940,44 +3847,22 @@ def apimart_video_reference_error(value: str) -> str:
     return provider_media_transfer.apimart_video_reference_error(value, output_file_from_url=output_file_from_url)
 
 def apimart_video_duration(duration) -> int:
-    try:
-        value = int(duration)
-    except Exception:
-        value = 5
-    return max(4, min(15, value))
+    return video_request_service.apimart_video_duration(duration)
 
 def apimart_veo31_duration(duration) -> int:
-    try:
-        value = int(duration)
-    except Exception:
-        value = 8
-    # APIMart VEO 3.1 currently accepts a narrower duration window than
-    # the generic UI. Clamp instead of silently forcing every request to 8s.
-    return max(4, min(8, value))
+    return video_request_service.apimart_veo31_duration(duration)
 
 def is_apimart_veo31_model(model: str) -> bool:
-    return str(model or "").strip().lower().startswith("veo3.1")
+    return video_request_service.is_apimart_veo31_model(model)
 
 def apimart_veo31_model(model: str) -> str:
-    value = str(model or "").strip().lower()
-    aliases = {
-        "veo3.1": "veo3.1-fast",
-        "veo3.1-pro": "veo3.1-quality",
-        "veo3.1-preview": "veo3.1-fast",
-    }
-    value = aliases.get(value, value or "veo3.1-fast")
-    allowed = {"veo3.1-fast", "veo3.1-quality", "veo3.1-lite"}
-    return value if value in allowed else "veo3.1-fast"
+    return video_request_service.apimart_veo31_model(model)
 
 def apimart_veo31_aspect(aspect: str) -> str:
-    value = str(aspect or "16:9").strip()
-    return value if value in {"16:9", "9:16"} else "16:9"
+    return video_request_service.apimart_veo31_aspect(aspect)
 
 def apimart_veo31_resolution(resolution: str) -> str:
-    value = str(resolution or "").strip().lower()
-    aliases = {"": "720p", "auto": "720p", "480p": "720p", "780p": "720p", "1080": "1080p", "4k": "4k"}
-    value = aliases.get(value, value)
-    return value if value in {"720p", "1080p", "4k"} else "720p"
+    return video_request_service.apimart_veo31_resolution(resolution)
 
 def apimart_upload_file_payload(path: str):
     return provider_media_transfer.apimart_upload_file_payload(path, BytesIO=BytesIO, Image=Image, content_type_for_path=content_type_for_path)
@@ -5563,14 +5448,7 @@ def video_output_urls(raw):
     return video_result_service.video_output_urls(raw)
 
 def video_api_root(provider):
-    base_url = (provider.get("base_url") or AI_BASE_URL).rstrip("/")
-    if is_volcengine_provider(provider):
-        if base_url.endswith("/api/v3"):
-            base_url = base_url[: -len("/api/v3")]
-        return base_url
-    if base_url.endswith("/v1") or base_url.endswith("/v2"):
-        base_url = base_url.rsplit("/", 1)[0]
-    return base_url
+    return video_provider_service.video_api_root(provider, AI_BASE_URL=AI_BASE_URL, is_volcengine_provider=is_volcengine_provider)
 
 def looks_like_html_response(text: str) -> bool:
     sample = str(text or "").lstrip()[:200].lower()
@@ -5602,11 +5480,7 @@ async def wait_for_video_task(client, provider, task_id, submit_url=""):
     return await video_provider_service.wait_for_video_task(client, provider, task_id, submit_url, HTTPException=HTTPException, IMAGE_POLL_INTERVAL=IMAGE_POLL_INTERVAL, VIDEO_POLL_TIMEOUT=VIDEO_POLL_TIMEOUT, VIDEO_TASK_FAILURE_STATUSES=VIDEO_TASK_FAILURE_STATUSES, VIDEO_TASK_SUCCESS_STATUSES=VIDEO_TASK_SUCCESS_STATUSES, _notify_canvas_video_remote_accept=_notify_canvas_video_remote_accept, api_headers=api_headers, humanize_video_task_failure=humanize_video_task_failure, upstream_error_summary=upstream_error_summary, video_api_root=video_api_root, video_output_urls=video_output_urls, video_task_url_candidates=video_task_url_candidates)
 
 def apimart_video_size(size):
-    value = str(size or "16:9").strip()
-    if value == "keep_ratio":
-        return "adaptive"
-    allowed = {"16:9", "9:16", "1:1", "4:3", "3:4", "21:9", "adaptive"}
-    return value if value in allowed else "16:9"
+    return video_request_service.apimart_video_size(size)
 
 def agnes_video_dimensions(aspect_ratio="", resolution=""):
     return agnes_video_service.agnes_video_dimensions(aspect_ratio, resolution)
@@ -5723,15 +5597,7 @@ async def generate_tudou_grok_video(client, payload, provider, base_url, request
     return await tudou_provider_service.generate_tudou_grok_video(client, payload, provider, base_url, requested_model, HTTPException=HTTPException, api_headers=api_headers, download_tudou_grok_video_content=download_tudou_grok_video_content, extract_task_id=extract_task_id, save_remote_video_to_output=save_remote_video_to_output, selected_model=selected_model, tudou_grok_video_part=tudou_grok_video_part, tudou_grok_video_seconds=tudou_grok_video_seconds, tudou_grok_video_size=tudou_grok_video_size, upstream_error_summary=upstream_error_summary, video_output_urls=video_output_urls, wait_for_video_task=wait_for_video_task)
 
 def volcengine_video_prompt_text(prompt, aspect_ratio="", duration=None):
-    text = str(prompt or "").strip()
-    suffixes = []
-    ratio = str(aspect_ratio or "").strip()
-    if ratio:
-        suffixes.append(f"--ratio {ratio}")
-    if not suffixes:
-        return text
-    suffix_text = " ".join(suffixes)
-    return f"{text} {suffix_text}".strip() if text else suffix_text
+    return video_request_service.volcengine_video_prompt_text(prompt, aspect_ratio, duration)
 
 CANVAS_VIDEO_TASK_LOCK = RLock()
 CANVAS_VIDEO_TASK_PROCESS_ID = uuid.uuid4().hex

@@ -286,3 +286,125 @@ async def build_native_video_body(payload, is_volcengine, volc_is_proxy, is_yuli
         if payload.generate_audio:
             body["generate_audio"] = True
     return body
+
+
+def volcengine_content_role(role: str, kind: str='image'):
+    value = str(role or "").strip().lower()
+    allowed = {
+        "first_frame", "last_frame", "reference_image",
+        "reference_video", "reference_audio", "video", "audio", "image"
+    }
+    if value in allowed:
+        if value == "audio" and kind == "audio":
+            return "reference_audio"
+        return "reference_video" if value == "video" and kind == "video" else value
+    if kind == "audio":
+        return "reference_audio"
+    if kind == "video":
+        return "reference_video"
+    # 修复：未显式指定 role 的纯生图请求不应兜底为 reference_image，
+    # 否则火山后端会误判为 r2v(参考图生视频)，导致 seedance/seedream 等生图模型失败。
+    return None
+
+
+def volcengine_video_duration(duration):
+    try:
+        value = int(duration)
+    except Exception:
+        value = 5
+    return max(1, min(60, value))
+
+
+def volcengine_video_resolution(value: str):
+    text = str(value or "").strip().lower()
+    aliases = {"": "", "auto": "", "480": "480p", "720": "720p", "1080": "1080p"}
+    text = aliases.get(text, text)
+    return text if text in {"480p", "720p", "1080p"} else ""
+
+
+def is_volcengine_seedance2_model(model: str):
+    value = str(model or "").strip().lower().replace("_", "-").replace(".", "-")
+    return "seedance-2-0" in value
+
+
+def apply_trusted_asset_prompt_index(prompt: str, image_count: int, video_count: int, audio_count: int):
+    """可信素材模式下，按平台规则在 prompt 里补「图片N/视频N/音频N」索引。
+    若用户已手动引用了某类素材（如已写「图片1」），则不重复追加该类。"""
+    text = str(prompt or "").strip()
+    segments = []
+    for label, count in (("图片", image_count), ("视频", video_count), ("音频", audio_count)):
+        if count <= 0:
+            continue
+        if any(f"{label}{i}" in text for i in range(1, count + 1)):
+            continue
+        segments.append("、".join(f"{label}{i}" for i in range(1, count + 1)))
+    if not segments:
+        return text
+    hint = "参考素材：" + "，".join(segments) + "。"
+    return f"{text}\n{hint}" if text else hint
+
+
+def apimart_video_duration(duration):
+    try:
+        value = int(duration)
+    except Exception:
+        value = 5
+    return max(4, min(15, value))
+
+
+def apimart_veo31_duration(duration):
+    try:
+        value = int(duration)
+    except Exception:
+        value = 8
+    # APIMart VEO 3.1 currently accepts a narrower duration window than
+    # the generic UI. Clamp instead of silently forcing every request to 8s.
+    return max(4, min(8, value))
+
+
+def is_apimart_veo31_model(model: str):
+    return str(model or "").strip().lower().startswith("veo3.1")
+
+
+def apimart_veo31_model(model: str):
+    value = str(model or "").strip().lower()
+    aliases = {
+        "veo3.1": "veo3.1-fast",
+        "veo3.1-pro": "veo3.1-quality",
+        "veo3.1-preview": "veo3.1-fast",
+    }
+    value = aliases.get(value, value or "veo3.1-fast")
+    allowed = {"veo3.1-fast", "veo3.1-quality", "veo3.1-lite"}
+    return value if value in allowed else "veo3.1-fast"
+
+
+def apimart_veo31_aspect(aspect: str):
+    value = str(aspect or "16:9").strip()
+    return value if value in {"16:9", "9:16"} else "16:9"
+
+
+def apimart_veo31_resolution(resolution: str):
+    value = str(resolution or "").strip().lower()
+    aliases = {"": "720p", "auto": "720p", "480p": "720p", "780p": "720p", "1080": "1080p", "4k": "4k"}
+    value = aliases.get(value, value)
+    return value if value in {"720p", "1080p", "4k"} else "720p"
+
+
+def apimart_video_size(size):
+    value = str(size or "16:9").strip()
+    if value == "keep_ratio":
+        return "adaptive"
+    allowed = {"16:9", "9:16", "1:1", "4:3", "3:4", "21:9", "adaptive"}
+    return value if value in allowed else "16:9"
+
+
+def volcengine_video_prompt_text(prompt, aspect_ratio='', duration=None):
+    text = str(prompt or "").strip()
+    suffixes = []
+    ratio = str(aspect_ratio or "").strip()
+    if ratio:
+        suffixes.append(f"--ratio {ratio}")
+    if not suffixes:
+        return text
+    suffix_text = " ".join(suffixes)
+    return f"{text} {suffix_text}".strip() if text else suffix_text
