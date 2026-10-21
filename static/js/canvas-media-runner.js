@@ -14,6 +14,11 @@
             }
             try{return await deps.runCanvasApiAudio(gen,opts);}catch(error){if(opts.cascade)throw error;deps.showErrorModal(error.message,'音频处理失败');return;}
         }
+        if(gen.shotTableOrigin&&!opts.acceptedTask&&(!gen.apiProvider||!gen.model)){
+            const error=new Error('请先在节点工具栏选择生图平台和模型');error.submissionKnownRejected=true;
+            if(opts.assistantNativeActionId||opts.cascade)throw error;
+            deps.showErrorModal(error.message,'镜头节点尚未配置');return;
+        }
         const cascadeTargetId = deps.cascadeTargetIdFromOptions(opts);
         const compiledNode = opts.assistantNativeActionId ? {...gen,inputs:[...(gen.inputs||[])]} : gen;
         const sources = deps.orderedSources(compiledNode, deps.generatorSources(gen));
@@ -132,6 +137,12 @@
     async function runVideoNode(deps, nodeId, opts={}){
         const node = deps.nodes.find(n => n.id === nodeId);
         if(!node || (node.running && !opts.cascade)) return;
+        if(node.shotTableOrigin?.inlineOutput&&node._pending?.length){deps.showErrorModal('本镜视频还有原任务，请先查询原任务，避免重复提交');return;}
+        if(node.shotTableOrigin&&(!node.apiProvider||!node.model)){deps.showErrorModal('请先在节点工具栏选择视频平台和模型');return;}
+        if(node.shotTableOrigin?.stage==='video'){
+            const image=deps.nodes.find(n=>n.id===node.shotTableOrigin.imageNodeId);
+            if(image&&(image.running||image.pending||image.pendingTasks?.length||image.submissionUnknown||image._pending?.some(p=>!p.failed))){deps.showErrorModal('本镜画面正在生成，请完成后再运行视频节点');return;}
+        }
         const cascadeTargetId = deps.cascadeTargetIdFromOptions(opts);
         const sources = deps.orderedSources(node, deps.generatorSources(node));
         const prompt = sources.map(s => s.prompt).filter(Boolean).join('\n\n');
@@ -140,6 +151,7 @@
         const refs = deps.imageRefsOnly(mediaRefs);
         const videoRefs = deps.videoRefsOnly(mediaRefs);
         const audioRefs = deps.audioRefsOnly(mediaRefs);
+        if(node.shotTableOrigin?.stage==='video'&&!refs.length){deps.showErrorModal('请先生成并连接本镜画面，再运行视频节点');return;}
         if(node.useFrameRoles && refs[0]) refs[0] = {...refs[0], role:'first_frame'};
         if(node.useFrameRoles && refs[1]) refs[1] = {...refs[1], role:'last_frame'};
         if(!prompt){ deps.alert(deps.tr('canvas.videoNeedsPrompt')); return; }
@@ -150,6 +162,7 @@
             if(!deps.nodes.includes(node)||deps.canvas?.id!==opts.assistantCanvasId||!originalOut||!deps.nodes.includes(originalOut)||originalOut.type!=='output'||!deps.connections.some(c=>c.from===node.id&&c.to===originalOut.id)||node.outputEnabled!==true||!provider||(provider.video_models||[]).indexOf(node.model)<0||!opts.assistantRunInputHash||opts.assistantMaxCalls!==1)throw new Error('原视频模型、画布或输出连接已变化，请重新读取；请求未提交');
         };
         let out = assistant?originalOut:deps.outputForNode(node, 460);
+        if(!out&&node.shotTableOrigin?.inlineOutput)out=node;
         const stillAttached=()=>deps.nodes.includes(node) && (!out || deps.nodes.includes(out));
         const pendingId = deps.uid('p');
         const run = deps.runSnapshot(node, prompt, refs);

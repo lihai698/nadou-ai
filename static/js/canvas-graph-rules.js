@@ -158,6 +158,7 @@
     function validStoryConnection(deps, c){
         const from = deps.nodes.find(n => n.id === c.from), to = deps.nodes.find(n => n.id === c.to);
         if(!from || !to || from.id === to.id) return false;
+        if(from.type==='shot-table'&&['prompt','generator'].includes(to.type)&&Object.values(from.shotTableData?.generationMap||{}).some(v=>(v.promptId===to.id&&!v.promptProcessorId)||v.video?.promptId===to.id))return true;
         const tableId = from.type === 'shot-table' ? from.id : to.type === 'shot-table' ? to.id : to.storyWorkflowOrigin?.tableId || from.storyWorkflowOrigin?.tableId;
         const table = deps.nodes.find(n => n.id === tableId && n.type === 'shot-table');
         if(!table?.shotTableData?.productionData) return false;

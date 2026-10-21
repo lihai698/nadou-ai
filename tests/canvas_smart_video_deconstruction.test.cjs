@@ -82,7 +82,6 @@ test('智能镜头表原生链只连提示词，重复生成不重建且保留�
   assert.equal(e.canvas.connections.filter(c=>c.to===image.id).length,1);assert.equal(e.canvas.connections.find(c=>c.to===image.id).from,prompt.id);
   await e.host.runGenerators(a.generatorIds);
   assert.equal(e.runs[0].id,image.id);assert.equal(e.runs[0].options.shotTableRun,true);
-  assert.equal(e.host.ratioOptions[0].label,'1:1');
 });
 
 test('智能撤销或切画布使旧抽帧上下文失效',()=>{

@@ -219,7 +219,7 @@
     function resumeCanvasImageTasks(deps){
         deps.resumeCanvasDepthCaptureTasks();
         deps.nodes.filter(n => n._directPending?.length).forEach(node => deps.materializeCanvasDirectTasks(node, node._directPending));
-        deps.nodes.filter(n => n.type === 'output').forEach(out => {
+        deps.nodes.filter(n => n.type === 'output'||n.type==='video'&&n.shotTableOrigin?.inlineOutput).forEach(out => {
             (out._pending || []).forEach(p => {
                 if(p.canvasTaskType === 'online-image' && p.canvasTaskId && !p.failed && !p.savePending) deps.pollCanvasImageTask(p.canvasTaskId, {cascadeTargetId:p.cascadeTargetId || ''});
                 if(p.canvasTaskType === 'comfy' && p.canvasTaskId && !p.failed && !p.savePending) deps.pollCanvasComfyTask(p.canvasTaskId);

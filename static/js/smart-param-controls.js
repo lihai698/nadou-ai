@@ -3,7 +3,7 @@
     'use strict';
 
 function renderVideoProviderControl(deps, providers){
-    const current = (providers || []).find(p => p.id === deps.settings.videoProvider) || deps.videoProviderById(deps.settings.videoProvider);
+    const current = deps.settings.videoProvider?((providers || []).find(p => p.id === deps.settings.videoProvider) || deps.videoProviderById(deps.settings.videoProvider)):null;
     return `<div class="smart-control provider-control">
         <button class="smart-pill" type="button"><i data-lucide="plug-zap"></i><span class="sub">${deps.escapeHtml(current?.name || deps.settings.videoProvider || deps.tr('smart.platform'))}</span></button>
         <div class="smart-popover compact-popover">
@@ -214,7 +214,7 @@ function renderSizeControls(deps, prefix='', includeSource=false){
 }
 
 function renderProviderControl(deps, providers){
-    const current = (providers || []).find(p => p.id === deps.settings.provider_id) || deps.apiProviderById(deps.settings.provider_id);
+    const current = (providers || []).find(p => p.id === deps.settings.provider_id) || (deps.settings.provider_id ? deps.apiProviderById(deps.settings.provider_id) : null);
     return `<div class="smart-control provider-control">
         <button class="smart-pill" type="button"><i data-lucide="plug-zap"></i><span class="sub">${deps.escapeHtml(current?.name || deps.settings.provider_id || deps.tr('smart.platform'))}</span></button>
         <div class="smart-popover compact-popover">

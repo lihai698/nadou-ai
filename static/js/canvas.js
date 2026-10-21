@@ -3435,6 +3435,29 @@ function initCanvasVideoDeconstructionBridge(){
         uid,pushUndo,save:scheduleSave,render,
         readSource:source=>sourceFor(source.nodeId,source.sourceUrl)?.resultId===source.resultId?source:null,
         select:ids=>{selected.clear();ids.forEach(id=>selected.add(id));refreshSelectionVisuals();},
+        defaultImageSettings:()=>{const s=canvasAssistantCreationSettings();return {...s,providerId:s.provider_id};},
+        defaultVideoSettings:()=>canvasAssistantCreationSettings(),
+        nodeWidth:n=>Math.max(nodeRect(n).w,n.w||defaultNodeSize(n.type).w||0),
+        rowSpacing:700,
+        videoMedia:n=>window.CanvasClipHost.mediaForNode(n,nodes),
+        prepareShotMedia:async media=>{
+            const resolved=[];
+            for(const item of media){const durationSeconds=item.durationSeconds||await window.CanvasClipBridge.probeDuration(item.url);if(!(durationSeconds>0))throw new Error(`无法读取${item.name}的真实时长，请确认视频可以播放后重试`);resolved.push({...item,durationSeconds});}
+            return resolved;
+        },
+        addShotCollection:({table,media,existing})=>{
+            if(existing&&existing.type!=='clip')throw new Error('原剪辑节点已改变，请先核对');
+            const collection=existing||{id:uid('clip'),type:'clip',x:Math.max(...nodes.map(n=>n.x+nodeRect(n).w))+96,y:table.y,w:760,h:196,clipData:window.CanvasClipModel.createData(),name:'分镜视频剪辑'};
+            let data=collection.clipData;for(const item of media)data=window.CanvasClipModel.addMedia(data,item);collection.clipData=data;
+            if(!existing)nodes.push(collection);return collection;
+        },
+        collectionNotice:'已按镜号加入剪辑时间线。重复整理保留剪辑修改；重新生成的结果作为新片段加入。请预览并调整节奏、对白和声音后导出。',
+        validateVideoSettings:s=>videoApiProviders().some(p=>p.id===s.videoProvider&&p.enabled!==false&&(p.video_models||[]).includes(s.videoModel)),
+        createVideoChain:({row,promptText,id,settings,x,y,uid:makeId,imageNodeId})=>{
+            const video={id:makeId('vid'),type:'video',x,y,viewAdjustPrompt:promptText,name:`镜头 ${row.index} · 视频`,apiProvider:settings.videoProvider||'',model:settings.videoModel||'',duration:settings.videoDuration||5,aspectRatio:settings.videoAspect||'16:9',resolution:settings.videoResolution||'',enhancePrompt:!!settings.videoEnhancePrompt,enableUpsample:!!settings.videoEnableUpsample,watermark:!!settings.videoWatermark,cameraFixed:!!settings.videoCameraFixed,generateAudio:!!settings.videoGenerateAudio,multimodal:!!settings.videoMultimodal,useFrameRoles:!!settings.videoUseFrameRoles,inputs:[],tempShLinks:[],running:false,shotTableOrigin:{tableId:id,rowId:row.id,stage:'video',inlineOutput:true,imageNodeId,durationSeconds:row.durationSeconds,startSeconds:row.startSeconds,endSeconds:row.endSeconds}};
+            return {nodes:[video],connections:[{id:makeId('c'),from:imageNodeId,to:video.id}],promptId:video.id,generatorId:video.id,outputId:video.id};
+        },
+        focus:ids=>CanvasViewport.fitAllNodesViewport(classicViewportHost(),ids),
         validateImageSettings:s=>imageApiProviders().some(p=>p.id===s.providerId&&p.enabled!==false&&(p.image_models||[]).includes(s.model)),
         runGenerators:async ids=>{
             const owner=canvas?.id,epoch=generation;
@@ -3443,8 +3466,7 @@ function initCanvasVideoDeconstructionBridge(){
         }
     });
     const begin=bridge.begin;bridge.begin=()=>{generation++;begin();};
-    bridge.sourceFor=sourceFor;bridge.saveNow=saveCanvas;bridge.onError=e=>setStatus(e.message);
-    bridge.ratioOptions=Object.keys(SIZE_MAP).map(id=>({id,label:API_RATIO_VALUES[id]||id}));
+    bridge.sourceFor=sourceFor;bridge.saveNow=saveCanvas;bridge.onError=e=>setStatus(e.message);bridge.onNotice=text=>setStatus(text);
     window.CanvasVideoDeconstructionBridge=bridge;
 }
 function initCanvasClipBridge(){
@@ -3491,6 +3513,7 @@ function initCanvasClipBridge(){
         },
     });
     bridge.begin=()=>{generation++;window.CanvasClipNode?.reconcile(bridge.getContext(),[]);};
+    bridge.probeDuration=probeDuration;
     window.CanvasClipBridge=bridge;
     document.addEventListener('pointerdown',event=>{
         if(!event.target.closest('.clip-node,.clip-panel'))window.CanvasClipNode?.closeAll();
@@ -5000,6 +5023,7 @@ function hasDownstreamGenerator(nodeId){
 function shouldCreateOutputForNode(node){
     if(!node) return false;
     if(hasExplicitOutputConnection(node.id)) return true;
+    if(node.shotTableOrigin?.inlineOutput) return false;
     return !hasDownstreamGenerator(node.id);
 }
 function outputForNode(node, dx=460){

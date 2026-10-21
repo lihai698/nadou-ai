@@ -7178,7 +7178,7 @@ function defaultReferenceImagesFor(node, consume=false, ctx=smartLoopContext){
     const upstream = (smartImageUsesWorkflowInput(node, ctx) ? workflowInputImagesFor(node, consume, ctx) : inputImagesFor(node, consume, ctx))
         .filter(img => img?.url);
     const manual = manualReferenceImagesFor(node);
-    if(smartImageUsesWorkflowInput(node, ctx)) return uniqueReferenceImages([...upstream, ...manual]);
+    if(smartImageUsesWorkflowInput(node, ctx)||node.shotTableOrigin?.stage==='video') return uniqueReferenceImages([...upstream, ...manual]);
     if(self.length) return uniqueReferenceImages([...self, ...upstream, ...manual]);
     return uniqueReferenceImages([...upstream, ...manual]);
 }
@@ -9033,21 +9033,40 @@ function initSmartVideoDeconstructionBridge(){
         },
         readSource:source=>{const node=nodes.find(item=>item.id===source.nodeId);const index=(node?.images||[]).findIndex(item=>{const value=imageForDisplay(item);return value?.url===source.sourceUrl&&(value.id||value.resultId||value.url)===source.resultId;});return index>=0?sourceFor(source.nodeId,index,source.sourceUrl,source.title):null;},
         select:ids=>{selectedIds=ids.slice();selectedId=ids.length===1?ids[0]:'';selectedImage={nodeId:'',index:-1};syncSelectionUi?.();},
+        defaultImageSettings:()=>{const s=smartSettingsForNode();return s.engine==='api'&&s.apiKind!=='video'?{...s,providerId:s.provider_id}:{};},
+        defaultVideoSettings:()=>{const s=smartSettingsForNode();return s.engine==='api'?s:{};},
+        nodeWidth:n=>nodeRect(n).width,
+        rowSpacing:540,
+        videoMedia:n=>(n.images||[]).map(imageForDisplay).filter(item=>item?.url&&mediaKindForItem(item)==='video').map(item=>({...item,kind:'video',sourceNodeId:n.id,sourceResultId:item.id||item.resultId||item.url})),
+        addShotCollection:({table,media,existing})=>{
+            if(existing&&existing.type!=='smart-group')throw new Error('原镜头分组已改变，请先核对');
+            const collection=existing||{id:uid('group'),type:'smart-group',x:Math.max(...nodes.map(n=>n.x+nodeRect(n).width))+96,y:table.y,w:900,h:320,title:'所选镜头视频 · 按镜号整理',items:[],images:[],scale:1,created_at:Date.now()};
+            collection.images=collection.images||[];for(const item of media){const key=JSON.stringify([item.rowId,item.url,item.sourceResultId]);if(!collection.images.some(i=>i.shotResultKey===key))collection.images.push({...item,shotResultKey:key});}
+            if(!existing)nodes.push(collection);return collection;
+        },
+        collectionNotice:'已按镜号整理到视频分组，可预览及批量下载。智能画布当前没有剪辑时间线；剪辑与成片导出请使用普通画布的剪辑节点。',
+        validateVideoSettings:s=>videoApiProviders().some(p=>p.id===s.videoProvider&&p.enabled!==false&&providerVideoModels(s.videoProvider).includes(s.videoModel)),
+        setVideoPrompt:(node,text)=>setPromptDraftForNode(node,text),
+        setImagePrompt:(node,text)=>setPromptDraftForNode(node,text),
+        createVideoChain:({row,promptText,id,table,settings,x,y,uid:makeId,imageNodeId})=>{
+            const video={id:makeId('smart'),type:'smart-image',x,y,w:316,h:260,promptDraftText:promptText,promptDraftHtml:escapeHtml(promptText),promptDraftTouched:true,title:`镜头 ${row.index} · 视频`,images:[],runSettings:{...cloneSmartSettings(initialSmartSettings),...settings,engine:'api',apiKind:'video',videoProvider:settings.videoProvider||'',videoModel:settings.videoModel||'',count:1},shotTableOrigin:{tableId:id,rowId:row.id,sourceFingerprint:table.shotTableData.source.fingerprint||table.shotTableData.source.sourceUrl,stage:'video',inlineOutput:true,imageNodeId,durationSeconds:row.durationSeconds,startSeconds:row.startSeconds,endSeconds:row.endSeconds},created_at:Date.now()};
+            return {nodes:[video],connections:[{from:imageNodeId,to:video.id,kind:'input'}],promptId:video.id,generatorId:video.id,outputId:video.id};
+        },
+        focus:ids=>SmartViewport.fitAllNodesViewport(smartViewportHost(),ids),
         validateImageSettings:s=>{const provider=(imageProviders?.()||[]).find(p=>p.id===s.providerId);return !!provider && provider.enabled!==false && (providerImageModels?.(s.providerId)||[]).includes(s.model);},
-        createGenerationChain:({row,table,id,settings,x,y,uid:makeId})=>{
-            const prompt={id:makeId('prompt'),type:'smart-prompt',x,y,w:316,h:210,title:'Prompt',text:row.imagePrompt||row.cells.visual||'',promptSeparator:';',promptSplitEnabled:false,llmEnabled:false,created_at:Date.now()};
-            const image={id:makeId('smart'),type:'smart-image',x:x+380,y,w:316,h:260,title:`镜头 ${row.index} 生成`,images:[],runSettings:{...cloneSmartSettings(initialSmartSettings),engine:'api',apiKind:'image',provider_id:settings.providerId,model:settings.model,ratio:settings.ratio||'square',resolution:settings.resolution||'1k',quality:settings.quality||'auto',count:1},shotTableOrigin:{tableId:id,rowId:row.id,sourceFingerprint:table.shotTableData.source.fingerprint||table.shotTableData.source.sourceUrl,durationSeconds:row.durationSeconds,motionPrompt:row.motionPrompt||row.cells.motion||''},created_at:Date.now()};
+        createGenerationChain:({row,promptText,table,id,settings,x,y,uid:makeId,creationOnly})=>{
+            const image={id:makeId('smart'),type:'smart-image',x:creationOnly?x:x+380,y,w:316,h:260,title:`镜头 ${row.index} · 画面`,images:[],runSettings:{...cloneSmartSettings(initialSmartSettings),...settings,engine:'api',apiKind:'image',provider_id:settings.providerId||'',model:settings.model||'',ratio:settings.ratio||'square',resolution:settings.resolution||'1k',quality:settings.quality||'auto',count:1},shotTableOrigin:{tableId:id,rowId:row.id,sourceFingerprint:table.shotTableData.source.fingerprint||table.shotTableData.source.sourceUrl,durationSeconds:row.durationSeconds,motionPrompt:row.motionPrompt||row.cells.motion||''},created_at:Date.now()};
+            if(creationOnly){setPromptDraftForNode(image,promptText??(row.imagePrompt||row.cells.visual||''));Object.assign(image.shotTableOrigin,{stage:'image',inlineOutput:true});return {nodes:[image],connections:[],promptId:image.id,generatorId:image.id,outputId:image.id};}
+            const prompt={id:makeId('prompt'),type:'smart-prompt',x,y,w:316,h:210,title:'Prompt',text:promptText??(row.imagePrompt||row.cells.visual||''),promptSeparator:';',promptSplitEnabled:false,llmEnabled:false,created_at:Date.now()};
             return {nodes:[prompt,image],connections:[{from:prompt.id,to:image.id,kind:'input'}],promptId:prompt.id,generatorId:image.id,outputId:image.id};
         },
         runGenerators:async ids=>{
             const owner=canvasId,epoch=generation;
             for(const id of ids){if(canvasId!==owner||generation!==epoch)break;const node=nodes.find(item=>item.id===id);if(!node)continue;selectedId=id;selectedIds=[];selectedImage={nodeId:'',index:-1};await runGeneration({shotTableRun:true});}
-        },
-        ratioOptions:Object.keys(SIZE_MAP).map(id=>({id,label:API_RATIO_VALUES[id]||id}))
+        }
     });
     const begin=bridge.begin;bridge.begin=()=>{generation++;begin();};
-    bridge.ratioOptions=Object.keys(SIZE_MAP).map(id=>({id,label:API_RATIO_VALUES[id]||id}));
-    bridge.sourceFor=sourceFor;bridge.saveNow=async()=>{for(let attempt=0;attempt<8;attempt++){if(await saveCanvas())return true;await new Promise(resolve=>setTimeout(resolve,220));}return false;};bridge.onError=e=>toast(e.message||'视频拆解操作失败');
+    bridge.sourceFor=sourceFor;bridge.saveNow=async()=>{for(let attempt=0;attempt<8;attempt++){if(await saveCanvas())return true;await new Promise(resolve=>setTimeout(resolve,220));}return false;};bridge.onError=e=>toast(e.message||'视频拆解操作失败');bridge.onNotice=text=>toast(text);
     window.CanvasVideoDeconstructionBridge=bridge;
 }
 window.onload = async () => {

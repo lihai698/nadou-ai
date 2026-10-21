@@ -79,6 +79,18 @@ class DeconstructionTests(unittest.TestCase):
   for v in ['[]','{}',valid.replace('"画面"','123')]:
    with self.assertRaises(ValueError):parse_analysis(v,[])
   self.assertFalse(vision_supported({'supports_vision':False},'text'))
+ def test_camera_analysis_is_independent_from_video_generation_prompt(self):
+  import json
+  m=self.create()
+  async def vision(fields):
+   return {'text':json.dumps(dict(shotSize='全景',visual='人物居中，桌子在前景',mood='平静',onScreenText='',imagePrompt='固定构图静态画面',motion='低机位缓慢前推',motionPrompt='0–2秒保持姿态，2–3秒抬头，镜头缓慢接近，服饰保持一致'),ensure_ascii=False)}
+  m.call_vision=vision
+  t=self.wait(m.prepare(self.context,'owner','table',{}),{'awaiting-confirmation'})
+  m.confirm(t['id'],'owner',{'providerId':'user','model':'vision-user'},t['quote']['id'])
+  r=self.wait(t,{'ready','failed'})
+  self.assertEqual(r['status'],'ready',r)
+  self.assertEqual(r['rows'][0]['cells']['motion'],'低机位缓慢前推')
+  self.assertIn('0–2秒',r['rows'][0]['motionPrompt'])
  def test_cancel_prevents_unsent_calls_and_concurrency_at_most_four(self):
   import asyncio
   m=self.create();started=threading.Event();release=threading.Event();count=0;maximum=0;live=0

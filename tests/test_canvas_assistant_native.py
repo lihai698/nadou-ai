@@ -440,13 +440,14 @@ class NativeActionTests(unittest.TestCase):
         canvas['nodes'][0]['shotTableData'].update(revision=1,rows=[{'id':'r','cells':{'motion':'缓慢推镜'},'motionPrompt':'缓慢推镜'}])
         self.assertEqual(native_effect(canvas,proposal)['state'],'completed')
 
-    def test_shot_motion_edit_and_column_contract_verify_coupled_effect(self):
+    def test_shot_motion_edit_and_column_contract_preserve_video_prompt(self):
         canvas=self.canvas('shot-table');canvas['nodes'][0]['shotTableData']={'version':1,'revision':2,'rows':[{'id':'r','cells':{'motion':'old'},'motionPrompt':'old'}],'columns':[{'id':'motion','kind':'builtin','label':'运镜'}]}
         p=prepare_native_action(canvas,{'action':'shot_edit','nodeId':'n','rowId':'r','columnId':'motion','value':'new'},'edit')
         canvas['nodes'][0]['shotTableData']['rows'][0]['cells']['motion']='new'
         with self.assertRaises(HTTPException):native_effect(canvas,p)
-        canvas['nodes'][0]['shotTableData']['rows'][0]['motionPrompt']='new';canvas['nodes'][0]['shotTableData']['revision']=3
+        canvas['nodes'][0]['shotTableData']['revision']=3
         self.assertEqual(native_effect(canvas,p)['state'],'completed')
+        self.assertEqual(canvas['nodes'][0]['shotTableData']['rows'][0]['motionPrompt'],'old')
         p=prepare_native_action(canvas,{'action':'shot_column','nodeId':'n','columnAction':'add','label':'细节'},'column')
         self.assertEqual(p['arguments']['columnId'],'assistant-column-column')
         with self.assertRaises(HTTPException):prepare_native_action(canvas,{'action':'shot_column','nodeId':'n','columnAction':'delete','columnId':'motion'},'delete')

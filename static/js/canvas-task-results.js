@@ -75,6 +75,7 @@
         if(clean.length){delete node.audioOutputText;deps.outputNodesForSource(node.id).forEach(out=>delete out.audioOutputText);}
         if(!append){
             node.generatedOutputs = clean;
+            if(node.shotTableOrigin?.inlineOutput)node.images=clean;
             syncConnectedOutputsFromGenerated(deps, node, clean);
             return;
         }
@@ -84,6 +85,7 @@
             return url && !seen.has(url) && seen.add(url);
         });
         node.generatedOutputs = [...(node.generatedOutputs || []), ...added];
+        if(node.shotTableOrigin?.inlineOutput)node.images=node.generatedOutputs;
         syncConnectedOutputsFromGenerated(deps, node, added);
     }
 
@@ -103,11 +105,11 @@
     }
 
     function findOutputByPendingId(deps, pendingId){
-        return deps.nodes.find(n => n.type === 'output' && (n._pending || []).some(p => p.id === pendingId));
+        return deps.nodes.find(n => (n.type === 'output'||n.type==='video'&&n.shotTableOrigin?.inlineOutput) && (n._pending || []).some(p => p.id === pendingId));
     }
 
     function findPendingTask(deps, taskId){
-        for(const out of deps.nodes.filter(n => n.type === 'output')){
+        for(const out of deps.nodes.filter(n => n.type === 'output'||n.type==='video'&&n.shotTableOrigin?.inlineOutput)){
             const pending = (out._pending || []).find(p => p.canvasTaskId === taskId);
             if(pending) return {out, pending};
         }
@@ -130,7 +132,7 @@
         if(!outputUrls.length)throw new Error('视频任务成功但没有返回视频地址');
         const runMs=deps.nowMs()-Number(pending.startedAt||deps.nowMs());
         pending.run.request=deps.requestMetaFromResult(result);
-        if(out)appendOutputImagesWithoutDuplicates(deps, out,outputUrls,pending.run?.refs?.[0],[{run:pending.run||{},runMs,kind:'video'}]);
+        if(out?.type==='output')appendOutputImagesWithoutDuplicates(deps, out,outputUrls,pending.run?.refs?.[0],[{run:pending.run||{},runMs,kind:'video'}]);
         if(gen){
             mergeGeneratedOutputs(deps, gen,outputUrls,Boolean(pending.appendGenerated));gen.runStatus='done';gen.runError='';gen.running=false;
             if(pending.assistantNativeActionId){gen.assistantNativeRun={...gen.assistantNativeRun,taskIds:[taskId],unknownCount:0,warning:''};gen.submissionUnknown=false;gen.submissionWarning='';}

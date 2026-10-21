@@ -53,7 +53,7 @@ class LocalVideoVision:
                 if self.process is None or self.process.poll() is not None:
                     self.process = subprocess.Popen([
                         str(executable), '-m', str(model_path), '--mmproj', str(projector),
-                        '--host', '127.0.0.1', '--port', '8085', '-c', '4096',
+                        '--host', '127.0.0.1', '--port', '8085', '-c', '8192',
                         '--parallel', '1', '--fit', 'on', '--fit-target', '4096',
                         '--reasoning', 'off', '--alias', 'nadou-local-vision', '--jinja',
                     ], cwd=executable.parent, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
@@ -97,10 +97,10 @@ class LocalVideoVision:
         content = [{'type':'text', 'text':fields['message']}]
         for url in fields['images']:
             path = Path(self.resolve_image(url))
-            # 限制三帧占用的上下文，避免高清视频挤掉结构化分析的输出空间。
+            # 多帧覆盖动作演进，限制像素数为专业分析与两个提示词留出输出空间。
             with Image.open(path) as original:
                 frame = original.convert('RGB')
-                frame.thumbnail((768, 768))
+                frame.thumbnail((512, 512))
                 buffer = io.BytesIO()
                 frame.save(buffer, format='JPEG', quality=90)
             encoded = base64.b64encode(buffer.getvalue()).decode('ascii')
@@ -111,9 +111,12 @@ class LocalVideoVision:
                 response = client.post('http://127.0.0.1:8085/v1/chat/completions', json={
                     'model':fields['model'], 'messages':[
                         {'role':'system','content':fields['system_prompt']}, {'role':'user','content':content}],
-                    'max_tokens':1200, 'temperature':.2, 'stream':False,
+                    'max_tokens':min(4000, max(1200, int(fields.get('max_tokens', 2800)))), 'temperature':.2, 'stream':False,
                     'chat_template_kwargs':{'enable_thinking':False},
                 })
                 response.raise_for_status()
                 result = response.json()
-        return {'text':result['choices'][0]['message']['content'], 'raw_usage':result.get('usage')}
+        choice = result['choices'][0]
+        if choice.get('finish_reason') == 'length':
+            raise ValueError('本地模型输出被截断，请检查上下文容量后重试')
+        return {'text':choice['message']['content'], 'raw_usage':result.get('usage')}

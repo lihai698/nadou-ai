@@ -142,6 +142,7 @@ function bindOutputWrap(deps, wrap, node){
             } else {
                 const url = img?.dataset.url || video?.dataset.url || audio?.dataset.url || wrap.dataset.outputUrl || wrap.dataset.missingUrl || '';
                 node.images = (node.images || []).filter(item => deps.outputUrlValue(item) !== url);
+                if(node.shotTableOrigin?.inlineOutput)node.generatedOutputs=node.images;
                 if(node.imageComparisons) delete node.imageComparisons[url];
                 deps.scheduleSave();
             }

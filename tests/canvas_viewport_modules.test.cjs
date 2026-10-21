@@ -2,6 +2,12 @@ const test=require('node:test'),assert=require('node:assert/strict');
 const classic=require('../static/js/canvas-viewport.js'),smart=require('../static/js/smart-viewport.js');
 function host(){const classes={add(){},remove(){},toggle(){}};let saved='';return {canvas:{id:'c'},nodes:[],viewport:{x:20,y:30,scale:2},zoomPreviewState:null,world:{style:{},classList:classes},shell:{clientWidth:1000,clientHeight:600,style:{},classList:classes},board:{getBoundingClientRect:()=>({width:1000,height:600})},document:{body:{classList:classes}},window:{},minimapContent:null,minimapViewport:null,minimapRenderQueued:false,requestAnimationFrame:fn=>fn(),renderLinks(){},renderSelectionHub(){},scheduleCanvasImageResolutionSync(){},scheduleSmartImageResolutionSync(){},scheduleSave(){},closeCreateMenu(){},closeLinkCreateMenu(){},nodesEl:{querySelector:()=>null},defaultNodeSize:()=>({w:100,h:80}),CSS:{escape:s=>s},canvasSessionViewportFallback:{},CANVAS_SESSION_VIEWPORTS_KEY:'views',sessionStorage:{getItem:()=>saved,setItem:(_k,v)=>saved=v},safeScale:v=>v>0?v:1,ZOOM_PREVIEW_NODE_MAX_SCALE:2,ZOOM_PREVIEW_NODE_DEFAULT_SCALE:1,nodeRect:n=>({x:n.x,y:n.y,width:n.w,height:n.h})};}
 for(const [label,api] of [['classic',classic],['smart',smart]]){
+ test(`${label}: focus uses only target nodes and leaves the minimap node list intact`,()=>{
+  const d=host();d.nodes=[{id:'new',x:3000,y:100,w:300,h:200},{id:'far',x:-90000,y:-90000,w:300,h:200}];
+  d.shell.scrollLeft=900;d.shell.scrollTop=600;
+  api.fitAllNodesViewport(d,['new']);assert.equal(d.viewport.x,500-3150*d.viewport.scale);assert.equal(d.viewport.y,300-200*d.viewport.scale);assert.equal(d.nodes.length,2);assert.equal(d.shell.scrollLeft,0);assert.equal(d.shell.scrollTop,0);
+  const before={...d.viewport};api.fitAllNodesViewport(d,['missing']);assert.deepEqual(d.viewport,before);
+ });
  test(`${label}: overview preserves and restores the original viewport`,()=>{
   const d=host();api.enterZoomPreview(d);assert.deepEqual(d.zoomPreviewState,{x:20,y:30,scale:2});assert.equal(d.viewport.scale,0.45);
   assert.equal(api.exitZoomPreview(d),true);assert.deepEqual(d.viewport,{x:20,y:30,scale:2});assert.equal(d.zoomPreviewState,null);assert.equal(api.exitZoomPreview(d),false);

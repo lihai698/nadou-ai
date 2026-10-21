@@ -4,6 +4,14 @@
 
     async function generateUrlsForCurrentSettings(deps, node, prompt, refs, runSettings=deps.settings, ctx=null){
         const activeSettings = runSettings || deps.settings;
+        if(node?.shotTableOrigin&&activeSettings.engine==='api'&&activeSettings.apiKind==='video'){
+            if(!activeSettings.videoProvider||!activeSettings.videoModel)throw new Error('请先在节点工具栏选择视频平台和模型');
+            const image=deps.nodes?.find(n=>n.id===node.shotTableOrigin.imageNodeId);
+            if(image&&(image.running||image.pending||image.pendingTasks?.length||image.submissionUnknown))throw new Error('本镜画面正在生成，请完成后再运行视频节点');
+            const images=deps.imageRefsOnly?deps.imageRefsOnly(refs||[]):(refs||[]).filter(ref=>ref.url&&(ref.kind||ref.mediaKind||'image')==='image');
+            if(node.shotTableOrigin.stage==='video'&&!images.length)throw new Error('请先生成并连接本镜画面，再运行视频节点');
+        }
+        if(node?.shotTableOrigin&&activeSettings.engine==='api'&&activeSettings.apiKind!=='video'&&(!activeSettings.provider_id||!activeSettings.model))throw new Error('请先在节点工具栏选择生图平台和模型');
         const audioRefs = deps.audioRefsOnly(refs || []);
         if(deps.isApiLikeEngine(activeSettings.engine)
             && activeSettings.apiKind !== 'video'
@@ -73,11 +81,17 @@
         if(!node || deps.smartNodeInFlight(node)) return;
         if(node.shotPromptOrigin && !options.acceptedTask){try{deps.CanvasVideoDeconstructionModel.validateShotImage(deps.nodes,deps.canvas.connections||[],node);}catch(error){deps.toast(error.message);return;}}
         if(!deps.confirmSmartUnknownResubmission(node)) return;
-        const request = options.assistantProposal ? {prompt:options.assistantProposal.prompt,displayPrompt:options.assistantProposal.prompt,refs:options.assistantProposal.referenceImages.map(url=>({url,kind:'image'}))} : options.shotTableRun ? deps.buildPromptRequestForNode(node, [], deps.smartLoopContext) : deps.buildPromptRequest(node, null, true, deps.smartLoopContext);
+        const request = options.assistantProposal ? {prompt:options.assistantProposal.prompt,displayPrompt:options.assistantProposal.prompt,refs:options.assistantProposal.referenceImages.map(url=>({url,kind:'image'}))} : options.shotTableRun ? deps.buildPromptRequestForNode(node, node.shotTableOrigin?.stage==='video'?null:[], deps.smartLoopContext) : deps.buildPromptRequest(node, null, true, deps.smartLoopContext);
         const prompt = request.prompt.trim();
         const refs = request.refs;
         const previousSettings = deps.cloneSmartSettings(deps.settings);
         const runSettings = deps.smartSettingsForNode(node);
+        if(node.shotTableOrigin?.stage==='video'&&runSettings.engine==='api'&&runSettings.apiKind==='video'){
+            if(!runSettings.videoProvider||!runSettings.videoModel){deps.toast('请先在节点工具栏选择视频平台和模型');return;}
+            const image=deps.nodes.find(n=>n.id===node.shotTableOrigin.imageNodeId);
+            if(image&&deps.smartNodeInFlight(image)){deps.toast('本镜画面正在生成，请完成后再运行视频节点');return;}
+            if(!deps.imageRefsOnly(refs||[]).length){deps.toast('请先生成并连接本镜画面，再运行视频节点');return;}
+        }
         // 自动识别只看上游连接；当前节点已生成的音频不能把手动返回的图片选择再次切回音频。
         if(deps.smartApiAudioMode(node,runSettings)){try{await deps.runSmartApiAudio(node,prompt,refs,runSettings);}catch(error){deps.toast(error.message || '音频处理失败');}return;}
         deps.settings = {...deps.settings, ...deps.cloneSmartSettings(runSettings || {}), ...(options.acceptedTask?{count:1}:{})};
@@ -131,11 +145,25 @@
         if(shouldCreateBranchOutput) branchNode = deps.createPendingOutputFromSource(node, expectedCount, pendingMeta, {connectSource:false, selectOutput:true, refs});
         deps.undoSuppressed = false;
         const pendingNode = branchNode || node;
+        let shotOutputBinding=null,shotInputEdge=null;
         if(node.shotTableOrigin){
             pendingNode.shotTableOrigin = {...node.shotTableOrigin};
             const table = deps.nodes.find(n=>n.id===node.shotTableOrigin.tableId);
             const key = `${node.shotTableOrigin.sourceFingerprint}:${node.shotTableOrigin.rowId}`;
-            if(table?.shotTableData?.generationMap[key]) table.shotTableData.generationMap[key].outputId=pendingNode.id;
+            const mapping=table?.shotTableData?.generationMap[key];
+            if(mapping){
+                const slot=node.shotTableOrigin.stage==='video'?mapping.video:mapping;
+                if(slot)shotOutputBinding={tableId:table.id,key,video:node.shotTableOrigin.stage==='video',previousOutputId:slot.outputId};
+                if(node.shotTableOrigin.stage==='video'){if(mapping.video)mapping.video.outputId=pendingNode.id;}
+                else {
+                    const oldOutput=mapping.outputId;mapping.outputId=pendingNode.id;
+                    if(mapping.video&&oldOutput!==pendingNode.id){
+                        const edge=(deps.canvas.connections||[]).find(c=>c.from===oldOutput&&c.to===mapping.video.generatorId&&c.kind==='input');
+                        if(edge){shotInputEdge={edge,from:oldOutput};edge.from=pendingNode.id;}
+                        const video=deps.nodes.find(n=>n.id===mapping.video.generatorId);if(video?.shotTableOrigin)video.shotTableOrigin.imageNodeId=pendingNode.id;
+                    }
+                }
+            }
         }
         if(extracted) pendingNode._runMetaTargetId = extracted.id;
         if(!branchNode){
@@ -258,11 +286,22 @@
             }
             pendingNode.pending = 0;
             if(branchNode){
+                const restoreInput=shotInputEdge&&(deps.canvas.connections||[]).includes(shotInputEdge.edge)&&shotInputEdge.edge.from===branchNode.id;
                 if(branchNode.submissionWarning){
                     deps.rememberSmartTaskSubmissionWarning(node, branchNode.submissionWarning, branchNode.submissionUnknown);
                 }
                 deps.nodes = deps.nodes.filter(n => n.id !== branchNode.id);
                 deps.canvas.connections = (deps.canvas.connections || []).filter(c => c.from !== branchNode.id && c.to !== branchNode.id);
+                if(shotOutputBinding){
+                    const mapping=deps.nodes.find(n=>n.id===shotOutputBinding.tableId)?.shotTableData?.generationMap[shotOutputBinding.key],slot=shotOutputBinding.video?mapping?.video:mapping;
+                    if(slot?.outputId===branchNode.id){
+                        slot.outputId=shotOutputBinding.previousOutputId;
+                        if(restoreInput)deps.canvas.connections.push({...shotInputEdge.edge,from:shotInputEdge.from});
+                        const video=deps.nodes.find(n=>n.id===mapping?.video?.generatorId);
+                        if(video?.shotTableOrigin?.imageNodeId===branchNode.id)video.shotTableOrigin.imageNodeId=shotOutputBinding.previousOutputId;
+                        deps.scheduleSave();
+                    }
+                }
                 deps.selectedId = node.id;
             } else {
                 pendingNode.pending = 0;

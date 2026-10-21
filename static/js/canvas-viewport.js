@@ -48,7 +48,10 @@
         deps.renderSelectionHub();
     }
 
-    function fitAllNodesViewport(deps){
+    function fitAllNodesViewport(deps, ids){
+        const targets=ids ? deps.nodes.filter(n=>ids.includes(n.id)) : deps.nodes;
+        if(ids&&!targets.length)return;
+        if(deps.shell){deps.shell.scrollLeft=0;deps.shell.scrollTop=0;}
         const rect = deps.board.getBoundingClientRect();
         if(!deps.nodes.length){
             deps.viewport.scale = 0.45;
@@ -60,7 +63,7 @@
             scheduleViewportSave(deps);
             return;
         }
-        const rects = deps.nodes.map((...args)=>estimatedNodeRect(deps, ...args));
+        const rects = targets.map((...args)=>estimatedNodeRect(deps, ...args));
         const minX = Math.min(...rects.map(r => r.x));
         const minY = Math.min(...rects.map(r => r.y));
         const maxX = Math.max(...rects.map(r => r.x + r.w));

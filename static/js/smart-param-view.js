@@ -37,9 +37,10 @@ function renderDynamicParams(deps){
 function renderApiParams(deps){
     const audioAnalysis = deps.smartHasAudioAnalysisInput();
     const providers = audioAnalysis ? deps.chatApiProviders() : deps.imageProviders();
-    if(!deps.settings.provider_id || !providers.some(p => p.id === deps.settings.provider_id)) deps.settings.provider_id = providers[0]?.id || '';
+    const awaitingSelection=deps.activeSettingsSubject?.()?.shotTableOrigin&&(!deps.settings.provider_id||!deps.settings.model);
+    if(!awaitingSelection&&(!deps.settings.provider_id || !providers.some(p => p.id === deps.settings.provider_id))) deps.settings.provider_id = providers[0]?.id || '';
     const models = audioAnalysis ? deps.providerChatModels(deps.settings.provider_id) : deps.filterJimengImageModels(deps.providerImageModels(deps.settings.provider_id));
-    if(!deps.settings.model || !models.includes(deps.settings.model)) deps.settings.model = models[0] || '';
+    if(!awaitingSelection&&(!deps.settings.model || !models.includes(deps.settings.model))) deps.settings.model = models[0] || '';
     // 切换平台/模型时保留用户已选的分辨率（记忆），normalizeApiSizeSettings 只会修正非法的 auto。
     deps.normalizeApiSizeSettings('');
     const outpaintLocked = deps.settings.outpaintResolutionLocked === true;
@@ -52,9 +53,10 @@ function renderApiParams(deps){
 
 function renderApiVideoParams(deps){
     const providers = deps.videoApiProviders();
-    if(!deps.settings.videoProvider || !providers.some(p => p.id === deps.settings.videoProvider)) deps.settings.videoProvider = providers[0]?.id || 'comfly';
+    const awaitingSelection=deps.activeSettingsSubject?.()?.shotTableOrigin&&(!deps.settings.videoProvider||!deps.settings.videoModel);
+    if(!awaitingSelection&&(!deps.settings.videoProvider || !providers.some(p => p.id === deps.settings.videoProvider))) deps.settings.videoProvider = providers[0]?.id || 'comfly';
     const models = deps.filterJimengVideoModels(deps.providerVideoModels(deps.settings.videoProvider));
-    if(!deps.settings.videoModel || !models.includes(deps.settings.videoModel)) deps.settings.videoModel = models[0] || 'veo3-fast';
+    if(!awaitingSelection&&(!deps.settings.videoModel || !models.includes(deps.settings.videoModel))) deps.settings.videoModel = models[0] || 'veo3-fast';
     deps.dynamicParams.innerHTML = `
         ${deps.renderVideoProviderControl(providers)}
         ${deps.renderVideoModelControl(models)}

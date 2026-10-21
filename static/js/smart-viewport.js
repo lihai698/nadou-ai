@@ -70,7 +70,11 @@
         deps.scheduleSave();
     }
 
-    function fitAllNodesViewport(deps){
+    function fitAllNodesViewport(deps, ids){
+        const targets=ids ? deps.nodes.filter(n=>ids.includes(n.id)) : deps.nodes;
+        if(ids&&!targets.length)return;
+        // 浏览器对工具栏的焦点滚动不能抵消画布定位，否则新节点仍会落在屏幕外。
+        deps.shell.scrollLeft=0;deps.shell.scrollTop=0;
         if(!deps.nodes.length){
             deps.viewport.scale = 0.45;
             deps.viewport.x = deps.shell.clientWidth / 2;
@@ -79,7 +83,7 @@
             deps.scheduleSave();
             return;
         }
-        const rects = deps.nodes.map(deps.nodeRect);
+        const rects = targets.map(deps.nodeRect);
         const minX = Math.min(...rects.map(r => r.x));
         const minY = Math.min(...rects.map(r => r.y));
         const maxX = Math.max(...rects.map(r => r.x + r.width));

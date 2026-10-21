@@ -40,7 +40,8 @@ function renderNode(deps, node){
         else deps.openGeneratorNodeMenu(node.id, e.clientX, e.clientY);
     };
     const title = node.type === 'audio' ? '音频素材' : node.type === 'image' ? 'Image' : node.type === 'prompt' ? 'Prompt' : node.type === 'loop' ? deps.tr('canvas.loopNode') : node.type === 'promptGroup' ? 'Prompts' : node.type === 'group' ? 'Group' : node.type === 'output' ? 'Output' : node.type === 'llm' ? 'LLM' : node.type === 'comfy' ? 'ComfyUI' : node.type === 'rh' ? 'RunningHub' : node.type === 'midjourney' ? 'Midjourney' : node.type === 'msgen' ? deps.tr('canvas.modelscopeGenerate') : node.type === 'video' ? deps.tr('canvas.videoGenerateNode') : deps.tr('canvas.apiGenerate');
-    const displayTitle = node.type === 'shot-table' ? '分镜表' : node.depthCapture ? (node.depthCapture.role === 'pose' ? '骨骼姿态' : '灰度深度') : node.type === 'image' && node.url ? deps.nodeTitleForMedia(node) : title;
+    const shotRow=node.shotTableOrigin&&deps.nodes.find(n=>n.id===node.shotTableOrigin.tableId)?.shotTableData?.rows.find(row=>row.id===node.shotTableOrigin.rowId);
+    const displayTitle = shotRow ? deps.escapeHtml(`镜头 ${shotRow.index} · ${node.shotTableOrigin.stage==='video'?'视频':'画面'}`) : node.type === 'shot-table' ? '分镜表' : node.depthCapture ? (node.depthCapture.role === 'pose' ? '骨骼姿态' : '灰度深度') : node.type === 'image' && node.url ? deps.nodeTitleForMedia(node) : title;
     // 失败徽章只在一键运行模式中显示，单节点失败已通过 alert 提示
     const showStatus = ['generator','midjourney','msgen','comfy','llm','video','rh'].includes(node.type) && node.runStatus
         && (node.runStatus !== 'failed' || node._cascadeFailed);
@@ -234,6 +235,13 @@ function renderNode(deps, node){
     if(node.type === 'rh') body.appendChild(deps.renderRhBody(node));
     if(node.type === 'comfy') body.appendChild(deps.renderComfyBody(node));
 
+    if(node.shotTableOrigin?.inlineOutput){
+        const preview=deps.document.createElement('div');
+        preview.className='shot-inline-results';
+        preview.innerHTML=deps.renderOutputGrid(node,(node._pending||[]).map(p=>deps.renderPendingOutput(p)).join(''));
+        preview.querySelectorAll('.output-img-wrap').forEach(wrap=>deps.bindOutputWrap(wrap,node));
+        body.appendChild(preview);
+    }
     if(node.type === 'output') {
         const pendingHtml = (node._pending || []).map(p =>
             deps.renderPendingOutput(p)

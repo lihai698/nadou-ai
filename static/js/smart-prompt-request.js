@@ -80,7 +80,8 @@ function buildPromptRequest(deps, node, overrideDefaultImages=null, consumeDefau
     });
     body = body.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
     const groupPrompt = deps.isSmartGroupNode(node) ? deps.textForNode(node, ctx).trim() : '';
-    const inputPrompt = deps.inputPromptTextFor(node, ctx).trim();
+    // 分镜视频使用自己的视频草稿；级联传来的图片提示词不能混入视频请求。
+    const inputPrompt = node?.shotTableOrigin?.stage==='video'&&node.shotTableOrigin.inlineOutput ? '' : deps.inputPromptTextFor(node, ctx).trim();
     if(groupPrompt || inputPrompt) body = [groupPrompt, inputPrompt, body].filter(Boolean).join('\n\n');
     if(!body && deps.settings.engine === 'runninghub'){
         body = deps.rhDefaultPromptSuggestion();

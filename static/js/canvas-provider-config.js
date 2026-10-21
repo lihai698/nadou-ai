@@ -147,6 +147,7 @@ function providerImageModels(deps, providerId){
 
 function sanitizeImageNodeProviderModel(deps, node){
     if(!node || node.type !== 'generator') return;
+    if(node.shotTableOrigin&&(!node.apiProvider||!node.model)) return;
     node.apiProvider = resolveImageProviderId(deps, node.apiProvider || '');
     const models = providerImageModels(deps, node.apiProvider);
     if(!models.length) node.model = '';
@@ -177,6 +178,7 @@ function providerVideoModels(deps, providerId){
 
 function sanitizeVideoNodeProviderModel(deps, node){
     if(!node || node.type !== 'video') return;
+    if(node.shotTableOrigin&&(!node.apiProvider||!node.model)) return;
     node.apiProvider = resolveVideoProviderId(deps, node.apiProvider || 'comfly');
     const models = providerVideoModels(deps, node.apiProvider);
     if(!models.length) node.model = '';

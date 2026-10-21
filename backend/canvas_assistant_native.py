@@ -973,7 +973,7 @@ def native_effect(canvas, proposal):
         if action=='shot_edit':
             row=next((r for r in table.get('rows',[]) if r.get('id')==args['rowId']),None)
             field=args['columnId'];value=row.get(field) if row and field in {'imagePrompt','motionPrompt'} else (row or {}).get('cells',{}).get(field)
-            if value!=args['value'] or field=='motion' and (row or {}).get('motionPrompt')!=args['value']: _error('镜头正文或运镜提示词尚未完整保存',409)
+            if value!=args['value']: _error('镜头正文尚未完整保存',409)
         elif action=='shot_select':
             if table.get('selectedRowIds')!=args['selectedRowIds']: _error('镜头选择尚未保存',409)
         else:

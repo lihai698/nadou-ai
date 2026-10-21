@@ -44,7 +44,7 @@ function mediaRefsFromNode(deps, node){
 }
 
 function generatorSources(deps, gen){
-    const localPrompt = typeof gen.viewAdjustPrompt === 'string' ? [{id:`${gen.id}:view-adjust`,type:'prompt',label:'视角调整',refs:[],prompt:gen.viewAdjustPrompt}] : [];
+    const localPrompt = typeof gen.viewAdjustPrompt === 'string' ? [{id:`${gen.id}:view-adjust`,type:'prompt',label:gen.shotTableOrigin?.stage==='image'?'分镜图片提示词':'视角调整',refs:[],prompt:gen.viewAdjustPrompt}] : [];
     return localPrompt.concat(deps.connections.filter(c => c.to === gen.id && c.kind !== 'story').map(c => deps.nodes.find(n => n.id === c.from)).filter(Boolean).map(n => {
         if(n.type === 'output' && (n.images||[]).length){
             // 从 output 节点取最新一张图当作 reference 给下游

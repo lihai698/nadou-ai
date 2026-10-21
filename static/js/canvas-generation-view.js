@@ -336,7 +336,7 @@ function renderGeneratorBody(deps, node){
     }else deps.sanitizeImageNodeProviderModel(node);
     deps.normalizeApiNodeSizeChoice(node);
     wrap.innerHTML = `
-        ${typeof node.viewAdjustPrompt === 'string' ? `<div class="prompt-editor view-adjust-node-prompt"><textarea data-view-adjust-prompt aria-label="视角调整提示词">${deps.escapeHtml(node.viewAdjustPrompt)}</textarea></div>` : ''}
+        ${typeof node.viewAdjustPrompt === 'string' ? `<div class="prompt-editor view-adjust-node-prompt"><textarea data-view-adjust-prompt aria-label="${node.shotTableOrigin?.stage==='image'?'分镜图片提示词':'视角调整提示词'}">${deps.escapeHtml(node.viewAdjustPrompt)}</textarea></div>` : ''}
         <div class="prompt-list mb-3"></div>
         <div class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">${hasAudioAnalysisInput ? '音频输入 · 文本模型分析' : deps.tr('canvas.images')}</div>
         <div class="input-list"></div>
@@ -415,6 +415,10 @@ function renderGeneratorBody(deps, node){
     }
     const providerSelect = wrap.querySelector('.provider-select');
     const modelSelect = wrap.querySelector('.model-select');
+    if(node.shotTableOrigin){
+        if(!node.apiProvider)providerSelect.insertAdjacentHTML('afterbegin','<option value="" selected disabled>请选择生图平台</option>');
+        if(!node.model)modelSelect.insertAdjacentHTML('afterbegin','<option value="" selected disabled>请选择生图模型</option>');
+    }
     providerSelect.onmousedown = e => e.stopPropagation();
     providerSelect.onclick = e => e.stopPropagation();
     providerSelect.onchange = e => {
@@ -729,10 +733,11 @@ function renderVideoBody(deps, node){
     const inputSources = deps.generatorSources(node);
     const ordered = deps.orderedSources(node, inputSources);
     const mediaInputs = ordered.filter(src => src.refs?.some(ref => ['image','video','audio'].includes(deps.mediaKindForRef(ref))));
-    const promptInputs = ordered.filter(src => src.prompt && !src.refs?.length);
+    const promptInputs = ordered.filter(src => src.prompt && !src.refs?.length&&!(node.shotTableOrigin?.inlineOutput&&src.id===`${node.id}:view-adjust`));
     deps.sanitizeVideoNodeProviderModel(node);
-    node.model = node.model || 'veo3-fast';
+    if(!node.shotTableOrigin)node.model = node.model || 'veo3-fast';
     wrap.innerHTML = `
+        ${node.shotTableOrigin?.inlineOutput?`<div class="prompt-editor view-adjust-node-prompt"><div class="setting-title">视频提示词</div><textarea data-shot-video-prompt aria-label="视频提示词">${deps.escapeHtml(node.viewAdjustPrompt||'')}</textarea></div>`:''}
         <div class="prompt-list mb-3"></div>
         <div class="video-input-head">
             <div class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Media</div>
@@ -793,8 +798,14 @@ function renderVideoBody(deps, node){
         </div>
         ${deps.retryBarHtml(node)}
     `;
+    const shotPrompt=wrap.querySelector('[data-shot-video-prompt]');
+    if(shotPrompt){shotPrompt.onmousedown=e=>e.stopPropagation();shotPrompt.onclick=e=>e.stopPropagation();shotPrompt.oninput=()=>{node.viewAdjustPrompt=shotPrompt.value;deps.scheduleSave();};}
     const providerSelect = wrap.querySelector('.video-provider');
     const modelSelect = wrap.querySelector('.video-model');
+    if(node.shotTableOrigin){
+        if(!node.apiProvider)providerSelect.insertAdjacentHTML('afterbegin','<option value="" disabled selected>请选择视频平台</option>');
+        if(!node.model)modelSelect.insertAdjacentHTML('afterbegin','<option value="" disabled selected>请选择视频模型</option>');
+    }
     const durationSelect = wrap.querySelector('.video-duration');
     const aspectSelect = wrap.querySelector('.video-aspect');
     const resolutionSelect = wrap.querySelector('.video-resolution');

@@ -22,8 +22,6 @@
 .video-deconstruction-cuts>button.selected { border-color:var(--strong); box-shadow:0 0 0 1px var(--strong); }
 .video-deconstruction-cut-image { width:100%; aspect-ratio:16/9; border-radius:7px; background-color:var(--soft); background-repeat:no-repeat; }
 .video-deconstruction-confirm,.video-deconstruction-editor { margin:12px 0; border:1px solid var(--line); border-radius:14px; padding:14px; background:var(--soft); }
-.video-deconstruction-picker { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; }
-.video-deconstruction-picker[hidden] { display:none; }
 .video-deconstruction-confirm a { color:var(--text); font-size:12px; text-decoration:underline; }
 .shot-table-body { display:flex; flex-direction:column; min-height:0; padding:10px !important; }
 .shot-table-summary { display:flex; flex-wrap:wrap; align-items:center; gap:8px; font-size:12px; padding:6px 0 10px; }
@@ -38,10 +36,8 @@
 .shot-table-grid td>span,.shot-table-grid td>strong { display:block; }
 .shot-table-grid td img { width:116px; height:72px; object-fit:contain; background:var(--soft); border-radius:8px; }
 .shot-table-grid td[data-vd-cell] { white-space:pre-wrap; cursor:text; }
-.shot-table-grid details { margin-top:8px; }
-.shot-table-grid details p { white-space:pre-wrap; }
 .shot-table-node[data-shot-mode=compact] .shot-table-grid td { max-height:70px; }
-.shot-table-node[data-shot-mode=compact] .shot-table-grid details,.shot-table-node[data-shot-mode=compact] .shot-table-grid button { display:none; }
+.shot-table-node[data-shot-mode=compact] .shot-table-grid button { display:none; }
 .shot-table-node[data-shot-mode=card] .shot-table-scroll { display:none; }
 .video-deconstruction-editor { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
 .video-deconstruction-editor>.video-deconstruction-toolbar,.video-deconstruction-row-preview { grid-column:1/-1; }
@@ -61,7 +57,7 @@
  .video-deconstruction-modal .depth-capture-head { padding:12px; }
  .video-deconstruction-body { padding:12px; }
  .video-deconstruction-status { margin:0 12px 6px; }
- .video-deconstruction-picker,.video-deconstruction-editor { grid-template-columns:minmax(0,1fr); }
+ .video-deconstruction-editor { grid-template-columns:minmax(0,1fr); }
  .video-deconstruction-modal .shot-table-scroll { display:none; }
  .video-deconstruction-actions { padding:10px 12px; justify-content:flex-start; }
  .video-deconstruction-actions button { padding:9px; }
@@ -71,3 +67,5 @@
 
 .shot-table-body .shot-table-summary { cursor:grab; }
 .shot-table-body .shot-table-summary:active { cursor:grabbing; }
+
+.shot-inline-results { margin-top:12px; }

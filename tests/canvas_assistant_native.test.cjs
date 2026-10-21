@@ -622,7 +622,8 @@ for(const tableType of ['shot-table','smart-shot-table'])test(`${tableType}镜�
  let serial=0;const execute=async(action,args)=>s.editor.execute({...s.proposal,id:'shot-'+(++serial),updatedAt:s.state.updatedAt,localSignature:s.editor.snapshot(),action,arguments:args});
  const row=data.rows[0].id;
  await execute('shot_edit',{rowId:row,columnId:'motion',value:'轻缓推镜'});
- assert.equal(s.state.nodes[0].shotTableData.rows[0].motionPrompt,'轻缓推镜');
+ assert.equal(s.state.nodes[0].shotTableData.rows[0].cells.motion,'轻缓推镜');
+ assert.equal(s.state.nodes[0].shotTableData.rows[0].motionPrompt,'');
  await execute('shot_column',{columnAction:'add',columnId:'custom-test',label:'商品细节'});
  await execute('shot_edit',{rowId:row,columnId:'custom-test',value:'包装文字'});
  await execute('shot_column',{columnAction:'rename',columnId:'custom-test',label:'包装细节'});

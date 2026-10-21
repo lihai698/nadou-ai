@@ -52,7 +52,10 @@ def parse_analysis(text, custom):
     keys = ['shotSize', 'visual', 'mood', 'onScreenText', 'imagePrompt', 'motionPrompt', *[c['id'] for c in custom]]
     if not isinstance(value, dict) or any(not isinstance(value.get(k), str) for k in keys) or not value.get('visual', '').strip():
         raise ValueError('模型未返回完整的镜头字段或有效画面分析')
-    return {k: value[k][:12000] for k in keys}
+    result = {k: value[k][:12000] for k in keys}
+    # 旧任务/模型没有独立运镜字段时保留兼容，新分析不再混用生成提示词。
+    result['motion'] = value.get('motion', value['motionPrompt'])[:12000] if isinstance(value.get('motion', value['motionPrompt']), str) else ''
+    return result
 
 
 def vision_supported(provider, model):
@@ -228,7 +231,7 @@ class VideoDeconstructionManager:
             vision_calls = 0 if task.get('speechOnly') else len(row_ids)
             revision = digest(self.providers())
             quote = dict(id=uuid.uuid4().hex, sourceFingerprint=task['context']['source_fingerprint'], tableRevision=task['context'].get('table_revision', 0),
-                         columns=columns, visionCalls=vision_calls, framesPerShot=3, audioCalls=int(audio.get('hasAudio', False) and mode != 'retry-shot'), expiresAt=time.time()+1800)
+                         columns=columns, visionCalls=vision_calls, framesPerShot=9 if task.get('localModel') else 3, audioCalls=int(audio.get('hasAudio', False) and mode != 'retry-shot'), expiresAt=time.time()+1800)
             # 本地任务在同一锁内自动进入分析，轮询不会误停在旧确认状态。
             with self.lock:
                 self._update(task, audio=audio, quote=quote, providersRevision=revision, status='awaiting-confirmation', phase='等待整批调用确认', progress=0)
@@ -299,22 +302,24 @@ class VideoDeconstructionManager:
                 if cancelled():
                     return
                 a, b = row['startSeconds'], row['endSeconds']
-                seconds = [round(a+(b-a)*p, 3) for p in (.08, .5, .92)]
+                fractions = tuple(.02+.96*i/8 for i in range(9)) if task.get('localModel') else (.08, .5, .92)
+                seconds = [round(a+(b-a)*p, 3) for p in fractions]
                 extracted = await asyncio.to_thread(self.media[task['id']].extract_frames, task['context'], seconds, cancelled=cancelled)
                 # 授权问题是全批失败，不伪装为某一镜的读图失败。
                 if cancelled():
                     return
-                if not extracted['failures'] and len(extracted['frames']) == 3:
+                if not extracted['failures'] and len(extracted['frames']) == len(seconds):
                     self._consume(task, 'Vision')
                     try:
                         fields = dict(provider=task['selection']['providerId'], model=task['selection']['model'], images=[f['url'] for f in extracted['frames']],
-                            temperature=.2, max_tokens=4000, message=f'镜头 {row["index"]}，{a}–{b} 秒。这三帧是同一镜头的首、中、尾画面。',
+                            temperature=.2, max_tokens=2800 if task.get('localModel') else 4000,
+                            message=f'待分析片段 {row["index"]}，{a}–{b} 秒，时长 {round(b-a, 3)} 秒。画面按时间排序，采样时刻（原片秒数）：{seconds}。本段由本地切点检测划分，仍需核对画面是否连续；不能默认一定是单一连续镜头。图片提示词还原第一张的静态构图，视频提示词描述该时长内的可见变化。',
                             system_prompt=ANALYSIS_SYSTEM_PROMPT+'\n自定义字段：'+json.dumps({c['id']:c.get('hint') or c['label'] for c in custom}, ensure_ascii=False))
                         if task.get('localModel'):fields['cancelled'] = cancelled
                         response = await (self.local_vision.analyze(fields) if task.get('localModel') else self.call_vision(fields))
                         result = parse_analysis(response.get('text'), custom)
-                        row.update(imagePrompt=result.pop('imagePrompt'), motionPrompt=result.pop('motionPrompt'), keyframeUrl=extracted['frames'][1]['url'], visionFailed=False, failureReason='')
-                        row['cells'].update(result, motion=row['motionPrompt'])
+                        row.update(imagePrompt=result.pop('imagePrompt'), motionPrompt=result.pop('motionPrompt'), keyframeUrl=extracted['frames'][0]['url'], visionFailed=False, failureReason='')
+                        row['cells'].update(result)
                         row['usage'] = response.get('raw_usage')
                     except Exception:
                         row.update(visionFailed=True, failureReason='模型未读出完整镜头内容，请检查模型的读图能力或重试')

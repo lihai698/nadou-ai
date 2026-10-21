@@ -2,6 +2,14 @@ const {test}=require('node:test');
 const assert=require('node:assert/strict');
 let m;try{m=require('../static/js/canvas-video-deconstruction-model.js')}catch(e){if(e.code!=='MODULE_NOT_FOUND')throw e}
 test('拆解模型真实入口存在',()=>assert.ok(m,'missing native deconstruction model'));
+test('修改客观运镜不覆盖完整视频提示词，旧行仍可读取运镜',()=>{
+ let d=m.createTable({nodeId:'v'});d.rows=m.buildShotRows([],3);
+ d.rows[0].motionPrompt='0–1秒抬头，1–3秒前行，保持服饰与背景连续';
+ d=m.editCell(d,'shot-1','motion','低机位缓慢前推');
+ assert.equal(d.rows[0].cells.motion,'低机位缓慢前推');
+ assert.equal(m.videoPrompt(d.rows[0]),'0–1秒抬头，1–3秒前行，保持服饰与背景连续');
+ d.rows[0].motionPrompt='';assert.equal(m.videoPrompt(d.rows[0]),'低机位缓慢前推');
+});
 test('弱切点放宽和过滤保留联系表原索引',()=>{
  assert.equal(m.defaultSensitivity([{seconds:1,score:.161}]),.15);
  assert.deepEqual(m.filterCuts([{seconds:1,score:.4},{seconds:1.1,score:.7},{seconds:2,score:.2}],.3).map(x=>x.index),[1]);

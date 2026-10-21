@@ -105,3 +105,30 @@ test('unknown video with a refreshable remote task keeps the branch and enables 
         assert.doesNotMatch(html, /disabled/);
     }
 });
+
+for(const stage of ['image','video'])test(`shot ${stage}: rejected retry restores its result binding and dependent video input`,async()=>{
+    const h=harness({message:'本次请求被拒绝'}),sourceNode=h.nodes[0];
+    sourceNode.shotTableOrigin={tableId:'table',rowId:'shot',sourceFingerprint:'fp',stage,imageNodeId:'input'};
+    const input={id:'input',type:'smart-image',images:[{url:'/assets/current.png',kind:'image'}]},video={id:'video',type:'smart-image',shotTableOrigin:{imageNodeId:'source'}};
+    const mapping=stage==='video'?{generatorId:'input',outputId:'input',video:{generatorId:'source',outputId:'source'}}:{generatorId:'source',outputId:'source',video:{generatorId:'video',outputId:'video'}};
+    h.nodes.push(input,video,{id:'table',type:'smart-shot-table',shotTableData:{generationMap:{'fp:shot':mapping}}});
+    h.canvas.connections.push({from:'source',to:'video',kind:'input'});
+    h.context.imageRefsOnly=refs=>refs.filter(r=>r.kind==='image');
+    h.context.buildPromptRequest=()=>({prompt:'本镜提示词',displayPrompt:'本镜提示词',refs:[{url:'/assets/current.png',kind:'image'}]});
+    await vm.runInContext('runGeneration()',h.context);
+    const slot=stage==='video'?mapping.video:mapping;
+    assert.equal(h.calls.video,1);assert.equal(h.context.nodes.some(n=>n.id==='branch'),false);assert.equal(slot.outputId,'source');assert.equal(sourceNode.images[0].url,'/assets/input.png');
+    if(stage==='image'){assert.ok(h.canvas.connections.some(c=>c.from==='source'&&c.to==='video'&&c.kind==='input'));assert.equal(video.shotTableOrigin.imageNodeId,'source');}
+    assert.ok(h.calls.saves>0);
+});
+
+test('shot video: an uncertain retry keeps its new branch mapping for querying the original task',async()=>{
+    const h=harness({queryPaused:true,message:'等待查询原任务'}),sourceNode=h.nodes[0];
+    sourceNode.shotTableOrigin={tableId:'table',rowId:'shot',sourceFingerprint:'fp',stage:'video',imageNodeId:'input'};
+    const mapping={generatorId:'input',outputId:'input',video:{generatorId:'source',outputId:'source'}};
+    h.nodes.push({id:'input',type:'smart-image',images:[{url:'/assets/current.png',kind:'image'}]},{id:'table',shotTableData:{generationMap:{'fp:shot':mapping}}});
+    h.context.imageRefsOnly=refs=>refs;
+    h.context.buildPromptRequest=()=>({prompt:'本镜提示词',displayPrompt:'本镜提示词',refs:[{url:'/assets/current.png',kind:'image'}]});
+    await vm.runInContext('runGeneration()',h.context);
+    assert.equal(mapping.video.outputId,'branch');assert.ok(h.context.nodes.some(n=>n.id==='branch'));assert.equal(h.calls.video,1);
+});
