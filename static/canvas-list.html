@@ -21,11 +21,11 @@
     <script src="/static/js/theme.js?v=2026.10.08.1.1792186296"></script>
     <script src="/static/js/touch-mouse.js?v=2026.10.08.1.1792186296"></script>
     <script src="/static/js/i18n.js?v=2026.10.08.1.1792519032"></script>
-    <link rel="stylesheet" href="/static/css/canvas-list.css?v=2026.10.08.1.1792186296">
+    <link rel="stylesheet" href="/static/css/canvas-list.css?v=2026.10.21.4">
     <link rel="stylesheet" href="/static/css/theme.css?v=2026.10.08.1.1792186296">
 </head>
 <body>
-    <div id="workspace" class="workspace">
+    <div id="workspace" class="workspace" style="visibility:hidden" aria-busy="true">
         <!-- LEFT: project sidebar -->
         <aside id="sidebar" class="ws-sidebar">
             <div class="ws-side-head">
@@ -51,23 +51,28 @@
 
         <!-- RIGHT: board -->
         <main class="ws-main">
+            <section class="ws-selection-panel" aria-label="选择画布">
             <div class="ws-topbar">
                 <div class="ws-topbar-left">
-                    <div id="boardProjectName" class="ws-board-name" data-i18n="workspace.defaultProject">默认项目</div>
-                    <span id="boardCanvasCount" class="ws-board-count">0</span>
+                    <div class="ws-selection-title"><h1 data-i18n="canvas.selectCanvas">选择画布</h1><span id="boardCanvasCount" class="ws-board-count">—</span></div>
+                    <div class="ws-selection-subtitle"><span id="boardProjectName" data-i18n="workspace.defaultProject">默认项目</span><span> · </span><span id="selectionHint">打开已有画布，或新建一个开始创作。</span></div>
                 </div>
                 <div class="ws-topbar-right">
                     <button id="pasteCanvasBtn" class="ws-paste-btn" type="button" data-i18n-title="workspace.pasteToProject" title="粘贴到此项目" style="display:none"><i data-lucide="clipboard-paste" class="w-4 h-4"></i><span data-i18n="workspace.pasteToProject">粘贴到此项目</span></button>
-                    <button id="boardResetView" class="ws-icon-btn" type="button" data-i18n-title="workspace.resetView" title="重置视图" aria-label="重置视图"><i data-lucide="locate-fixed" class="w-4 h-4"></i></button>
                     <button id="boardRefresh" class="ws-icon-btn" type="button" data-i18n-title="workspace.refresh" title="刷新" aria-label="刷新"><i data-lucide="refresh-cw" class="w-4 h-4"></i></button>
+                    <button id="openTrashBtn" class="ws-icon-btn" type="button" data-i18n-title="workspace.trash" title="回收站" aria-label="回收站"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
                     <button id="newCanvasBtn" class="ws-primary-btn" type="button"><i data-lucide="plus" class="w-4 h-4"></i><span data-i18n="workspace.newCanvas">新建画布</span></button>
                 </div>
             </div>
 
-            <!-- Board (pan/zoom) -->
+            <!-- Centered six-column canvas selection -->
             <div id="board" class="ws-board">
                 <div id="boardWorld" class="ws-board-world"></div>
-                <div id="boardEmptyHint" class="ws-board-empty">
+                <div id="boardLoadError" class="ws-board-empty hidden" role="alert">
+                    <div id="boardLoadErrorText" class="ws-board-empty-text">画布列表加载失败，请重试。</div>
+                    <button id="boardRetryBtn" class="ws-primary-btn" type="button">重试</button>
+                </div>
+                <div id="boardEmptyHint" class="ws-board-empty hidden">
                     <div class="ws-board-empty-icon"><i data-lucide="mouse-pointer-click" class="w-7 h-7"></i></div>
                     <div class="ws-board-empty-text" data-i18n="workspace.empty">暂无画布</div>
                     <div class="ws-board-empty-sub" data-i18n="workspace.emptyHint">为当前项目创建第一块画布</div>
@@ -76,6 +81,8 @@
                     </div>
                 </div>
             </div>
+
+            </section>
 
             <!-- Trash panel (overlay over the board area) -->
             <div id="trashPanel" class="ws-trash-panel">
@@ -95,7 +102,6 @@
         </main>
     </div>
     <script src="/static/js/canvas-list-export.js?v=2026.10.08.1.1792186296"></script>
-    <script src="/static/js/canvas-list-viewport.js?v=2026.10.08.1.1792186296"></script>
-    <script src="/static/js/canvas-list.js?v=2026.10.08.1.1792186296"></script>
+    <script src="/static/js/canvas-list.js?v=2026.10.21.4"></script>
 </body>
 </html>

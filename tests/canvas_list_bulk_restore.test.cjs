@@ -5,7 +5,6 @@ const path = require('node:path');
 const vm = require('node:vm');
 
 const root = path.join(__dirname, '..');
-const viewportSource = readFileSync(path.join(root, 'static/js/canvas-list-viewport.js'), 'utf8');
 const workspaceSource = readFileSync(path.join(root, 'static/js/canvas-list.js'), 'utf8');
 
 function element(){
@@ -92,7 +91,6 @@ async function workspace({failedIds = [], beforeRestore = async()=>{}, failTrash
         window:{innerWidth:1200, location:{search:''}, StudioI18n, document, addEventListener(){}},
         setTimeout(){ return 1; }, clearTimeout(){}, console:{error(){}},
     });
-    vm.runInContext(viewportSource, context);
     vm.runInContext(workspaceSource, context);
     await new Promise(resolve => setImmediate(resolve));
     await vm.runInContext('loadTrash()', context);

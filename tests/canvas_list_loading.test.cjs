@@ -4,7 +4,6 @@ const {readFileSync} = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 
-const viewportSource = readFileSync(path.join(__dirname, '..', 'static/js/canvas-list-viewport.js'), 'utf8');
 const source = readFileSync(path.join(__dirname, '..', 'static/js/canvas-list.js'), 'utf8');
 
 function element(){
@@ -94,7 +93,6 @@ async function workspace(initial){
         clearTimeout(){},
         console: {error(){}},
     });
-    vm.runInContext(viewportSource, context, {filename: 'canvas-list-viewport.js'});
     vm.runInContext(source, context, {filename: 'canvas-list.js'});
     // The page calls loadAll() during boot. Let its response and rendering settle.
     await new Promise(resolve => setImmediate(resolve));
@@ -159,15 +157,59 @@ test('workspace rejects malformed data, then renders new cards after a successfu
     assert.equal(page.node('boardCanvasCount').textContent, '1');
 });
 
-test('workspace loads the viewport module before the entry and keeps one listener owner', () => {
+test('workspace uses a six-column selection panel without board pan or zoom handlers', () => {
     const root = path.join(__dirname, '..');
     const html = readFileSync(path.join(root, 'static/canvas-list.html'), 'utf8');
-    const moduleIndex = html.indexOf('/static/js/canvas-list-viewport.js');
-    const entryIndex = html.indexOf('/static/js/canvas-list.js');
-    const entry = readFileSync(path.join(root, 'static/js/canvas-list.js'), 'utf8');
-    assert.ok(moduleIndex >= 0);
-    assert.ok(entryIndex > moduleIndex);
-    assert.doesNotMatch(entry, /function\s+onBoardPan(?:Start|Move|End)|function\s+onBoardWheel/);
-    assert.doesNotMatch(entry, /board\.addEventListener\(['"]mousedown['"],\s*onBoardPanStart/);
-    assert.match(entry, /viewportController\.bind\(\)/);
+    const css = readFileSync(path.join(root, 'static/css/canvas-list.css'), 'utf8');
+    assert.match(html, /ws-selection-panel/);
+    assert.doesNotMatch(html, /id="newSmartCanvasBtn"/);
+    assert.match(source, /data-kind="smart"/);
+    assert.match(css, /grid-template-columns:repeat\(6,minmax\(0,1fr\)\)/);
+    assert.doesNotMatch(source, /viewportController|board\.addEventListener\(['"]wheel/);
+});
+
+test('workspace aligns saved, overlapping and new canvases in the same grid', async()=>{
+    const page = await workspace({
+        projects: initial.projects,
+        canvases: response({canvases: Array.from({length: 7}, (_, index) => ({
+            id: String(index), title: `画布 ${index}`, project: 'default',
+            kind: index % 2 ? 'smart' : 'classic',
+            board_x: index === 6 ? null : -900 + index * 9,
+            board_y: index === 6 ? null : 5000,
+        }))}),
+    });
+    const cards = visibleCards(page);
+    assert.equal(cards.length, 7);
+    assert.ok(cards.every(card => card.style.left === undefined && card.style.top === undefined));
+});
+
+
+test('initial list stays concealed until the pending API response is rendered', async()=>{
+    let resolveCanvases;
+    const pending = new Promise(resolve => { resolveCanvases = resolve; });
+    const page = await workspace({projects: initial.projects, canvases: pending});
+    assert.notEqual(page.node('workspace').style.visibility, 'visible');
+    resolveCanvases(initial.canvases);
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(visibleCards(page).length, 1);
+    assert.equal(page.node('boardCanvasCount').textContent, '1');
+    assert.equal(page.node('boardEmptyHint').classList.contains('hidden'), true);
+    assert.equal(page.node('workspace').style.visibility, 'visible');
+});
+
+test('a genuine empty project appears only after a successful response', async()=>{
+    const page = await workspace({projects: initial.projects, canvases: response({canvases: []})});
+    assert.equal(page.node('boardCanvasCount').textContent, '0');
+    assert.equal(page.node('boardEmptyHint').classList.contains('hidden'), false);
+    assert.equal(page.node('workspace').style.visibility, 'visible');
+});
+
+test('initial load failure shows a retry state instead of claiming there are no canvases', async()=>{
+    const page = await workspace({projects: initial.projects, canvases: response({}, 503)});
+    assert.equal(page.node('boardLoadError').classList.contains('hidden'), false);
+    assert.equal(page.node('boardEmptyHint').classList.contains('hidden'), true);
+    assert.equal(page.node('workspace').style.visibility, 'visible');
+    await page.reload(initial);
+    assert.equal(page.node('boardLoadError').classList.contains('hidden'), true);
+    assert.equal(visibleCards(page).length, 1);
 });

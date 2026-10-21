@@ -1,5 +1,5 @@
 // canvas-list.js — Project Workspace.
-// Two-pane: LEFT project list, RIGHT pannable/zoomable board of canvas cards.
+// Project sidebar and a centered, six-column canvas selection panel.
 // Self-contained; relies only on global fetch / StudioI18n / lucide.
 
 /* ===== Small helpers (copied from the previous gate file) ===== */
@@ -9,7 +9,6 @@ function langIsEn(){ return window.StudioI18n?.lang?.() === 'en'; }
 function escapeHtml(str){ return String(str == null ? '' : str).replace(/[&<>"']/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s])); }
 function escapeAttr(str){ return escapeHtml(str); }
 function L(zh, en){ return langIsEn() ? en : zh; }
-function compactLabel(fullZh, compactZh, en){ return window.innerWidth <= 760 ? L(compactZh, en) : L(fullZh, en); }
 function displayProjectName(project){
     if(project?.id === 'default' && project.name === '默认项目') return tr('workspace.defaultProject');
     return project?.name || tr('workspace.defaultProject');
@@ -48,6 +47,8 @@ function renderCanvasIcon(icon, size = 16){
 }
 
 /* ===== DOM refs ===== */
+const workspaceEl = document.getElementById('workspace');
+const boardLoadError = document.getElementById('boardLoadError');
 const board = document.getElementById('board');
 const boardWorld = document.getElementById('boardWorld');
 const boardEmptyHint = document.getElementById('boardEmptyHint');
@@ -69,7 +70,6 @@ const newProjectConfirm = document.getElementById('newProjectConfirm');
 const newProjectCancel = document.getElementById('newProjectCancel');
 const newCanvasBtn = document.getElementById('newCanvasBtn');
 const boardRefreshBtn = document.getElementById('boardRefresh');
-const boardResetViewBtn = document.getElementById('boardResetView');
 const pasteCanvasBtn = document.getElementById('pasteCanvasBtn');
 const emptyCreateCanvasBtn = document.getElementById('emptyCreateCanvasBtn');
 const statusEl = document.getElementById('boardStatus');
@@ -77,6 +77,7 @@ const statusEl = document.getElementById('boardStatus');
 /* ===== State ===== */
 let projects = [];
 let canvases = [];          // all canvases across projects
+let hasLoadedCanvases = false;
 let deletedCanvases = [];
 const selectedTrashIds = new Set();
 let trashBusy = false;
@@ -84,16 +85,6 @@ let currentProjectId = rememberedProjectId();
 let pendingDeleteProjectId = null;
 let statusTimer = null;
 let clipboardCanvasId = null;   // 剪切的画布（切到别的项目后粘贴）
-
-// Viewport math and board listeners live in a small, dependency-injected module.
-// This page keeps the public state so card dragging can use the same coordinates.
-const viewportController = window.CanvasListViewport?.createCanvasListViewport?.({
-    board,
-    boardWorld,
-    beforePanStart:() => closeCardMenu()
-});
-if(!viewportController) throw new Error('CanvasListViewport is required');
-const viewport = viewportController.state;
 
 /* ===== Status toast ===== */
 function setStatus(text){
@@ -105,7 +96,7 @@ function setStatus(text){
     statusTimer = setTimeout(() => statusEl.classList.remove('show'), 2200);
 }
 
-function resetView(){ viewportController.reset(); }
+function resetView(){ board.scrollTop = 0; board.scrollLeft = 0; }
 
 /* ===== Data loading ===== */
 function currentProject(){ return projects.find(p => p.id === currentProjectId) || projects[0] || null; }
@@ -137,6 +128,8 @@ async function loadAll(){
             currentProjectId = def ? def.id : 'default';
         }
         rememberProjectId(currentProjectId);
+        hasLoadedCanvases = true;
+        boardLoadError.classList.add('hidden');
         renderProjects();
         renderBoard();
         resetView();
@@ -145,7 +138,17 @@ async function loadAll(){
     } catch(e){
         console.error(e);
         setStatus(L('加载失败','Load failed'));
+        if(!hasLoadedCanvases){
+            boardEmptyHint.classList.add('hidden');
+            boardLoadError.classList.remove('hidden');
+            document.getElementById('boardLoadErrorText').textContent = L('画布列表加载失败，请重试。','Could not load canvases. Please retry.');
+            document.getElementById('boardRetryBtn').textContent = L('重试','Retry');
+        }
         return false;
+    } finally {
+        // Reveal only after the initial data has rendered (or a recoverable error is ready).
+        workspaceEl.style.visibility = 'visible';
+        workspaceEl.setAttribute('aria-busy', 'false');
     }
 }
 
@@ -302,31 +305,15 @@ function updateBoardHeader(){
     const p = currentProject();
     boardProjectName.textContent = displayProjectName(p);
     boardCanvasCount.textContent = String(canvasesInProject(currentProjectId).length);
-}
-
-function autoLayoutNulls(items){
-    // grid layout for cards with null board position; persist each once.
-    const X0 = 40, Y0 = 40, XSTRIDE = 276, YSTRIDE = 176, COLS = 4;
-    const positioned = items.filter(c => c.board_x != null && c.board_y != null);
-    const nulls = items.filter(c => c.board_x == null || c.board_y == null);
-    // start index after existing positioned grid slots to reduce overlap
-    let i = positioned.length;
-    nulls.forEach(c => {
-        const col = i % COLS, rowIdx = Math.floor(i / COLS);
-        c.board_x = X0 + col * XSTRIDE;
-        c.board_y = Y0 + rowIdx * YSTRIDE;
-        i++;
-        persistMeta(c.id, { board_x: c.board_x, board_y: c.board_y });
-    });
+    document.getElementById('selectionHint').textContent = L('打开已有画布，或新建一个开始创作。','Open a canvas or create one to get started.');
 }
 
 function renderBoard(){
     updateBoardHeader();
     const items = canvasesInProject(currentProjectId);
-    autoLayoutNulls(items);
     boardWorld.innerHTML = '';
     items.forEach(c => boardWorld.appendChild(buildCard(c)));
-    boardEmptyHint.classList.toggle('hidden', items.length > 0);
+    boardEmptyHint.classList.toggle('hidden', !hasLoadedCanvases || items.length > 0);
     updatePasteBtn();
     refreshIcons();
 }
@@ -338,17 +325,15 @@ function buildCard(c){
         + (String(c.color || '').trim() ? ' cc-marked' : '')
         + (clipboardCanvasId === c.id ? ' cut' : '');
     card.dataset.canvasId = c.id;
-    card.style.left = (c.board_x || 0) + 'px';
-    card.style.top = (c.board_y || 0) + 'px';
-    // 卡片布局：顶部=类型标签+更多按钮；中部=标题；底部=节点数·时间。已移除图标。
+    // Match the selection panel: icon, title and compact time badge.
     card.innerHTML = `
         <div class="ws-card-top">
-            <span class="ws-card-kind ${isSmart ? 'smart' : 'classic'}">${isSmart ? compactLabel('智能画布','智能','Smart') : compactLabel('普通画布','普通','Classic')}</span>
+            <span class="ws-card-icon"><i data-lucide="${isSmart ? 'sparkles' : 'flag'}" class="w-5 h-5"></i></span>
+            ${isSmart ? `<span class="ws-card-kind smart">${L('智能','Smart')}</span>` : ''}
             <button class="ws-card-menu" type="button" title="${L('更多','More')}" aria-label="${L('更多','More')}"><i data-lucide="more-horizontal" class="w-4 h-4"></i></button>
         </div>
         <div class="ws-card-title">${escapeHtml(c.title)}</div>
         <div class="ws-card-meta">
-            <span class="ws-card-nodes">${(c.node_count != null ? c.node_count : 0)} ${L('节点','nodes')}</span>
             <span class="ws-card-meta-dot"></span>
             <span class="ws-card-time">${formatCanvasTime(c.updated_at || c.created_at)}</span>
         </div>
@@ -359,7 +344,11 @@ function buildCard(c){
                 <button class="ws-card-delete-no" type="button">${L('取消','Cancel')}</button>
             </div>
         </div>`;
-    attachCardDrag(card, c);
+    card.addEventListener('click', e => {
+        if(e.target.closest('button, input, .ws-card-delete-confirm')) return;
+        closeCardMenu();
+        openCanvas(c);
+    });
     const menuBtn = card.querySelector('.ws-card-menu');
     menuBtn.onmousedown = e => e.stopPropagation();
     menuBtn.onclick = e => { e.stopPropagation(); openCardMenu(c.id, menuBtn); };
@@ -367,45 +356,6 @@ function buildCard(c){
     card.querySelector('.ws-card-delete-yes').onclick = e => { e.stopPropagation(); deleteCanvas(c.id); };
     card.querySelector('.ws-card-delete-no').onclick = e => { e.stopPropagation(); card.classList.remove('confirming-delete'); };
     return card;
-}
-
-/* ===== Card drag vs click ===== */
-function attachCardDrag(card, c){
-    card.addEventListener('mousedown', e => {
-        if(e.button !== 0) return;
-        if(e.target.closest('.ws-card-menu')) return;
-        if(e.target.closest('.ws-card-delete-confirm')) return;
-        if(card.querySelector('.ws-card-title-input')) return; // editing title
-        e.stopPropagation();
-        closeCardMenu();
-        const startWorld = viewportController.screenToWorld(e.clientX, e.clientY);
-        const origX = c.board_x || 0, origY = c.board_y || 0;
-        let moved = false;
-        const onMove = ev => {
-            const w = viewportController.screenToWorld(ev.clientX, ev.clientY);
-            const dx = w.x - startWorld.x, dy = w.y - startWorld.y;
-            if(!moved && (Math.abs(dx * viewport.scale) > 5 || Math.abs(dy * viewport.scale) > 5)){
-                moved = true; card.classList.add('dragging');
-            }
-            if(moved){
-                c.board_x = origX + dx; c.board_y = origY + dy;
-                card.style.left = c.board_x + 'px';
-                card.style.top = c.board_y + 'px';
-            }
-        };
-        const onUp = () => {
-            document.removeEventListener('mousemove', onMove);
-            document.removeEventListener('mouseup', onUp);
-            card.classList.remove('dragging');
-            if(moved){
-                persistMeta(c.id, { board_x: Math.round(c.board_x), board_y: Math.round(c.board_y) });
-            } else {
-                openCanvas(c);
-            }
-        };
-        document.addEventListener('mousemove', onMove);
-        document.addEventListener('mouseup', onUp);
-    });
 }
 
 function openCanvas(c){
@@ -421,14 +371,12 @@ function openCanvas(c){
 let createCardEl = null;
 let createKind = 'classic';
 function closeCreateCard(){ createCardEl?.remove(); createCardEl = null; }
-function openCreateCard(worldPt){
+function openCreateCard(){
     closeCreateCard();
     closeCardMenu();
     createKind = 'classic';
     const el = document.createElement('div');
     el.className = 'ws-create-card';
-    el.style.left = worldPt.x + 'px';
-    el.style.top = worldPt.y + 'px';
     el.innerHTML = `
         <div class="ws-create-title">${L('新建画布','New canvas')}</div>
         <input class="ws-create-input" type="text" maxlength="80" placeholder="${L('画布名称（可留空）','Canvas name (optional)')}">
@@ -440,7 +388,12 @@ function openCreateCard(worldPt){
             <button class="ws-create-confirm" type="button">${L('创建','Create')}</button>
             <button class="ws-create-cancel" type="button">${L('取消','Cancel')}</button>
         </div>`;
-    boardWorld.appendChild(el);
+    document.body.appendChild(el);
+    const anchor = newCanvasBtn.getBoundingClientRect();
+    const popup = el.getBoundingClientRect();
+    el.style.left = Math.max(16, Math.min(anchor.right - popup.width, window.innerWidth - popup.width - 16)) + 'px';
+    el.style.top = (anchor.bottom + 12 + popup.height <= window.innerHeight - 16
+        ? anchor.bottom + 12 : Math.max(16, anchor.top - popup.height - 12)) + 'px';
     createCardEl = el;
     el.addEventListener('mousedown', e => e.stopPropagation());
     const input = el.querySelector('.ws-create-input');
@@ -451,7 +404,7 @@ function openCreateCard(worldPt){
             el.querySelectorAll('.ws-create-toggle-btn').forEach(b => b.classList.toggle('active', b === btn));
         };
     });
-    const confirm = () => createCanvasOnBoard(input.value.trim(), createKind, worldPt);
+    const confirm = () => createCanvasOnBoard(input.value.trim(), createKind, {x:0, y:0});
     el.querySelector('.ws-create-confirm').onclick = confirm;
     el.querySelector('.ws-create-cancel').onclick = closeCreateCard;
     input.onkeydown = e => {
@@ -805,20 +758,15 @@ async function purgeCanvas(id){
 }
 
 /* ===== Event bindings ===== */
-viewportController.bind();
-board.addEventListener('dblclick', e => {
-    if(e.target.closest('.ws-card') || e.target.closest('.ws-create-card')) return;
-    openCreateCard(viewportController.screenToWorld(e.clientX, e.clientY));
-});
-
-newCanvasBtn.addEventListener('click', () => openCreateCard(viewportController.boardCenterWorld()));
+newCanvasBtn.addEventListener('click', () => openCreateCard());
 emptyCreateCanvasBtn?.addEventListener('mousedown', e => e.stopPropagation());
 emptyCreateCanvasBtn?.addEventListener('click', e => {
     e.stopPropagation();
-    openCreateCard(viewportController.boardCenterWorld());
+    openCreateCard();
 });
 boardRefreshBtn.addEventListener('click', loadAll);
-boardResetViewBtn.addEventListener('click', resetView);
+document.getElementById('boardRetryBtn').addEventListener('click', loadAll);
+document.getElementById('openTrashBtn').addEventListener('click', openTrashView);
 pasteCanvasBtn?.addEventListener('click', pasteCanvas);
 
 newProjectBtn.addEventListener('click', openNewProject);
@@ -877,6 +825,5 @@ window.addEventListener('message', event => {
 /* ===== Boot ===== */
 window.StudioI18n?.apply?.();
 syncWorkspaceAriaLabels();
-viewportController.apply();
 loadAll();
 refreshIcons();
