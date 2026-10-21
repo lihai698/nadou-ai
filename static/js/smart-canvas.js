@@ -8981,6 +8981,56 @@ const smartEditorBridges=CanvasEditorBridges.create(smartEditorBridgeHost());
 function initSmartVideoDeconstructionBridge(){
     return smartEditorBridges.initSmartVideoDeconstructionBridge();
 }
+function smartAssistantEditorHost(){
+    return {
+        get bindSmartPreviewImageFallbacks(){return bindSmartPreviewImageFallbacks;},
+        get canvas(){return canvas;},
+        get canvasAssistantTemplateCallback(){return canvasAssistantTemplateCallback;},
+        set canvasAssistantTemplateCallback(value){canvasAssistantTemplateCallback=value;},
+        get canvasForStorage(){return canvasForStorage;},
+        get canvasId(){return canvasId;},
+        get connectInputNode(){return connectInputNode;},
+        get createImageNodeAt(){return createImageNodeAt;},
+        get createLoopNode(){return createLoopNode;},
+        get createNode(){return createNode;},
+        get createPromptNode(){return createPromptNode;},
+        get createSmartGroupNode(){return createSmartGroupNode;},
+        get finalizeSmartPendingTask(){return finalizeSmartPendingTask;},
+        get fitAllNodesViewport(){return fitAllNodesViewport;},
+        get mergeReloadCanvasNow(){return mergeReloadCanvasNow;},
+        get nodes(){return nodes;},
+        get openPromptTemplatePanel(){return openPromptTemplatePanel;},
+        get pushUndo(){return pushUndo;},
+        get render(){return render;},
+        get resultMediaUrls(){return resultMediaUrls;},
+        get resumeSmartPendingNode(){return resumeSmartPendingNode;},
+        get runGeneration(){return runGeneration;},
+        get runPromptLLMNode(){return runPromptLLMNode;},
+        get runSmartAssistantNativeLoop(){return runSmartAssistantNativeLoop;},
+        get saveCanvas(){return saveCanvas;},
+        get scheduleSave(){return scheduleSave;},
+        get selectedId(){return selectedId;},
+        set selectedId(value){selectedId=value;},
+        get selectedIds(){return selectedIds;},
+        set selectedIds(value){selectedIds=value;},
+        get selectedNodeIds(){return selectedNodeIds;},
+        get setPromptDraftForNode(){return setPromptDraftForNode;},
+        get setSmartGroupMemberIds(){return setSmartGroupMemberIds;},
+        get setSmartLoopPromptFieldValues(){return setSmartLoopPromptFieldValues;},
+        get smartAssistantCreationSettings(){return smartAssistantCreationSettings;},
+        get smartAssistantGenerateImage(){return smartAssistantGenerateImage;},
+        get smartAssistantImageRequest(){return smartAssistantImageRequest;},
+        get smartCanvasAssistantExportWorkflow(){return typeof smartCanvasAssistantExportWorkflow==='function'?smartCanvasAssistantExportWorkflow:null;},
+        get smartDepthPair(){return smartDepthPair;},
+        get smartPendingTasks(){return smartPendingTasks;},
+        get smartPreviewImgHtml(){return smartPreviewImgHtml;},
+        get smartVideoPreviewHtml(){return smartVideoPreviewHtml;},
+        get updateSmartDepthCapture(){return updateSmartDepthCapture;},
+        get validateSmartAssistantLoopSlots(){return validateSmartAssistantLoopSlots;},
+        get viewport(){return viewport;},
+        get window(){return window;}
+    };
+}
 window.onload = async () => {
     applyTheme(localStorage.getItem('studio_theme') || localStorage.getItem('canvas_theme') || 'light');
     loadPromptPresets();
@@ -8996,59 +9046,7 @@ window.onload = async () => {
     initSmartVideoDeconstructionBridge();
     syncApiKindToggleVisibility();
     render();
-    const nativeEditor=window.CanvasAssistantNative?.createEditor({
-        getState:()=>({id:canvasId,kind:'smart',updatedAt:Number(canvas?.updated_at||0),nodes,connections:canvas?.connections||[],readOnly:!!canvas?.readOnly}),
-        getSnapshot:()=>({nodes:canvasForStorage().nodes,connections:canvas?.connections||[]}),
-        save:()=>saveCanvas(),pushUndo:()=>pushUndo(),render:()=>render(),setLoopPrompts:setSmartLoopPromptFieldValues,setGroupMembers:setSmartGroupMemberIds,
-        exportWorkflow:typeof smartCanvasAssistantExportWorkflow==='function'?smartCanvasAssistantExportWorkflow:null,
-        connectNodes:connectInputNode,
-        runLLMNode:(node,options)=>runPromptLLMNode(node.id,options),
-        runNode:(node,options)=>node?.type==='smart-loop' ? runSmartAssistantNativeLoop(node,options) : runGeneration({...options,assistantNativeNodeId:node.id}),
-        validateLoopSlots:(node,proposal)=>validateSmartAssistantLoopSlots(node,proposal),
-        applyTask:async(node,task,kind)=>{
-
-            if(kind==='depth')return updateSmartDepthCapture(smartDepthPair(node),task,node.depthCapture.operationId);
-            const id=task.task_id||task.id;
-            if(task.status==='succeeded'){
-                const outputs=resultMediaUrls(task.image_items?.length?task.image_items:task);
-                if(!outputs.length)throw new Error('原任务成功但没有可回填的媒体结果');
-                finalizeSmartPendingTask(node,id,outputs,kind);render();
-            }else if(task.status==='failed'){
-                const pending=smartPendingTasks(node).find(p=>p.taskId===id);
-                if(pending){pending.querying=false;await resumeSmartPendingNode(node,{},id);}
-            }
-        },
-        shotHost:()=>window.CanvasVideoDeconstructionBridge,shotModel:window.CanvasVideoDeconstructionModel,
-        applyFields:(node,patch)=>{const fields={...patch};if(Object.hasOwn(fields,'promptDraftText')){setPromptDraftForNode(node,fields.promptDraftText);delete fields.promptDraftText;}Object.assign(node,fields);},
-        createNode:type=>{const point={x:(viewport?.x||0)+120,y:(viewport?.y||0)+120};
-            if(type==='smart-image')return createImageNodeAt(point);
-            const factory={'smart-prompt':createPromptNode,'smart-loop':createLoopNode,'smart-group':createSmartGroupNode}[type];
-            return factory?.(point.x,point.y);},
-        check:proposal=>proposal.check(),
-    });
-    window.CanvasAssistant?.mount({
-        kind:'smart',
-        getContext:()=>canvas ? {id:canvasId,title:canvas.title,updatedAt:Number(canvas.updated_at||0),nodes,selectedNodeIds:selectedNodeIds(),creationSettings:smartAssistantCreationSettings()} : null,
-        save:()=>saveCanvas(),
-        refresh:()=>mergeReloadCanvasNow(),
-        prepareImageRequest:smartAssistantImageRequest,
-        generateImage:smartAssistantGenerateImage,
-        nativeSnapshot:()=>nativeEditor?.snapshot(),
-        executeNativeAction:proposal=>nativeEditor.execute(proposal),
-        resumeNativeLoop:proposal=>nativeEditor.resumeLoop(proposal),
-        syncNativeTask:proposal=>nativeEditor.syncTask(proposal),
-        referencePreview:(item,size)=>item.kind==='video' ? smartVideoPreviewHtml(item,size,'preload="none"') : smartPreviewImgHtml(item.thumbnail||item.url,size,'loading="lazy" draggable="false"'),
-        bindReferencePreviews:element=>bindSmartPreviewImageFallbacks(element),
-        openPromptTemplates:async callback=>{canvasAssistantTemplateCallback=callback;await openPromptTemplatePanel('', '', {target:'assistant'});},
-        addTextNode:async text=>{const node=createPromptNode((viewport?.x||0)+120,(viewport?.y||0)+120);if(!node)return false;node.text=String(text||'');render();scheduleSave();return true;},
-        addImageNode:async (url,name,kind)=>{if(!url)return false;createNode((viewport?.x||0)+120,(viewport?.y||0)+120,[{url,name:name||'助手图片',kind:kind||'image'}],{select:true});return saveCanvas();},
-        viewChanges:async ids=>{
-            await mergeReloadCanvasNow();
-            const affected=nodes.filter(node=>ids.includes(node.id));
-            if(!affected.length)return false;
-            selectedIds=affected.map(node=>node.id);selectedId=affected[0].id;render();fitAllNodesViewport();return true;
-        },
-    });
+    CanvasAssistantEditor.mountSmart(smartAssistantEditorHost());
 };
 
 function applySelectedPromptPreset(){

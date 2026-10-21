@@ -465,7 +465,8 @@ test('普通画布真实挂载和完成函数回填直接任务，空处理不�
  const ctx=createTaskContext({nodes:s.state.nodes,connections:s.state.connections,window:{CanvasAssistantNative:{createEditor:a=>{mounted=a;}}},setCanvasGroupMembers:()=>{},setCanvasWorkflowParameters:()=>{},resultMediaUrls:t=>t.images||[],uid:()=> 'new-'+(++seq),render:()=>{},scheduleSave:()=>{},nowMs:()=>0,requestMetaFromResult:()=>({}),appendOutputImages:(out,images)=>out.images.push(...images),mergeGeneratedOutputs:(n,images)=>n.generatedOutputs=images,addGenerationLog:()=>{},refreshRunNodes:()=>{}});
  Object.assign(ctx,{syncGeneratorInputs:()=>{},refreshGeneratorInputViews:()=>{},outputUrlValue:x=>typeof x==='string'?x:x.url,mediaKindForOutputItem:()=> 'image',outputNodesForSource:()=>s.state.nodes.filter(n=>n.type==='output'),CANVAS_MEDIA_OUTPUT_TYPES:['generator']});
  for(const name of ['findPendingTask','materializeCanvasDirectTasks','completeCanvasImageTask'])vm.runInContext(nativeFunction(source,name),ctx);
- const start=source.lastIndexOf('const nativeEditor=window.CanvasAssistantNative');vm.runInContext(source.slice(start,source.indexOf('window.CanvasAssistant?.mount',start)),ctx);
+ ctx.CanvasAssistantEditor=require('../static/js/canvas-assistant-editor.js');
+ vm.runInContext(nativeFunction(source,'classicAssistantEditorHost')+'\nCanvasAssistantEditor.mountClassic(classicAssistantEditorHost());',ctx);
  s.adapter.applyTask=mounted.applyTask;
  const p={canvasId:'canvas',nodeId:'g',arguments:{taskId:'original',taskKind:'image'},receipt:{task:{task_id:'original',status:'succeeded',images:['/output/real.png']}}};
  assert.equal(await s.editor.syncTask(p),true);assert.equal(node._directPending?.length||0,0);assert.deepEqual(Array.from(node.generatedOutputs),['/output/real.png']);assert.equal(s.state.nodes.find(n=>n.type==='output').images[0].url,'/output/real.png');
@@ -652,12 +653,11 @@ test('编辑器保存只递增版本可执行，保存期间正文变化或停�
 });
 test('智能画布实际挂载适配器读取canvas.connections，不依赖普通画布变量',()=>{
  const source=fs.readFileSync(require.resolve('../static/js/smart-canvas.js'),'utf8');
- const start=source.lastIndexOf('const nativeEditor=window.CanvasAssistantNative');
- const adapterBlock=source.slice(start,source.indexOf('window.CanvasAssistant?.mount',start));
  const canvas={nodes:[{id:'p'}],connections:[{from:'a',to:'p'}]};let captured;
  const context=createTaskContext({window:{CanvasAssistantNative:{createEditor:a=>{captured=a;return {};}}},canvas,canvasId:'canvas',nodes:canvas.nodes,canvasForStorage:()=>canvas,setSmartLoopPromptFieldValues:()=>{},connectInputNode:()=>{}});
  vm.runInContext(nativeFunction(source,'setSmartGroupMemberIds'),context);
- vm.runInContext(adapterBlock,context);
+ context.CanvasAssistantEditor=require('../static/js/canvas-assistant-editor.js');
+ vm.runInContext(nativeFunction(source,'smartAssistantEditorHost')+'\nCanvasAssistantEditor.mountSmart(smartAssistantEditorHost());',context);
  assert.deepEqual(JSON.parse(JSON.stringify(captured.getSnapshot())),{nodes:canvas.nodes,connections:canvas.connections});
 });
 

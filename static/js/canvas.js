@@ -6820,6 +6820,65 @@ async function saveCanvasAssistantSnapshot(){
 
     return saveCanvas();
 }
+function classicAssistantEditorHost(){
+    return {
+        get addPromptNode(){return addPromptNode;},
+        get bindCanvasPreviewImageFallbacks(){return bindCanvasPreviewImageFallbacks;},
+        get canConnect(){return canConnect;},
+        get canvas(){return canvas;},
+        get canvasAssistantCreationSettings(){return canvasAssistantCreationSettings;},
+        get canvasAssistantExportWorkflow(){return typeof canvasAssistantExportWorkflow==='function'?canvasAssistantExportWorkflow:null;},
+        get canvasAssistantGenerateImage(){return canvasAssistantGenerateImage;},
+        get canvasAssistantImageRequest(){return canvasAssistantImageRequest;},
+        get canvasAssistantTemplateCallback(){return canvasAssistantTemplateCallback;},
+        set canvasAssistantTemplateCallback(value){canvasAssistantTemplateCallback=value;},
+        get canvasDepthPair(){return canvasDepthPair;},
+        get canvasPreviewImgHtml(){return canvasPreviewImgHtml;},
+        get canvasVideoPreviewHtml(){return canvasVideoPreviewHtml;},
+        get completeCanvasComfyTask(){return completeCanvasComfyTask;},
+        get completeCanvasImageTask(){return completeCanvasImageTask;},
+        get completeCanvasVideoTask(){return completeCanvasVideoTask;},
+        get connections(){return connections;},
+        get createImageCardFromUrl(){return createImageCardFromUrl;},
+        get createNodeByType(){return createNodeByType;},
+        get defaultPoint(){return defaultPoint;},
+        get downloadUrl(){return downloadUrl;},
+        get failCanvasImageTask(){return failCanvasImageTask;},
+        get findPendingTask(){return findPendingTask;},
+        get fitAllNodesViewport(){return fitAllNodesViewport;},
+        get materializeCanvasDirectTasks(){return materializeCanvasDirectTasks;},
+        get nodes(){return nodes;},
+        get openPromptTemplateModal(){return openPromptTemplateModal;},
+        get pushUndo(){return pushUndo;},
+        get refreshGeneratorInputViews(){return refreshGeneratorInputViews;},
+        get refreshRunNodes(){return refreshRunNodes;},
+        get render(){return render;},
+        get resultMediaUrls(){return resultMediaUrls;},
+        get runComfyNode(){return runComfyNode;},
+        get runGenerator(){return runGenerator;},
+        get runLLMNode(){return runLLMNode;},
+        get runMidjourneyNode(){return runMidjourneyNode;},
+        get runMsGenNode(){return runMsGenNode;},
+        get runRhNode(){return runRhNode;},
+        get runVideoNode(){return runVideoNode;},
+        get saveCanvas(){return saveCanvas;},
+        get saveCanvasAssistantSnapshot(){return saveCanvasAssistantSnapshot;},
+        get scheduleSave(){return scheduleSave;},
+        get selected(){return selected;},
+        set selected(value){selected=value;},
+        get serializableCanvasNodes(){return serializableCanvasNodes;},
+        get setCanvasGeneratorSizeFields(){return setCanvasGeneratorSizeFields;},
+        get setCanvasGroupMembers(){return setCanvasGroupMembers;},
+        get setCanvasMsSizeFields(){return setCanvasMsSizeFields;},
+        get setCanvasWorkflowParameters(){return setCanvasWorkflowParameters;},
+        get syncGeneratorInputs(){return syncGeneratorInputs;},
+        get syncRemoteCanvasNow(){return syncRemoteCanvasNow;},
+        get uid(){return uid;},
+        get updateCanvasDepthCapture(){return updateCanvasDepthCapture;},
+        get window(){return window;},
+        get wouldCreateGeneratorCycle(){return wouldCreateGeneratorCycle;}
+    };
+}
 window.onload = async () => {
     initCanvasClipBridge();
     initCanvasVideoDeconstructionBridge();
@@ -6836,88 +6895,7 @@ window.onload = async () => {
     if(openId){
         await openCanvas(openId);
         await loadCanvasPromptTemplates();
-        const nativeEditor=window.CanvasAssistantNative?.createEditor({
-            getState:()=>({id:canvas?.id,kind:'classic',updatedAt:Number(canvas?.updated_at||0),nodes,connections,readOnly:!!canvas?.readOnly}),
-            getSnapshot:()=>({nodes:serializableCanvasNodes(),connections}),
-            save:()=>saveCanvasAssistantSnapshot(),pushUndo:()=>pushUndo(),render:()=>render(),clipModel:window.CanvasClipModel,setGroupMembers:setCanvasGroupMembers,setWorkflowParameters:setCanvasWorkflowParameters,
-            exportWorkflow:typeof canvasAssistantExportWorkflow==='function'?canvasAssistantExportWorkflow:null,
-            deliverMediaExport:async(node,results,destination)=>{
-                if(destination==='download'){for(const r of results)await downloadUrl(r.url,r.name||'export.mp4');}
-                else {const host=window.CanvasClipBridge?.forNode(node.id);if(!host||!host.output(node.id,results,host.getContext()))throw new Error('原生剪辑输出未接入画布');}
-            },
-            runNode:(node,options)=>node.type==='msgen'?runMsGenNode(node.id,options):node.type==='midjourney'?runMidjourneyNode(node.id,options):node.type==='comfy'?runComfyNode(node.id,options):node.type==='rh'?runRhNode(node.id,options):node.type==='video'?runVideoNode(node.id,options):runGenerator(node.id,options),
-            runLLMNode:(node,options)=>runLLMNode(node.id,options),
-            connectNodes:(from,to)=>{if(!canConnect(from,to)||wouldCreateGeneratorCycle(from,to))return false;if(!connections.some(c=>c.from===from&&c.to===to))connections.push({id:uid('c'),from,to});syncGeneratorInputs();refreshGeneratorInputViews();return true;},
-            applyTask:(node,task,kind)=>{
-                if(kind==='depth')return updateCanvasDepthCapture(canvasDepthPair(node),task,node.depthCapture.operationId);
-                if(kind==='video'){
-                    const id=task.task_id||task.id;
-                    if(task.status==='succeeded')return completeCanvasVideoTask(id,task.result||task);
-                    const found=findPendingTask(id);
-                    if(!found)return false;
-                    if(['failed','cancelled','canceled'].includes(task.status)){found.pending.failed=true;found.pending.error=task.error||'原视频任务未成功';refreshRunNodes(node,found.out);return true;}
-                    return false;
-                }
-                if(kind==='comfy'){
-                    const id=task.task_id||task.id;
-                    if(task.status==='succeeded'){
-                        if(!findPendingTask(id))return false;
-                        completeCanvasComfyTask(id,task.result || task);
-                        return !findPendingTask(id);
-                    }
-                    if(task.status==='failed'){
-                        const found=findPendingTask(id);
-                        if(!found)return false;
-                        found.pending.error=task.error||'原生 ComfyUI 任务失败';
-                        found.pending.failed=true;
-                        refreshRunNodes(node,found.out);scheduleSave();
-                        return true;
-                    }
-                    return false;
-                }
-                const id=task.task_id||task.id;
-                if(task.status==='succeeded'){
-                    const images=resultMediaUrls(task.image_items?.length?task.image_items:task).map(item=>kind==='video'?(typeof item==='string'?{url:item,kind:'video'}:{...item,kind:item.kind||'video'}):item);
-                    if(!images.length)throw new Error('原任务成功但没有可回填的媒体结果');
-                    const direct=(node._directPending||[]).filter(p=>p.canvasTaskId===id);
-                    if(direct.length)materializeCanvasDirectTasks(node,direct);
-                    if(!findPendingTask(id))return false;
-                    completeCanvasImageTask(id,{...task,images});
-                    return !findPendingTask(id);
-                }else if(task.status==='failed'){
-                    const direct=(node._directPending||[]).filter(p=>p.canvasTaskId===id);
-                    if(direct.length)materializeCanvasDirectTasks(node,direct);
-                    if(!findPendingTask(id))return false;
-                    failCanvasImageTask(id,task.error||'原任务失败',task);
-                }
-            },
-            applyFields:(node,patch)=>{if(node.type==='generator')setCanvasGeneratorSizeFields(node,patch);else if(node.type==='msgen')setCanvasMsSizeFields(node,patch);else Object.assign(node,patch);},
-            createNode:type=>createNodeByType(type,defaultPoint(0,0)),
-            shotHost:()=>window.CanvasVideoDeconstructionBridge,shotModel:window.CanvasVideoDeconstructionModel,
-            check:proposal=>proposal.check(),
-        });
-        window.CanvasAssistant?.mount({
-            kind:'classic',
-            getContext:()=>canvas ? {id:canvas.id,title:canvas.title,updatedAt:Number(canvas.updated_at||0),nodes,selectedNodeIds:[...selected],creationSettings:canvasAssistantCreationSettings()} : null,
-            save:()=>saveCanvasAssistantSnapshot(),
-            refresh:()=>syncRemoteCanvasNow(),
-            prepareImageRequest:canvasAssistantImageRequest,
-            generateImage:canvasAssistantGenerateImage,
-            nativeSnapshot:()=>nativeEditor?.snapshot(),
-            executeNativeAction:proposal=>nativeEditor.execute(proposal),
-            syncNativeTask:proposal=>nativeEditor.syncTask(proposal),
-            referencePreview:(item,size)=>item.kind==='video' ? canvasVideoPreviewHtml(item.url,size,'preload="none"') : canvasPreviewImgHtml(item.thumbnail||item.url,size,'loading="lazy" draggable="false"'),
-            bindReferencePreviews:element=>bindCanvasPreviewImageFallbacks(element),
-            openPromptTemplates:async callback=>{canvasAssistantTemplateCallback=callback;await openPromptTemplateModal('');},
-            addTextNode:async text=>{const node=addPromptNode(defaultPoint(0,0));if(!node)return false;node.text=String(text||'');render();scheduleSave();return true;},
-            addImageNode:async (url,name,kind)=>{if(!url)return false;createImageCardFromUrl(url,defaultPoint(0,0),name||'助手图片',kind);return saveCanvas();},
-            viewChanges:async ids=>{
-                await syncRemoteCanvasNow();
-                const affected=nodes.filter(node=>ids.includes(node.id));
-                if(!affected.length)return false;
-                selected=new Set(affected.map(node=>node.id));render();fitAllNodesViewport();return true;
-            },
-        });
+        CanvasAssistantEditor.mountClassic(classicAssistantEditorHost());
     } else {
         window.location.replace(canvasListUrlForProject(rememberedCanvasListProject()));
     }
