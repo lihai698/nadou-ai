@@ -586,33 +586,27 @@ function refreshIcons(){ if(window.lucide) lucide.createIcons(); }
 function uid(prefix){ return `${prefix}_${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36).slice(-4)}`; }
 function escapeHtml(str){ return String(str == null ? '' : str).replace(/[&<>"']/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s])); }
 const escapeAttr = escapeHtml;
+function smartMediaSourceHost(){
+    return {
+        get URL(){return URL;},
+        get window(){return window;},
+        smartOriginalMediaUrl:(...args)=>smartOriginalMediaUrl(...args),
+        fileNameFromUrl:(...args)=>fileNameFromUrl(...args),
+        proxiedMediaUrl:(...args)=>proxiedMediaUrl(...args),
+        displayMediaUrl:(...args)=>displayMediaUrl(...args),
+        smartMediaPreviewUrl:(...args)=>smartMediaPreviewUrl(...args),
+        escapeHtml:(...args)=>escapeHtml(...args),
+        escapeAttr:(...args)=>escapeAttr(...args)
+    };
+}
 function smartOriginalMediaUrl(itemOrUrl){
-    const raw = typeof itemOrUrl === 'string' ? itemOrUrl : (itemOrUrl?.url || '');
-    const text = String(raw || '');
-    if(!text) return '';
-    try {
-        const parsed = new URL(text, window.location.origin);
-        if(parsed.pathname === '/api/media-preview'){
-            const original = parsed.searchParams.get('url') || '';
-            return original || text;
-        }
-    } catch(e) {}
-    return text;
+    return CanvasMediaSources.smartOriginalMediaUrl(smartMediaSourceHost(), itemOrUrl);
 }
 function smartMediaPreviewUrl(itemOrUrl, size=512){
-    const raw = smartOriginalMediaUrl(itemOrUrl);
-    const displayItem = typeof itemOrUrl === 'object' && itemOrUrl ? {...itemOrUrl, url:raw} : raw;
-    const displayUrl = displayMediaUrl(displayItem);
-    if(!raw || raw.startsWith('data:') || raw.startsWith('blob:')) return displayUrl;
-    if(!raw.startsWith('/output/') && !raw.startsWith('/assets/')) return displayUrl;
-    if(!/\.(png|jpe?g|webp|gif|bmp|avif|tiff?|mp4|webm|mov|m4v|avi|mkv)(\?|#|$)/i.test(raw)) return displayUrl;
-    const width = Math.max(64, Math.min(2048, Math.round(Number(size) || 512)));
-    return `/api/media-preview?w=${width}&url=${encodeURIComponent(raw)}`;
+    return CanvasMediaSources.smartMediaPreviewUrl(smartMediaSourceHost(), itemOrUrl, size);
 }
 function smartPreviewImgHtml(itemOrUrl, size=512, attrs=''){
-    const original = smartOriginalMediaUrl(itemOrUrl);
-    const preview = smartMediaPreviewUrl(itemOrUrl, size);
-    return `<img src="${escapeHtml(preview)}" data-preview-src="${escapeAttr(preview)}" data-original-src="${escapeAttr(original)}"${attrs ? ` ${attrs}` : ''}>`;
+    return CanvasMediaSources.smartPreviewImgHtml(smartMediaSourceHost(), itemOrUrl, size, attrs);
 }
 function smartImageDimensionsHost(){
     return {
@@ -638,19 +632,13 @@ function smartImageDimensionsHost(){
 }
 const smartImageDimensions=SmartImageDimensions.create(smartImageDimensionsHost);
 function smartVideoPreviewHtml(itemOrUrl, size=512, attrs=''){
-    const original = smartOriginalMediaUrl(itemOrUrl);
-    const preview = smartMediaPreviewUrl(itemOrUrl, size);
-    return `<img src="${escapeHtml(preview)}" data-preview-src="${escapeAttr(preview)}" data-original-src="${escapeAttr(original)}" data-url="${escapeAttr(original)}" data-preview-kind="video"${attrs ? ` ${attrs}` : ''}>`;
+    return CanvasMediaSources.smartVideoPreviewHtml(smartMediaSourceHost(), itemOrUrl, size, attrs);
 }
 function smartVideoFallbackHtml(url, attrs=''){
-    const original = smartOriginalMediaUrl(url);
-    const src = displayMediaUrl({url:original});
-    return `<video src="${escapeHtml(src)}" data-url="${escapeAttr(original)}" muted preload="metadata" playsinline disablepictureinpicture controlslist="nodownload noplaybackrate noremoteplayback"${attrs ? ` ${attrs}` : ''}></video>`;
+    return CanvasMediaSources.smartVideoFallbackHtml(smartMediaSourceHost(), url, attrs);
 }
 function smartVideoPlayerHtml(url, attrs=''){
-    const original = smartOriginalMediaUrl(url);
-    const safe = escapeHtml(displayMediaUrl({url:original}));
-    return `<video src="${safe}" data-url="${escapeAttr(original)}" data-inline-video-active="1" controls autoplay playsinline preload="metadata" disablepictureinpicture controlslist="nodownload noplaybackrate noremoteplayback"${attrs ? ` ${attrs}` : ''}></video>`;
+    return CanvasMediaSources.smartVideoPlayerHtml(smartMediaSourceHost(), url, attrs);
 }
 
 function smartPreviewEventsHost(){
@@ -4112,15 +4100,10 @@ function outputUrlLooksVideo(url){
     return /\.(mp4|webm|mov|m4v|avi|mkv)(\?|$)/.test(smartOriginalMediaUrl(url).toLowerCase());
 }
 function proxiedMediaUrl(itemOrUrl, name=''){
-    const url = smartOriginalMediaUrl(itemOrUrl);
-    if(!url || String(url).startsWith('/assets/') || String(url).startsWith('/output/') || String(url).startsWith('data:') || String(url).startsWith('blob:')) return url;
-    const filename = name || (typeof itemOrUrl === 'object' ? (itemOrUrl.name || '') : '') || fileNameFromUrl(url) || 'preview';
-    return `/api/download-output?inline=1&url=${encodeURIComponent(url)}&name=${encodeURIComponent(filename)}`;
+    return CanvasMediaSources.proxiedMediaUrl(smartMediaSourceHost(), itemOrUrl, name);
 }
 function displayMediaUrl(itemOrUrl, name=''){
-    const url = smartOriginalMediaUrl(itemOrUrl);
-    if(/^https?:\/\//i.test(String(url || ''))) return proxiedMediaUrl(itemOrUrl, name);
-    return url;
+    return CanvasMediaSources.displayMediaUrl(smartMediaSourceHost(), itemOrUrl, name);
 }
 function bindImageProxyFallback(imgEl, itemOrUrl){
     return smartImageResolution.bindProxy(imgEl,itemOrUrl);
@@ -4130,12 +4113,7 @@ function safeExportFileName(name, fallback='download.zip'){
     return cleaned || fallback;
 }
 function fileNameFromUrl(url=''){
-    try {
-        const parsed = new URL(String(url || ''), window.location.href);
-        return decodeURIComponent(parsed.pathname.split('/').filter(Boolean).pop() || '');
-    } catch(e) {
-        return decodeURIComponent(String(url || '').split('?')[0].split('#')[0].split('/').filter(Boolean).pop() || '');
-    }
+    return CanvasMediaSources.fileNameFromUrl(smartMediaSourceHost(), url);
 }
 function extensionForMediaItem(item, fallback='.png'){
     const source = [item?.name, item?.url].map(value => String(value || '').split('?')[0].split('#')[0]).find(value => /\.[a-z0-9]{2,8}$/i.test(value));

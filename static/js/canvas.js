@@ -20,51 +20,35 @@ function actionFailed(labelKey, detail=''){
     return langIsEn() ? `${label} failed${detail ? `: ${detail}` : ''}` : `${label}失败${detail ? `：${detail}` : ''}`;
 }
 function noReturnedImage(labelKey){ return langIsEn() ? `${tr(labelKey)} failed: no image returned` : `${tr(labelKey)}失败：未返回图片`; }
+function classicMediaSourceHost(){
+    return {
+        get URL(){return URL;},
+        get window(){return window;},
+        canvasOriginalMediaUrl:(...args)=>canvasOriginalMediaUrl(...args),
+        canvasFileNameFromUrl:(...args)=>canvasFileNameFromUrl(...args),
+        canvasProxiedMediaUrl:(...args)=>canvasProxiedMediaUrl(...args),
+        canvasDisplayMediaUrl:(...args)=>canvasDisplayMediaUrl(...args),
+        canvasMediaPreviewUrl:(...args)=>canvasMediaPreviewUrl(...args),
+        escapeAttr:(...args)=>escapeAttr(...args)
+    };
+}
 function canvasOriginalMediaUrl(url){
-    const raw = String(url || '');
-    if(!raw) return '';
-    try {
-        const parsed = new URL(raw, window.location.origin);
-        if(parsed.pathname === '/api/media-preview'){
-            const original = parsed.searchParams.get('url') || '';
-            return original || raw;
-        }
-    } catch(e) {}
-    return raw;
+    return CanvasMediaSources.canvasOriginalMediaUrl(classicMediaSourceHost(), url);
 }
 function canvasFileNameFromUrl(url=''){
-    try {
-        const parsed = new URL(String(url || ''), window.location.href);
-        return decodeURIComponent(parsed.pathname.split('/').filter(Boolean).pop() || '');
-    } catch(e) {
-        return decodeURIComponent(String(url || '').split('?')[0].split('#')[0].split('/').filter(Boolean).pop() || '');
-    }
+    return CanvasMediaSources.canvasFileNameFromUrl(classicMediaSourceHost(), url);
 }
 function canvasProxiedMediaUrl(url, name=''){
-    const raw = canvasOriginalMediaUrl(url);
-    if(!raw || raw.startsWith('/assets/') || raw.startsWith('/output/') || raw.startsWith('data:') || raw.startsWith('blob:')) return raw;
-    if(!/^https?:\/\//i.test(raw)) return raw;
-    const filename = name || canvasFileNameFromUrl(raw) || 'preview';
-    return `/api/download-output?inline=1&url=${encodeURIComponent(raw)}&name=${encodeURIComponent(filename)}`;
+    return CanvasMediaSources.canvasProxiedMediaUrl(classicMediaSourceHost(), url, name);
 }
 function canvasDisplayMediaUrl(url, name=''){
-    const raw = canvasOriginalMediaUrl(url);
-    return /^https?:\/\//i.test(raw) ? canvasProxiedMediaUrl(raw, name) : raw;
+    return CanvasMediaSources.canvasDisplayMediaUrl(classicMediaSourceHost(), url, name);
 }
 function canvasMediaPreviewUrl(url, size=512){
-    const raw = canvasOriginalMediaUrl(url);
-    if(!raw || raw.startsWith('data:') || raw.startsWith('blob:')) return raw;
-    if(!raw.startsWith('/output/') && !raw.startsWith('/assets/')) return canvasDisplayMediaUrl(raw);
-    if(!/\.(png|jpe?g|webp|gif|bmp|avif|tiff?|mp4|webm|mov|m4v|avi|mkv|flv)(\?|#|$)/i.test(raw)) return raw;
-    const width = Math.max(64, Math.min(2048, Math.round(Number(size) || 512)));
-    return `/api/media-preview?w=${width}&url=${encodeURIComponent(raw)}`;
+    return CanvasMediaSources.canvasMediaPreviewUrl(classicMediaSourceHost(), url, size);
 }
 function canvasPreviewImgHtml(url, size=512, attrs=''){
-    const original = canvasOriginalMediaUrl(url);
-    const preview = canvasMediaPreviewUrl(original, size);
-    // loading=lazy：画布内容多时，视口外的缩略图不加载/不解码，避免一次性解码上百张图卡顿；
-    // decoding=async：解码放到主线程外，渲染时不阻塞。
-    return `<img loading="lazy" decoding="async" src="${escapeAttr(preview)}" data-preview-src="${escapeAttr(preview)}" data-original-src="${escapeAttr(original)}" data-url="${escapeAttr(original)}"${attrs ? ` ${attrs}` : ''}>`;
+    return CanvasMediaSources.canvasPreviewImgHtml(classicMediaSourceHost(), url, size, attrs);
 }
 function loadCanvasOriginalImageDimensions(url){
     const src = String(url || '');
@@ -77,19 +61,13 @@ function loadCanvasOriginalImageDimensions(url){
     });
 }
 function canvasVideoPreviewHtml(url, size=512, attrs=''){
-    const original = canvasOriginalMediaUrl(url);
-    const preview = canvasMediaPreviewUrl(original, size);
-    return `<img loading="lazy" decoding="async" src="${escapeAttr(preview)}" data-preview-src="${escapeAttr(preview)}" data-original-src="${escapeAttr(original)}" data-url="${escapeAttr(original)}" data-preview-kind="video"${attrs ? ` ${attrs}` : ''}>`;
+    return CanvasMediaSources.canvasVideoPreviewHtml(classicMediaSourceHost(), url, size, attrs);
 }
 function canvasVideoFallbackHtml(url, attrs=''){
-    const original = canvasOriginalMediaUrl(url);
-    const src = canvasDisplayMediaUrl(original);
-    return `<video src="${escapeAttr(src)}" data-url="${escapeAttr(original)}" muted preload="metadata" playsinline disablepictureinpicture controlslist="nodownload noplaybackrate noremoteplayback"${attrs ? ` ${attrs}` : ''}></video>`;
+    return CanvasMediaSources.canvasVideoFallbackHtml(classicMediaSourceHost(), url, attrs);
 }
 function canvasVideoPlayerHtml(url, attrs=''){
-    const original = canvasOriginalMediaUrl(url);
-    const src = canvasDisplayMediaUrl(original);
-    return `<video src="${escapeAttr(src)}" data-url="${escapeAttr(original)}" controls autoplay playsinline preload="metadata" disablepictureinpicture controlslist="nodownload noplaybackrate noremoteplayback"${attrs ? ` ${attrs}` : ''}></video>`;
+    return CanvasMediaSources.canvasVideoPlayerHtml(classicMediaSourceHost(), url, attrs);
 }
 function canvasActivateVideoPreview(img){
     if(!img) return false;
