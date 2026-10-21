@@ -40,6 +40,9 @@ from backend import tudou_provider_service
 from backend import midjourney_service
 from backend import video_provider_service
 from backend import comfy_generation_service
+from backend import comfy_backend_selection
+from backend import static_page_service
+from backend import network_log_service
 from backend import comfy_output_service
 from backend import responses_service
 from backend import upstream_response_codec
@@ -1295,66 +1298,13 @@ def fetch_remote_update_notes(url: str, version: str = "", timeout: float = 5.0)
     return update_release_service.fetch_remote_update_notes(url, version, timeout, Any=Any, Dict=Dict, json=json, requests=requests, safe_update_notes=safe_update_notes, time=time, urllib=urllib, write_diagnostic=write_diagnostic)
 
 def versioned_static_html(html: str) -> str:
-    version = current_app_version()
-    if not version:
-        return html
-    safe_version = urllib.parse.quote(version, safe="._-")
-    pattern = re.compile(r'(?P<prefix>(?:src|href)=["\']|@import\s+url\(["\'])(?P<url>/static/[^"\')?#]+(?:\.(?:js|css|html)))(?:\?v=[^"\')#]*)?', re.I)
-    def replace(match):
-        url = match.group("url")
-        cache_version = safe_version
-        try:
-            rel = urllib.parse.unquote(url[len("/static/"):]).replace("/", os.sep)
-            path = os.path.abspath(os.path.join(STATIC_DIR, rel))
-            static_root = os.path.abspath(STATIC_DIR)
-            if path.startswith(static_root + os.sep) and os.path.isfile(path):
-                cache_version = f"{safe_version}.{int(os.path.getmtime(path))}"
-        except Exception:
-            pass
-        return f"{match.group('prefix')}{url}?v={cache_version}"
-    return pattern.sub(replace, html)
+    return static_page_service.versioned_static_html(html, current_app_version=current_app_version, urllib=urllib, re=re, os=os, STATIC_DIR=STATIC_DIR)
 
 def sync_static_html_versions():
-    version = current_app_version()
-    if not version:
-        return
-    safe_version = urllib.parse.quote(version, safe="._-")
-    try:
-        for name in os.listdir(STATIC_DIR):
-            # 跳过 macOS 在外置硬盘(ExFAT/NTFS)生成的 ._* Apple Double 元数据文件，
-            # 这些是二进制文件，按 UTF-8 读取会抛 UnicodeDecodeError。
-            if name.startswith("._"):
-                continue
-            if not name.lower().endswith(".html"):
-                continue
-            path = os.path.join(STATIC_DIR, name)
-            if not os.path.isfile(path):
-                continue
-            # 单文件容错：某个文件读写失败不应中断整批同步。
-            try:
-                with open(path, "r", encoding="utf-8") as f:
-                    old = f.read()
-                new = versioned_static_html(re.sub(r'([?&]v=)[^"\'`\s<>)]*', rf'\g<1>{safe_version}', old))
-                if new != old:
-                    write_text_atomic(path, new, encoding="utf-8", newline="")
-            except Exception as e:
-                write_diagnostic(
-                    f"static html version sync failed scope=file error={type(e).__name__}"
-                )
-    except Exception as e:
-        write_diagnostic(
-            f"static html version sync failed scope=directory error={type(e).__name__}"
-        )
+    return static_page_service.sync_static_html_versions(current_app_version=current_app_version, urllib=urllib, os=os, re=re, STATIC_DIR=STATIC_DIR, versioned_static_html=versioned_static_html, write_text_atomic=write_text_atomic, write_diagnostic=write_diagnostic)
 
 def static_html_response(filename: str):
-    path = os.path.join(STATIC_DIR, filename)
-    with open(path, "r", encoding="utf-8") as f:
-        html = f.read()
-    return Response(
-        versioned_static_html(html),
-        media_type="text/html; charset=utf-8",
-        headers={"Cache-Control": "no-cache"},
-    )
+    return static_page_service.static_html_response(filename, os=os, STATIC_DIR=STATIC_DIR, versioned_static_html=versioned_static_html, Response=Response)
 
 STATIC_PROMPT_TEMPLATE_MD = os.path.join(STATIC_DIR, "system-prompts", "infinite-canvas-prompt-templates.md")
 PROMPT_TEMPLATE_PATHS = [STATIC_PROMPT_TEMPLATE_MD]
@@ -2095,98 +2045,23 @@ class PromptLibraryCategoryRequest(BaseModel):
 # --- 负载均衡 ---
 
 def check_images_exist(backend_addr, images):
-    if not images: return True
-    for img in images:
-        try:
-            url = f"http://{backend_addr}/view?filename={urllib.parse.quote(img)}&type=input"
-            r = requests.get(url, stream=True, timeout=0.5)
-            r.close()
-            if r.status_code != 200: return False
-        except: return False
-    return True
+    return comfy_backend_selection.check_images_exist(backend_addr, images, urllib=urllib, requests=requests)
 
-MEDIA_INPUT_KEYS = ("image", "video", "audio", "mask", "filename", "file")
-MEDIA_INPUT_EXT_RE = re.compile(r"\.(png|jpe?g|webp|gif|bmp|tiff?|mp4|webm|mov|m4v|avi|mkv|mp3|wav|m4a|aac|ogg|flac)(?:\?|$)", re.I)
 
 def is_comfy_input_media_value(input_name: str, value: Any) -> bool:
-    if not isinstance(value, str) or not value.strip():
-        return False
-    key = str(input_name or "").lower()
-    if any(token in key for token in MEDIA_INPUT_KEYS):
-        return True
-    return bool(MEDIA_INPUT_EXT_RE.search(value))
+    return comfy_backend_selection.is_comfy_input_media_value(input_name, value)
 
 def collect_required_comfy_media(params: Dict[str, Any]) -> List[str]:
-    required = []
-    for node_inputs in (params or {}).values():
-        if not isinstance(node_inputs, dict):
-            continue
-        scan_inputs = node_inputs.get("inputs") if isinstance(node_inputs.get("inputs"), dict) else node_inputs
-        for input_name, value in scan_inputs.items():
-            if is_comfy_input_media_value(input_name, value):
-                required.append(value)
-    return list(dict.fromkeys(required))
+    return comfy_backend_selection.collect_required_comfy_media(params, is_comfy_input_media_value=is_comfy_input_media_value)
 
 def comfy_prompt_error_message(status_code: int, error_body: str) -> str:
     return upstream_public_policy.comfy_prompt_error_message(status_code, error_body, safe_cli_public_text=safe_cli_public_text)
 
 def get_best_backend(required_images: List[str] = None):
-    best_backend = COMFYUI_INSTANCES[0]
-    min_queue_size = float('inf')
-    backend_stats = {}
-
-    for addr in COMFYUI_INSTANCES:
-        try:
-            with urllib.request.urlopen(f"http://{addr}/queue", timeout=1) as response:
-                data = json.loads(response.read())
-                remote_load = len(data.get('queue_running', [])) + len(data.get('queue_pending', []))
-                with LOAD_LOCK:
-                    local_load = BACKEND_LOCAL_LOAD.get(addr, 0)
-                effective_load = max(remote_load, local_load)
-                has_images = check_images_exist(addr, required_images)
-                backend_stats[addr] = {"load": effective_load, "has_images": has_images}
-        except Exception as e:
-            write_diagnostic(
-                f"comfy backend unreachable error={type(e).__name__}"
-            )
-            continue
-
-    if not backend_stats:
-        return COMFYUI_INSTANCES[0]
-
-    for addr, stats in backend_stats.items():
-        load = stats["load"]
-        if load < min_queue_size or (load == min_queue_size and stats.get("has_images") and not backend_stats.get(best_backend, {}).get("has_images")):
-            min_queue_size = load
-            best_backend = addr
-
-    return best_backend
+    return comfy_backend_selection.get_best_backend(required_images, get_instances=lambda: COMFYUI_INSTANCES, get_backend_load=lambda: BACKEND_LOCAL_LOAD, urllib=urllib, json=json, LOAD_LOCK=LOAD_LOCK, check_images_exist=check_images_exist, write_diagnostic=write_diagnostic)
 
 def reserve_best_backend(required_images: List[str] = None):
-    backend_stats = {}
-    for addr in COMFYUI_INSTANCES:
-        try:
-            with urllib.request.urlopen(f"http://{addr}/queue", timeout=1) as response:
-                data = json.loads(response.read())
-                remote_load = len(data.get('queue_running', [])) + len(data.get('queue_pending', []))
-                has_images = check_images_exist(addr, required_images)
-                backend_stats[addr] = {"remote_load": remote_load, "has_images": has_images}
-        except Exception as e:
-            write_diagnostic(
-                f"comfy backend reservation unavailable error={type(e).__name__}"
-            )
-            continue
-    with LOAD_LOCK:
-        best_backend = COMFYUI_INSTANCES[0]
-        min_load = float('inf')
-        if backend_stats:
-            for addr, stats in backend_stats.items():
-                load = max(stats["remote_load"], BACKEND_LOCAL_LOAD.get(addr, 0))
-                if load < min_load or (load == min_load and stats.get("has_images") and not backend_stats.get(best_backend, {}).get("has_images")):
-                    min_load = load
-                    best_backend = addr
-        BACKEND_LOCAL_LOAD[best_backend] = BACKEND_LOCAL_LOAD.get(best_backend, 0) + 1
-        return best_backend
+    return comfy_backend_selection.reserve_best_backend(required_images, get_instances=lambda: COMFYUI_INSTANCES, get_backend_load=lambda: BACKEND_LOCAL_LOAD, urllib=urllib, json=json, LOAD_LOCK=LOAD_LOCK, check_images_exist=check_images_exist, write_diagnostic=write_diagnostic)
 
 # --- 辅助工具 ---
 
@@ -2381,89 +2256,22 @@ def display_title(text):
 def resolve_chat_provider(provider: str, model: str, ms_model: str):
     return chat_execution_service.resolve_chat_provider(provider, model, ms_model, AI_BASE_URL=AI_BASE_URL, HTTPException=HTTPException, MODELSCOPE_CHAT_MODELS=MODELSCOPE_CHAT_MODELS, RUNNINGHUB_LLM_BASE_URL=RUNNINGHUB_LLM_BASE_URL, api_headers=api_headers, bearer_auth_value=bearer_auth_value, effective_protocol=effective_protocol, get_api_provider=get_api_provider, is_apimart_provider=is_apimart_provider, is_codex_provider=is_codex_provider, is_gemini_cli_provider=is_gemini_cli_provider, modelscope_api_key=modelscope_api_key, modelscope_api_root=modelscope_api_root, preferred_chat_model=preferred_chat_model, selected_model=selected_model)
 
-_LOG_URL_RE = re.compile(r"https?://[^\s\"'<>]+", re.IGNORECASE)
-_LOG_SECRET_ASSIGNMENT_RE = re.compile(
-    r"(\b(?:api[_-]?key|access[_-]?token|refresh[_-]?token|token|secret|password|passwd|authorization)\b\s*[:=]\s*)(?:Bearer\s+)?([^\s,;]+)",
-    re.IGNORECASE,
-)
 
 
 def redact_url_for_log(value):
-    """保留网络请求的主机和路径，移除用户信息、查询参数及片段。"""
-    raw = str(value or "").strip()
-    if not raw:
-        return "?"
-    try:
-        parsed = urllib.parse.urlsplit(raw)
-        if not parsed.scheme and not parsed.netloc:
-            return parsed.path or "?"
-        hostname = parsed.hostname or "?"
-        if ":" in hostname and not hostname.startswith("["):
-            hostname = f"[{hostname}]"
-        try:
-            port = f":{parsed.port}" if parsed.port else ""
-        except ValueError:
-            port = ""
-        netloc = hostname + port
-        prefix = f"{parsed.scheme}://" if parsed.scheme else "//"
-        return f"{prefix}{netloc}{parsed.path or '/'}"
-    except Exception:
-        return "[已脱敏 URL]"
+    return network_log_service.redact_url_for_log(value, urllib=urllib)
 
 
 def redact_log_text(value):
-    """移除异常文本中的 URL 查询值和常见凭据字段，避免凭据进入诊断日志。"""
-    text = str(value or "")
-    text = _LOG_URL_RE.sub(lambda match: redact_url_for_log(match.group(0)), text)
-    return _LOG_SECRET_ASSIGNMENT_RE.sub(r"\1<redacted>", text)
+    return network_log_service.redact_log_text(value, redact_url_for_log=redact_url_for_log)
 
 
 def format_proxy_summary(proxies):
-    """只记录代理类型及脱敏后的主机/路径，不输出代理认证信息。"""
-    if not isinstance(proxies, dict) or not proxies:
-        return "none"
-    parts = []
-    for scheme, value in sorted(proxies.items(), key=lambda item: str(item[0])):
-        if str(scheme).lower() == "no_proxy":
-            continue
-        parts.append(f"{scheme}={redact_url_for_log(value)[:256]}")
-    return ",".join(parts) or "none"
+    return network_log_service.format_proxy_summary(proxies, redact_url_for_log=redact_url_for_log)
 
 
 def log_net_error(context, exc, url=""):
-    """记录可定位的网络错误，同时脱敏 URL、代理和异常链中的凭据。"""
-    try:
-        chain = []
-        cur = exc
-        seen = 0
-        while cur is not None and seen < 6:
-            chain.append(f"{type(cur).__module__}.{type(cur).__name__}: {redact_log_text(str(cur))[:200]}")
-            nxt = getattr(cur, "__cause__", None) or getattr(cur, "__context__", None)
-            if nxt is cur:
-                break
-            cur = nxt
-            seen += 1
-        if not url:
-            req = getattr(exc, "request", None)
-            if req is not None:
-                url = str(getattr(req, "url", "") or "")
-        try:
-            proxies = urllib.request.getproxies() or {}
-        except Exception:
-            proxies = {}
-        write_diagnostic(
-            f"[NET-ERR] {format_context()} | {redact_log_text(context)[:300]} | "
-            f"url={redact_url_for_log(url)[:512]} | "
-            f"sys_proxy={format_proxy_summary(proxies)} | " + " <- ".join(chain)
-        )
-    except Exception:
-        try:
-            write_diagnostic(
-                f"[NET-ERR] {format_context()} | {redact_log_text(context)[:300]} | "
-                f"error={type(exc).__name__}"
-            )
-        except Exception:
-            pass
+    return network_log_service.log_net_error(context, exc, url, redact_log_text=redact_log_text, urllib=urllib, write_diagnostic=write_diagnostic, format_context=format_context, redact_url_for_log=redact_url_for_log, format_proxy_summary=format_proxy_summary)
 
 def api_headers(json_body=True, provider=None, model=""):
     if provider:
