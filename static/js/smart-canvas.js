@@ -162,12 +162,7 @@ let lastImagePasteAt = 0;
 let lastNodePasteAt = 0;
 let suppressNodeClickUntil = 0;
 const smartTextSelection = CanvasTextSelection.create();
-const UNDO_LIMIT = 40;
-const undoStack = [];
-const redoStack = [];
-let redoBaseContent = '';
-let undoSuppressed = false;
-let pendingUndoSnapshot = null;
+const smartHistory = CanvasHistory.createSmart(smartHistoryHost());
 let runningHubWorkflowCache = {};
 function smartCascadeHost(){
     return {
@@ -307,69 +302,54 @@ function smartCascadeEdgeState(edgeKey){
 function smartCascadePathForCtx(ctx=null){
     return SmartCascadeState.smartCascadePathForCtx(smartCascadeHost(), ctx);
 }
-function capturePendingUndo(){ pendingUndoSnapshot = snapshotForUndo(); }
-function commitPendingUndo(){
-    if(pendingUndoSnapshot){
-        redoStack.length = 0;
-        redoBaseContent = '';
-        undoStack.push(pendingUndoSnapshot);
-        if(undoStack.length > UNDO_LIMIT) undoStack.shift();
-        pendingUndoSnapshot = null;
-    }
-}
-function discardPendingUndo(){ pendingUndoSnapshot = null; }
-function snapshotForUndo(){
+function smartHistoryHost(){
     return {
-        nodes: JSON.parse(JSON.stringify(nodes)),
-        connections: JSON.parse(JSON.stringify(canvas?.connections || [])),
-        selectedId,
-        selectedIds: selectedIds.slice(),
-        selectedImage: {...selectedImage}
+        get nodes(){return nodes;},
+        set nodes(value){nodes=value;},
+        get canvas(){return canvas;},
+        get selectedId(){return selectedId;},
+        set selectedId(value){selectedId=value;},
+        get selectedIds(){return selectedIds;},
+        set selectedIds(value){selectedIds=value;},
+        get selectedImage(){return selectedImage;},
+        set selectedImage(value){selectedImage=value;},
+        get activeComposerSubject(){return activeComposerSubject;},
+        set activeComposerSubject(value){activeComposerSubject=value;},
+        get lastComposerNodeId(){return lastComposerNodeId;},
+        set lastComposerNodeId(value){lastComposerNodeId=value;},
+        invalidateSmartVideoDeconstruction:(...args)=>invalidateSmartVideoDeconstruction(...args),
+        render:(...args)=>render(...args),
+        scheduleSave:(...args)=>scheduleSave(...args),
+        toast:(...args)=>toast(...args),
+        tr:(...args)=>tr(...args)
     };
 }
+function capturePendingUndo(){
+    return smartHistory.capturePendingUndo();
+}
+function commitPendingUndo(){
+    return smartHistory.commitPendingUndo();
+}
+function discardPendingUndo(){
+    return smartHistory.discardPendingUndo();
+}
+function snapshotForUndo(){
+    return smartHistory.snapshotForUndo();
+}
 function pushUndo(){
-    if(undoSuppressed) return;
-    if(!canvas) return;
-    redoStack.length = 0;
-    redoBaseContent = '';
-    undoStack.push(snapshotForUndo());
-    if(undoStack.length > UNDO_LIMIT) undoStack.shift();
+    return smartHistory.pushUndo();
 }
 function restoreHistorySnapshot(snap){
-    invalidateSmartVideoDeconstruction();
-    undoSuppressed = true;
-    try {
-        discardPendingUndo();
-        nodes = snap.nodes;
-        if(canvas) canvas.connections = snap.connections;
-        selectedId = snap.selectedId;
-        selectedIds = snap.selectedIds;
-        selectedImage = snap.selectedImage;
-        activeComposerSubject = null;
-        lastComposerNodeId = '';
-        render();
-        redoBaseContent = redoStack.length ? historyContentSignature() : '';
-        scheduleSave();
-    } finally {
-        undoSuppressed = false;
-    }
+    return smartHistory.restoreHistorySnapshot(snap);
 }
 function historyContentSignature(){
-    return JSON.stringify({nodes, connections: canvas?.connections || []});
+    return smartHistory.historyContentSignature();
 }
 function performUndo(){
-    if(!undoStack.length){ toast(tr('smart.toastNoUndo')); return; }
-    redoStack.push(snapshotForUndo());
-    if(redoStack.length > UNDO_LIMIT) redoStack.shift();
-    restoreHistorySnapshot(undoStack.pop());
-    toast(tr('smart.toastUndone'));
+    return smartHistory.performUndo();
 }
 function performRedo(){
-    if(!redoStack.length){ toast(tr('smart.toastNoRedo')); return; }
-    undoStack.push(snapshotForUndo());
-    if(undoStack.length > UNDO_LIMIT) undoStack.shift();
-    restoreHistorySnapshot(redoStack.pop());
-    toast(tr('smart.toastRedone'));
+    return smartHistory.performRedo();
 }
 let comfyWorkflowCache = {};
 let cropState = null;
@@ -1120,6 +1100,7 @@ function canvasListUrlForProject(projectId){
 let returningToCanvasList = false;
 function smartNavigationHost(){
     return {
+        get history(){return smartHistory;},
         invalidateMediaInputContext:()=>{smartDeferredActions.invalidate();smartMediaInputController.invalidate();},
         get CanvasSaveTransport(){return CanvasSaveTransport;},
         get SMART_UNSAVED_ACCEPTED_TASKS_PREFIX(){return SMART_UNSAVED_ACCEPTED_TASKS_PREFIX;},
@@ -1143,9 +1124,6 @@ function smartNavigationHost(){
         get localStorage(){return localStorage;},
         get nodes(){return nodes;},
         set nodes(value){nodes=value;},
-        get pendingUndoSnapshot(){return pendingUndoSnapshot;},
-        set pendingUndoSnapshot(value){pendingUndoSnapshot=value;},
-        get redoStack(){return redoStack;},
         get returningToCanvasList(){return returningToCanvasList;},
         set returningToCanvasList(value){returningToCanvasList=value;},
         get runTimerInterval(){return runTimerInterval;},
@@ -1166,7 +1144,6 @@ function smartNavigationHost(){
         get sourceProjectId(){return sourceProjectId;},
         get transientSmartCloudLinks(){return transientSmartCloudLinks;},
         set transientSmartCloudLinks(value){transientSmartCloudLinks=value;},
-        get undoStack(){return undoStack;},
         get viewport(){return viewport;},
         get window(){return window;},
         canvasListUrlForProject:(...args)=>canvasListUrlForProject(...args),
@@ -3550,6 +3527,7 @@ async function loadCanvas(){
 }
 function smartSaveCoordinatorHost(){
     return {
+        get history(){return smartHistory;},
         get CanvasSaveTransport(){return CanvasSaveTransport;},
         get SMART_LOG_PREVIEW_NODE_ID(){return SMART_LOG_PREVIEW_NODE_ID;},
         get canvas(){return canvas;},
@@ -3562,15 +3540,12 @@ function smartSaveCoordinatorHost(){
         get initialSmartSettings(){return initialSmartSettings;},
         get nodes(){return nodes;},
         set nodes(value){nodes=value;},
-        get redoBaseContent(){return redoBaseContent;},
-        set redoBaseContent(value){redoBaseContent=value;},
-        get redoStack(){return redoStack;},
         get rememberServerCanvasNodes(){return rememberServerCanvasNodes;},
         get setCanvasSaveError(){return setCanvasSaveError;},
         get smartClientId(){return smartClientId;},
         get smartSaveScheduler(){return smartSaveScheduler;},
         get smartSaveSession(){return smartSaveSession;},
-        get undoSuppressed(){return undoSuppressed;},
+        get undoSuppressed(){return smartHistory.suppressed;},
         get viewport(){return viewport;},
         get window(){return window;},
         applyMergedServerCanvas:(...args)=>applyMergedServerCanvas(...args),
@@ -3579,7 +3554,6 @@ function smartSaveCoordinatorHost(){
         cloneSmartNode:(...args)=>cloneSmartNode(...args),
         cloneSmartSettings:(...args)=>cloneSmartSettings(...args),
         fetch:(...args)=>fetch(...args),
-        historyContentSignature:(...args)=>historyContentSignature(...args),
         mediaItemForStorage:(...args)=>mediaItemForStorage(...args),
         normalizeLegacySmartNode:(...args)=>normalizeLegacySmartNode(...args),
         savePromptDraftForCurrent:(...args)=>savePromptDraftForCurrent(...args),
@@ -5132,9 +5106,9 @@ function handlePortDrop(drag, e){
         discardPendingUndo(); render(); return;
     }
     const p = screenToWorld(e);
-    undoSuppressed = true;
+    smartHistory.suppressed = true;
     const newNode = createImageNodeAt(p, [], {select:true, skipUndo:true});
-    undoSuppressed = false;
+    smartHistory.suppressed = false;
     const fromId = drag.fromPort === 'out' ? drag.fromId : newNode.id;
     const toId = drag.fromPort === 'out' ? newNode.id : drag.fromId;
     connectInputNode(fromId, toId);
@@ -6555,8 +6529,8 @@ function smartUploadHost(){
         get nodes(){return nodes;},
         get selectedId(){return selectedId;},
         set selectedId(value){selectedId=value;},
-        get undoSuppressed(){return undoSuppressed;},
-        set undoSuppressed(value){undoSuppressed=value;},
+        get undoSuppressed(){return smartHistory.suppressed;},
+        set undoSuppressed(value){smartHistory.suppressed=value;},
         get window(){return window;},
         addNodeToSmartGroup:(...args)=>addNodeToSmartGroup(...args),
         createImageNodeAt:(...args)=>createImageNodeAt(...args),
@@ -7731,8 +7705,8 @@ function smartGenerationHost(){
         get smartLoopContext(){return smartLoopContext;},
         get transientSmartCloudLinks(){return transientSmartCloudLinks;},
         set transientSmartCloudLinks(value){transientSmartCloudLinks=value;},
-        get undoSuppressed(){return undoSuppressed;},
-        set undoSuppressed(value){undoSuppressed=value;},
+        get undoSuppressed(){return smartHistory.suppressed;},
+        set undoSuppressed(value){smartHistory.suppressed=value;},
         addConnection:(...args)=>addConnection(...args),
         addSmartGenerationLog:(...args)=>addSmartGenerationLog(...args),
         apiImageSize:(...args)=>apiImageSize(...args),
@@ -8271,8 +8245,8 @@ function smartPointerHost(){
         set suppressNodeClickUntil(value){suppressNodeClickUntil=value;},
         get thumbDragState(){return thumbDragState;},
         set thumbDragState(value){thumbDragState=value;},
-        get undoSuppressed(){return undoSuppressed;},
-        set undoSuppressed(value){undoSuppressed=value;},
+        get undoSuppressed(){return smartHistory.suppressed;},
+        set undoSuppressed(value){smartHistory.suppressed=value;},
         get viewport(){return viewport;},
         get world(){return world;},
         get zoomPreviewState(){return zoomPreviewState;},
@@ -8435,7 +8409,7 @@ window.addEventListener('keydown', e => {
         e.preventDefault();
         const ids = selectedIds.length ? selectedIds.slice() : [selectedId];
         pushUndo();
-        ids.forEach(id => { undoSuppressed = true; deleteNode(id); undoSuppressed = false; });
+        ids.forEach(id => { smartHistory.suppressed = true; deleteNode(id); smartHistory.suppressed = false; });
         render();
         scheduleSave();
     }

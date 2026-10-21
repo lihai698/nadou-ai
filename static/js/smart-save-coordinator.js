@@ -4,11 +4,7 @@
 
 function scheduleSave(deps){
     if(deps.window.CanvasSaveRecovery) backupSmartDraft(deps);
-    // Field edits can bypass pushUndo; viewport-only and no-op saves must keep redo.
-    if(!deps.undoSuppressed && deps.redoStack.length && deps.historyContentSignature() !== deps.redoBaseContent){
-        deps.redoStack.length = 0;
-        deps.redoBaseContent = '';
-    }
+    deps.history.beforeScheduleSave();
     deps.smartSaveScheduler.cancel();
     if(deps.smartSaveSession.isSaving){
         deps.smartSaveSession.queue();
@@ -60,7 +56,7 @@ async function saveCanvas(deps){
         if(!deps.canvas || deps.canvasId !== waitingCanvasId) return false;
         return saveCanvas(deps);
     }
-    const preserveRedo = deps.redoStack.length && deps.historyContentSignature() === deps.redoBaseContent;
+    const preserveRedo = deps.history.prepareStorageNormalization();
     deps.savePromptDraftForCurrent();
     deps.nodes.forEach(node => {
         node.images = (node.images || []).map(img => deps.mediaItemForStorage(deps.stripImageGenerationMeta(img)));
@@ -71,8 +67,7 @@ async function saveCanvas(deps){
     deps.canvas.viewport = {...deps.viewport};
     const storageCanvas = deps.canvasForStorage();
     if(deps.window.CanvasSaveRecovery) backupSmartDraft(deps);
-    // Storage normalization is not a new edit. Do not mask changes made before saving.
-    if(preserveRedo) deps.redoBaseContent = deps.historyContentSignature();
+    deps.history.finishStorageNormalization(preserveRedo);
     deps.smartSaveSession.begin();
     try {
         const result = await deps.CanvasSaveTransport.saveSmart({

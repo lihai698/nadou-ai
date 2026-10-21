@@ -229,6 +229,14 @@ const smartSaveCoordinatorHost=smartSaveCoordinatorSource.slice(smartSaveCoordin
 
 function createTaskContext(...args){
     const context=vm.createContext(...args);
+    vm.runInContext(readFileSync(path.join(__dirname,'../static/js/canvas-history.js'),'utf8'),context);
+    for(const [file,kind] of [['canvas.js','classic'],['smart-canvas.js','smart']]){
+        const source=readFileSync(path.join(__dirname,'../static/js',file),'utf8');
+        const start=source.indexOf('function '+kind+'HistoryHost(');
+        if(start<0) throw new Error('Missing production history host: '+kind);
+        vm.runInContext(source.slice(start,source.indexOf('\n}',start)+2),context);
+        vm.runInContext('var '+kind+'History=CanvasHistory.create'+(kind==='classic'?'Classic':'Smart')+'('+kind+'HistoryHost());',context);
+    }
     vm.runInContext(readFileSync(path.join(__dirname,'../static/js/image-editor-session.js'),'utf8'),context);
     vm.runInContext(readFileSync(path.join(__dirname,'../static/js/canvas-text-selection.js'),'utf8'),context);
     vm.runInContext('var classicTextSelection=CanvasTextSelection.create(); var smartTextSelection=CanvasTextSelection.create();',context);

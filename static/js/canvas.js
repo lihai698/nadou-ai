@@ -524,8 +524,7 @@ const activeCanvasTaskPolls = new Set();
 const activeCanvasComfyTaskPolls = new Set();
 let hoveredConnectionId = '';
 let lastMouseBoard = {x: 0, y: 0};
-let undoStack = [];
-const UNDO_MAX = 30;
+const classicHistory = CanvasHistory.createClassic(classicHistoryHost());
 const cascadeRunningIds = new Set();
 const cascadeStopIds = new Set();
 const cascadeSerialIds = new Set(); // 记录以串行循环模式启动的运行，用于停止按钮
@@ -6405,21 +6404,25 @@ function connectSelectionToGenerator(kind, genId){
     return CanvasGroupEdit.connectSelectionToGenerator(classicNodeEditHost(), kind, genId);
 }
 
+function classicHistoryHost(){
+    return {
+        get canvas(){return canvas;},
+        get nodes(){return nodes;},
+        set nodes(value){nodes=value;},
+        get connections(){return connections;},
+        set connections(value){connections=value;},
+        serializableCanvasNodes:(...args)=>serializableCanvasNodes(...args),
+        get window(){return window;},
+        get selected(){return selected;},
+        render:(...args)=>render(...args),
+        scheduleSave:(...args)=>scheduleSave(...args)
+    };
+}
 function pushUndo(){
-    if(!canvas) return;
-    undoStack.push({nodes:JSON.parse(JSON.stringify(serializableCanvasNodes())), connections:JSON.parse(JSON.stringify(connections))});
-    if(undoStack.length > UNDO_MAX) undoStack.shift();
+    return classicHistory.pushUndo();
 }
 function performUndo(){
-    if(!canvas || !undoStack.length) return;
-    const state = undoStack.pop();
-    window.CanvasVideoDeconstructionBridge?.begin?.();
-    window.CanvasVideoDeconstructionUI?.closeAll?.(true);
-    nodes = state.nodes;
-    connections = state.connections;
-    selected.clear();
-    render();
-    scheduleSave();
+    return classicHistory.performUndo();
 }
 function cloneNode(n, dx, dy){
     return CanvasNodeEdit.cloneNode(classicNodeEditHost(), n, dx, dy);

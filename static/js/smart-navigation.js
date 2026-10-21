@@ -57,9 +57,7 @@ async function clearCurrentSmartCanvas(deps){
         deps.selectedId = '';
         deps.selectedIds = [];
         deps.selectedImage = {nodeId:'', index:-1};
-        deps.undoStack.length = 0;
-        deps.redoStack.length = 0;
-        deps.pendingUndoSnapshot = null;
+        deps.history.reset();
         deps.canvas.updated_at = Number(deps.canvas.updated_at || Date.now());
         deps.canvas.settings = {};
         deps.canvas.viewport = {...deps.viewport};
