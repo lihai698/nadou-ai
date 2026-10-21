@@ -904,41 +904,22 @@ function showErrorModal(message, title=tr('canvas.generationFailed')){
     errorModal.classList.add('open');
     refreshIcons();
 }
+function canvasBrowserUtilityHost(){
+    return {
+        apiErrorMessage:(...args)=>apiErrorMessage(...args),
+        get document(){return document;},
+        get navigator(){return navigator;},
+        get window(){return window;},
+        copyTextWithCopyEvent:(...args)=>copyTextWithCopyEvent(...args),
+        copyTextWithTextarea:(...args)=>copyTextWithTextarea(...args),
+        clipboardMatchesText:(...args)=>clipboardMatchesText(...args)
+    };
+}
 function apiErrorMessage(data, fallback='请求失败'){
-    if(!data) return fallback;
-    if(typeof data === 'string') return data || fallback;
-    const detail = data.detail ?? data.error ?? data.message;
-    if(typeof detail === 'string') return detail || fallback;
-    if(Array.isArray(detail)){
-        const messages = detail.map(item => {
-            if(typeof item === 'string') return item;
-            const loc = Array.isArray(item?.loc) ? item.loc.filter(x => x !== 'body').join('.') : '';
-            const msg = item?.msg || item?.message || JSON.stringify(item);
-            return loc ? `${loc}: ${msg}` : msg;
-        }).filter(Boolean);
-        return messages.join('\n') || fallback;
-    }
-    if(detail && typeof detail === 'object'){
-        return detail.message || detail.msg || JSON.stringify(detail);
-    }
-    try {
-        return JSON.stringify(data);
-    } catch(e) {
-        return fallback;
-    }
+    return CanvasBrowserUtilities.apiErrorMessage(canvasBrowserUtilityHost(), data, fallback);
 }
 async function responseErrorMessage(response, fallback='请求失败'){
-    try {
-        const data = await response.clone().json();
-        return apiErrorMessage(data, fallback);
-    } catch(e) {
-        try {
-            const text = await response.text();
-            return text || fallback;
-        } catch(_) {
-            return fallback;
-        }
-    }
+    return CanvasBrowserUtilities.responseErrorMessage(canvasBrowserUtilityHost(), response, fallback);
 }
 function closeErrorModal(){
     if(errorModal) errorModal.classList.remove('open');
@@ -955,65 +936,16 @@ async function copyErrorMessage(){
     }
 }
 function copyTextWithCopyEvent(value){
-    let handled = false;
-    const onCopy = event => {
-        event.preventDefault();
-        event.clipboardData?.setData('text/plain', value);
-        handled = true;
-    };
-    document.addEventListener('copy', onCopy);
-    try {
-        return document.execCommand('copy') && handled;
-    } catch(_) {
-        return false;
-    } finally {
-        document.removeEventListener('copy', onCopy);
-    }
+    return CanvasBrowserUtilities.copyTextWithCopyEvent(canvasBrowserUtilityHost(), value);
 }
 function copyTextWithTextarea(value){
-    let ta = null;
-    try {
-        ta = document.createElement('textarea');
-        ta.value = value;
-        ta.setAttribute('readonly', '');
-        ta.style.position = 'fixed';
-        ta.style.left = '-9999px';
-        ta.style.top = '0';
-        ta.style.opacity = '0';
-        document.body.appendChild(ta);
-        ta.focus({preventScroll:true});
-        ta.select();
-        ta.setSelectionRange(0, ta.value.length);
-        return document.execCommand('copy');
-    } catch(_) {
-        return false;
-    } finally {
-        ta?.remove();
-    }
+    return CanvasBrowserUtilities.copyTextWithTextarea(canvasBrowserUtilityHost(), value);
 }
 async function clipboardMatchesText(value){
-    try {
-        if(navigator.clipboard?.readText && window.isSecureContext){
-            return (await navigator.clipboard.readText()) === value;
-        }
-    } catch(_) {}
-    return null;
+    return CanvasBrowserUtilities.clipboardMatchesText(canvasBrowserUtilityHost(), value);
 }
 async function copyTextToClipboard(text){
-    const value = String(text || '');
-    if(!value) return false;
-    if(copyTextWithCopyEvent(value) || copyTextWithTextarea(value)){
-        const verified = await clipboardMatchesText(value);
-        return verified !== false;
-    }
-    try {
-        if(navigator.clipboard?.writeText && window.isSecureContext !== false){
-            await navigator.clipboard.writeText(value);
-            const verified = await clipboardMatchesText(value);
-            return verified !== false;
-        }
-    } catch(_) {}
-    return false;
+    return CanvasBrowserUtilities.copyTextToClipboard(canvasBrowserUtilityHost(), text);
 }
 function parseRatioValue(value){
     return ClassicNodeParams.parseRatioValue(classicNodeParamsHost(), value);
