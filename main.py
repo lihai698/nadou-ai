@@ -4043,52 +4043,14 @@ VOLCENGINE_ARK_ASSET_REGION = "cn-beijing"
 VOLCENGINE_ARK_ASSET_VERSION = "2024-01-01"
 
 def _volc_hmac(key: bytes, msg: str) -> bytes:
-    return hmac.new(key, msg.encode("utf-8"), hashlib.sha256).digest()
+    return avatar_asset_service._volc_hmac(key, msg, hmac=hmac, hashlib=hashlib)
 
 def volcengine_sign_v4_headers(ak: str, sk: str, action: str, body_str: str,
                                service: str = VOLCENGINE_ARK_ASSET_SERVICE,
                                region: str = VOLCENGINE_ARK_ASSET_REGION,
                                version: str = VOLCENGINE_ARK_ASSET_VERSION,
                                host: str = VOLCENGINE_ARK_ASSET_HOST) -> Dict[str, str]:
-    """火山引擎 OpenAPI 签名 V4（POST + JSON body）。返回需随请求发送的鉴权头。"""
-    method = "POST"
-    content_type = "application/json"
-    now = datetime.datetime.now(datetime.timezone.utc)
-    x_date = now.strftime("%Y%m%dT%H%M%SZ")
-    short_date = x_date[:8]
-    payload_hash = hashlib.sha256(body_str.encode("utf-8")).hexdigest()
-    # 查询串按键排序：Action < Version
-    canonical_query = f"Action={urllib.parse.quote(action, safe='')}&Version={urllib.parse.quote(version, safe='')}"
-    canonical_headers = (
-        f"content-type:{content_type}\n"
-        f"host:{host}\n"
-        f"x-content-sha256:{payload_hash}\n"
-        f"x-date:{x_date}\n"
-    )
-    signed_headers = "content-type;host;x-content-sha256;x-date"
-    canonical_request = "\n".join([method, "/", canonical_query, canonical_headers, signed_headers, payload_hash])
-    algorithm = "HMAC-SHA256"
-    credential_scope = f"{short_date}/{region}/{service}/request"
-    string_to_sign = "\n".join([
-        algorithm, x_date, credential_scope,
-        hashlib.sha256(canonical_request.encode("utf-8")).hexdigest(),
-    ])
-    k_date = _volc_hmac(sk.encode("utf-8"), short_date)
-    k_region = _volc_hmac(k_date, region)
-    k_service = _volc_hmac(k_region, service)
-    k_signing = _volc_hmac(k_service, "request")
-    signature = hmac.new(k_signing, string_to_sign.encode("utf-8"), hashlib.sha256).hexdigest()
-    authorization = (
-        f"{algorithm} Credential={ak}/{credential_scope}, "
-        f"SignedHeaders={signed_headers}, Signature={signature}"
-    )
-    return {
-        "Content-Type": content_type,
-        "Host": host,
-        "X-Date": x_date,
-        "X-Content-Sha256": payload_hash,
-        "Authorization": authorization,
-    }
+    return avatar_asset_service.volcengine_sign_v4_headers(ak, sk, action, body_str, service, region, version, host, datetime=datetime, hashlib=hashlib, urllib=urllib, _volc_hmac=_volc_hmac, hmac=hmac)
 
 async def volcengine_ark_asset_call(client, action: str, body: Dict[str, Any]) -> Dict[str, Any]:
     return await avatar_asset_service.volcengine_ark_asset_call(client, action, body, HTTPException=HTTPException, VOLCENGINE_ARK_ASSET_HOST=VOLCENGINE_ARK_ASSET_HOST, VOLCENGINE_ARK_ASSET_VERSION=VOLCENGINE_ARK_ASSET_VERSION, provider_error_summary=provider_error_summary, upstream_response_error_summary=upstream_response_error_summary, volcengine_access_key_value=volcengine_access_key_value, volcengine_secret_key_value=volcengine_secret_key_value, volcengine_sign_v4_headers=volcengine_sign_v4_headers)
