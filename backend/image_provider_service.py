@@ -278,3 +278,59 @@ async def wait_for_image_task(client, task_id, provider=None, *, is_apimart_prov
     summary = provider_error_summary(last_payload)
     extra = f"，最后状态：{summary}" if summary else ""
     raise HTTPException(status_code=504, detail=f"生图任务超时（已等待 {int(timeout)} 秒），task_id={_safe_upstream_text(task_id, 120)}{extra}")
+
+
+def build_image_param_fields(engine: str, provider: dict, model: str, *, is_gpt_image_2_model, IMAGE_PARAM_RESOLUTIONS, IMAGE_PARAM_RATIOS, ONLINE_IMAGE_REFERENCE_MAX):
+    """返回某平台/引擎的图像生成参数字段定义。客户端按 type 动态渲染并回填到生成请求。
+    字段 key 直接对应 OnlineImageRequest 的字段名（size/quality/n/reference_images）。"""
+    gpt_auto_size = engine == "api" and is_gpt_image_2_model(model)
+    image_resolutions = ([{"value": "auto", "label": "自动"}] + IMAGE_PARAM_RESOLUTIONS) if gpt_auto_size else IMAGE_PARAM_RESOLUTIONS
+    size_field = {
+        "key": "size", "type": "size", "label": "尺寸",
+        "ratios": IMAGE_PARAM_RATIOS, "resolutions": image_resolutions,
+        "default": {"ratio": "1:1", "resolution": "auto" if gpt_auto_size else "1k"},
+    }
+    count_field = {
+        "key": "n", "type": "int", "label": "数量", "control": "chips",
+        "options": [1, 2, 3, 4], "default": 1,
+    }
+    refs_field = {"key": "reference_images", "type": "refs", "label": "参考图", "max": ONLINE_IMAGE_REFERENCE_MAX}
+
+    if engine == "runninghub":
+        # RunningHub 参数按 app/工作流动态，需先选工作流再用 /api/runninghub/workflow-info 拉字段。
+        return [{"key": "_rh_notice", "type": "notice",
+                 "label": "RunningHub 工作流参数将按所选工作流动态加载（开发中）。"}]
+
+    fields = [size_field]
+    if engine in ("api", "volcengine"):
+        fields.append({
+            "key": "quality", "type": "select", "label": "质量", "control": "chips",
+            "options": [
+                {"value": "auto", "label": "自动"},
+                {"value": "low", "label": "低"},
+                {"value": "medium", "label": "中"},
+                {"value": "high", "label": "高"},
+            ],
+            "default": "auto",
+        })
+    fields.append(count_field)
+    fields.append(refs_field)
+    return fields
+
+
+async def image_params(provider_id: str='', model: str='', *, load_api_providers, is_runninghub_provider, is_volcengine_provider, build_image_param_fields):
+    providers = load_api_providers()
+    provider = next((p for p in providers if p.get("id") == (provider_id or "").strip().lower()), None) or {}
+    if is_runninghub_provider(provider):
+        engine = "runninghub"
+    elif (provider_id or "").strip().lower() == "modelscope":
+        engine = "modelscope"
+    elif is_volcengine_provider(provider):
+        engine = "volcengine"
+    else:
+        engine = "api"
+    return {
+        "engine": engine,
+        "submit": "/api/canvas-image-tasks",
+        "fields": build_image_param_fields(engine, provider, model),
+    }
