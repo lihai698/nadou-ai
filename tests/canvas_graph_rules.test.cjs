@@ -40,3 +40,14 @@ test('smart generated result is excluded from downstream workflow targets',()=>{
         isSmartImageNode:n=>n?.type==='smart-image',isHistoryGroupNode:()=>false};
     assert.deepEqual(graph.downstreamWorkflowImageTargetsFor(host,source),[next]);
 });
+
+test('new reference nodes accept all existing node types in either direction without cycles',()=>{
+    const types=['prompt','image','audio','output','llm','generator','video','rh','comfy','midjourney','msgen','loop','group','promptGroup','shot-table','clip'];
+    const host={nodes:types.map(type=>({id:type,type})),connections:[]};
+    for(const special of ['shot-table','audio','clip']) for(const type of types){
+        assert.equal(graph.canConnect(host,type,special),type!==special,`${type} -> ${special}`);
+        assert.equal(graph.canConnect(host,special,type),type!==special,`${special} -> ${type}`);
+    }
+    host.connections=[{from:'shot-table',to:'llm'},{from:'llm',to:'generator'}];
+    assert.equal(graph.canConnect(host,'generator','shot-table'),false);
+});

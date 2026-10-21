@@ -31,7 +31,8 @@ test('智能画布加载视频拆解共用模块并提供入口扩展',()=>{
   assert.match(smart,/initSmartVideoDeconstructionBridge/);
   assert.match(smart,/onOpenCuts/);
   assert.match(smart,/onOpenTable/);
-  assert.match(smart,/smart-shot-table/);
+  assert.match(bridges,/tableType:'smart-shot-table'/);
+  assert.match(smart,/SmartNodeView\.render\(smartNodeViewHost\(\)\)/);
 });
 
 test('智能画布镜头表使用专用节点类型和原生生图链适配器',()=>{

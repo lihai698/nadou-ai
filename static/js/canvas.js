@@ -1107,6 +1107,7 @@ function classicLayoutHost(){
         pushUndo:(...args)=>pushUndo(...args),
         render:(...args)=>render(...args),
         updateWorkgroupViewport:()=>classicWorkgroupController?.updateViewport(),
+        renderTempLink:()=>CanvasConnectionLayer.renderTempLink(classicConnectionLayerHost()),
         renderLinks:(...args)=>renderLinks(...args),
         renderSelectionHub:(...args)=>renderSelectionHub(...args),
         sanitizeConnections:(...args)=>sanitizeConnections(...args),

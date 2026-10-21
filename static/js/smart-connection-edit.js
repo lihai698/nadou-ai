@@ -13,7 +13,18 @@
         const from = deps.nodes.find(n => n.id === fromId);
         const to = deps.nodes.find(n => n.id === toId);
         if(!from || !to || from.id === to.id) return false;
-        if(from.type === 'smart-shot-table' || to.type === 'smart-shot-table') return false;
+        if(from.type === 'smart-shot-table' || to.type === 'smart-shot-table'){
+            const seen=new Set(), pending=[toId];
+            while(pending.length){
+                const id=pending.pop();
+                if(id===fromId) return false;
+                if(seen.has(id)) continue;
+                seen.add(id);
+                for(const edge of deps.canvas.connections || []){
+                    if(edge.from===id && ['input','flow'].includes(edge.kind || 'flow')) pending.push(edge.to);
+                }
+            }
+        }
         if(to.type === 'smart-loop'){
             const groupImages = deps.isSmartGroupNode(from) ? deps.imagesForNode(from).filter(img => img?.url) : [];
             const groupPrompts = deps.isSmartGroupNode(from) ? deps.promptTextItemsForNode(from).filter(Boolean) : [];

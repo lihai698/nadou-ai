@@ -130,14 +130,13 @@
         const from = deps.nodes.find(n => n.id === fromId);
         const to = deps.nodes.find(n => n.id === toId);
         if(!from || !to) return false;
-        if(to.type==='shot-table') return to.shotTableData?.source?.nodeId===fromId && ['image','output',...deps.CANVAS_MEDIA_OUTPUT_TYPES].includes(from.type);
-        if(from.type==='shot-table') return false;
-        if(from.type==='clip') return to.type==='output'&&!wouldCreateGeneratorCycle(deps, fromId,toId);
-        if(to.type==='clip') return ['image','group','output',...deps.CANVAS_MEDIA_OUTPUT_TYPES].includes(from.type)&&!wouldCreateGeneratorCycle(deps, fromId,toId);
+        // Reference connections do not replace the table's original analysis source.
+        if(['shot-table','clip','audio'].includes(from.type) || ['shot-table','clip','audio'].includes(to.type)){
+            return !wouldCreateGeneratorCycle(deps, fromId,toId);
+        }
         if(to.depthCapture?.sourceId === fromId && from.type !== 'image' && from.type !== 'output') return false;
         if(to.depthCapture?.sourceId === fromId) return true;
         if(from.type==='generator' && to.type==='llm' && (from.audioOutputText || deps.canvasApiAudioMode(from)))return !wouldCreateGeneratorCycle(deps, fromId,toId);
-        if(from.type==='audio')return ['generator','video','rh','comfy'].includes(to.type)&&!wouldCreateGeneratorCycle(deps, fromId,toId);
         if(deps.CANVAS_GENERATOR_TYPES.includes(from.type)){
             if(to.type === 'output') return true;
             if(deps.CANVAS_MEDIA_OUTPUT_TYPES.includes(from.type) && deps.CANVAS_GENERATOR_TYPES.includes(to.type)){

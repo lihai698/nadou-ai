@@ -5025,8 +5025,7 @@ function handlePortDrop(drag, e){
             if(portEl){
                 port = portEl.dataset.port;
             } else {
-                const rect = nodeEl.getBoundingClientRect();
-                port = (e.clientX - rect.left) < rect.width / 2 ? 'in' : 'out';
+                port = drag.fromPort === 'out' ? 'in' : 'out';
             }
         }
         return {targetId:id, targetPort:port, hit:hitEl};
@@ -8079,7 +8078,7 @@ function smartWorkgroupCanConnect(fromId,toId){
     if(CanvasWorkgroups.leaves(nodes,fromId).includes(toId)||CanvasWorkgroups.leaves(nodes,toId).includes(fromId))return false;
     const edges=CanvasWorkgroups.effectiveConnections(nodes,canvas?.connections||[]),pairs=CanvasWorkgroups.effectiveConnections(nodes,[{from:fromId,to:toId,kind:'input'}],canvas?.connections||[]);
     try{CanvasWorkgroups.order(nodes.filter(n=>!CanvasWorkgroups.isFrame(n)),edges.concat(pairs));}catch(e){return false;}
-    return pairs.some(c=>{const from=nodes.find(n=>n.id===c.from),to=nodes.find(n=>n.id===c.to);return from&&to&&!['smart-shot-table','smart-loop'].includes(to.type)&&from.type!=='smart-shot-table';});
+    return pairs.some(c=>{const from=nodes.find(n=>n.id===c.from),to=nodes.find(n=>n.id===c.to);return from&&to&&to.type!=='smart-loop';});
 }
 function ungroupNode(groupId){
     if(CanvasWorkgroups.isFrame(nodes.find(n=>n.id===groupId)))return smartWorkgroups().dissolve(groupId);
@@ -8320,6 +8319,7 @@ smartArrangeBtn?.addEventListener('click', e => {
 window.onmousemove = e => { return SmartPointerEvents.pointerMove(smartPointerHost(), e); };
 
 window.onmouseup = e => { return SmartPointerEvents.pointerUp(smartPointerHost(), e); };
+window.addEventListener('blur',()=>SmartPointerEvents.cancelPortDrag(smartPointerHost()));
 shell.addEventListener('wheel', e => {
     if(e.target.closest('.composer,.smart-back,.image-edit-modal,.asset-panel,.asset-toggle,.smart-log-toggle,.smart-shortcut-toggle,.smart-workflow-toggle,.workflow-transfer-panel,.log-modal,.shortcut-modal,.prompt-node-segments,.prompt-node-text,.prompt-node-llm,.smart-group-list,[data-thumb-scroll]')) return;
     e.preventDefault();

@@ -32,6 +32,14 @@ function install(context){
 }
 function event(context,extra={}){return {button:0,clientX:100,clientY:50,deltaY:-1,target:context.board,preventDefault(){},stopPropagation(){},...extra};}
 
+test('blur removes the temporary path and gesture state without connecting or saving',async()=>{
+    const {context,calls,window}=fixture();const controller=install(context);
+    context.tempLink={from:'p'};controller.setMouseMove(()=>{});controller.setMouseUp(()=>{throw Error('must not connect');});
+    await window.emit('blur');
+    assert.equal(context.tempLink,null);assert.equal(window.onmouseup,null);
+    assert.equal(calls.links,1);assert.equal(calls.finish,0);assert.equal(context.connections.length,0);
+});
+
 test('real board dispatcher keeps pan, selection modifiers and non-left-button guards',()=>{
     const {context,calls}=fixture();install(context);
     context.board.onmousedown(event(context,{button:1}));assert.equal(calls.pan,1);

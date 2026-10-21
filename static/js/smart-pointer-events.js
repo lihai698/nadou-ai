@@ -88,6 +88,7 @@
             return;
         }
         if(deps.portDragState){
+            if(e.buttons === 0){ cancelPortDrag(deps); return; }
             e.preventDefault();
             const p = deps.screenToWorld(e);
             deps.portDragState.currentWorld = p;
@@ -101,8 +102,7 @@
                 if(portEl){
                     targetPort = portEl.dataset.port;
                 } else {
-                    const rect = nodeEl.getBoundingClientRect();
-                    targetPort = (e.clientX - rect.left) < rect.width / 2 ? 'in' : 'out';
+                    targetPort = deps.portDragState.fromPort === 'out' ? 'in' : 'out';
                 }
                 const compatible = (deps.portDragState.fromPort === 'out' && targetPort === 'in') || (deps.portDragState.fromPort === 'in' && targetPort === 'out');
                 if(!compatible){ targetId = ''; targetPort = ''; }
@@ -473,7 +473,15 @@
         }
     }
 
-    const api={pointerDown, contextMenu, doubleClick, backgroundClick, pointerMove, pointerUp};
+    function cancelPortDrag(deps){
+        if(!deps.portDragState) return;
+        deps.portDragState=null;
+        deps.shell.classList.remove('port-dragging');
+        deps.clearPortDragVisual();
+        deps.discardPendingUndo();
+    }
+
+    const api={pointerDown, contextMenu, doubleClick, backgroundClick, pointerMove, pointerUp, cancelPortDrag};
     if(typeof module!=='undefined' && module.exports) module.exports=api;
     root.SmartPointerEvents=api;
 })(typeof globalThis!=='undefined' ? globalThis : window);

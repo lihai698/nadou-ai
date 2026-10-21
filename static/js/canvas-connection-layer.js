@@ -42,10 +42,23 @@ function renderLinks(deps){
         deps.linkControlsEl.appendChild(linkDeleteButton(deps, c, a, b));
         deps.linksEl.appendChild(linkHitEl(deps, a.x, a.y, b.x, b.y, c.id));
     });
-    if(deps.tempLink){
-        deps.linksEl.appendChild(pathEl(deps, deps.tempLink.x1, deps.tempLink.y1, deps.tempLink.x2, deps.tempLink.y2, 'link temp'));
-    }
+    renderTempLink(deps);
     renderKnifeTrail(deps);
+}
+
+function renderTempLink(deps){
+    let path = deps.linksEl.querySelector?.('.link.temp');
+    if(!deps.tempLink){ path?.remove(); return; }
+    const t=deps.tempLink;
+    const a=t.originKind==='in' ? {x:t.x2,y:t.y2} : {x:t.x1,y:t.y1};
+    const b=t.originKind==='in' ? {x:t.x1,y:t.y1} : {x:t.x2,y:t.y2};
+    if(!path){
+        path=pathEl(deps,a.x,a.y,b.x,b.y,'link temp');
+        deps.linksEl.appendChild(path);
+    } else {
+        const dx=Math.max(80,Math.abs(b.x-a.x)*.45);
+        path.setAttribute('d',`M ${a.x} ${a.y} C ${a.x+dx} ${a.y}, ${b.x-dx} ${b.y}, ${b.x} ${b.y}`);
+    }
 }
 
 function renderKnifeTrail(deps){
@@ -173,7 +186,7 @@ function segmentIntersectsRect(deps, a, b, r){
     return segmentsIntersect(deps, a, b, p1, p2) || segmentsIntersect(deps, a, b, p2, p3) || segmentsIntersect(deps, a, b, p3, p4) || segmentsIntersect(deps, a, b, p4, p1);
 }
 
-    const api={portPoint, canResolvePort, renderLinks, renderKnifeTrail, linkDeleteButton, linkHitEl, setHoveredConnection, connectionDistanceToPoint, updateConnectionHoverFromMouse, isConnectionSelected, pathEl, pointSegmentDistance, cubicPoint, segmentsIntersect, segmentIntersectsRect};
+    const api={portPoint, canResolvePort, renderLinks, renderTempLink, renderKnifeTrail, linkDeleteButton, linkHitEl, setHoveredConnection, connectionDistanceToPoint, updateConnectionHoverFromMouse, isConnectionSelected, pathEl, pointSegmentDistance, cubicPoint, segmentsIntersect, segmentIntersectsRect};
     if(typeof module!=='undefined' && module.exports) module.exports=api;
     root.CanvasConnectionLayer=api;
 })(typeof globalThis!=='undefined' ? globalThis : window);

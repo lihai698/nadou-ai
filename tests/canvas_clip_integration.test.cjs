@@ -12,12 +12,12 @@ test('剪辑真实创建入口使用原生addNode、30fps纯数据和正确尺�
  vm.runInContext(section('function addClipNode(','function addPromptNode('),c);
  const n=vm.runInContext('addClipNode({x:12,y:13})',c);assert.equal(n.type,'clip');assert.equal(n.x,12);assert.equal(n.clipData.fps,30);assert.equal(n.clipData.exportMuted,false);assert.equal(c.nodes[0],n);
 });
-test('剪辑连线接受媒体源及输出，拒绝提示词和环路',()=>{
+test('剪辑连线接受媒体和提示词参考，仍拒绝环路',()=>{
  const nodes=[{id:'c',type:'clip'},{id:'im',type:'image'},{id:'vid',type:'video'},{id:'out',type:'output'},{id:'prompt',type:'prompt'}];
  const c=createTaskContext({nodes,CANVAS_GENERATOR_TYPES:['video'],CANVAS_MEDIA_OUTPUT_TYPES:['video'],connections:[{from:'c',to:'out'}]});
  vm.runInContext(section('function canConnect(','function sanitizeConnections('),c);
  assert.equal(vm.runInContext("canConnect('im','c')",c),true);assert.equal(vm.runInContext("canConnect('vid','c')",c),true);
- assert.equal(vm.runInContext("canConnect('c','out')",c),true);assert.equal(vm.runInContext("canConnect('prompt','c')",c),false);assert.equal(vm.runInContext("canConnect('out','c')",c),false);
+ assert.equal(vm.runInContext("canConnect('c','out')",c),true);assert.equal(vm.runInContext("canConnect('prompt','c')",c),true);assert.equal(vm.runInContext("canConnect('out','c')",c),false);
 });
 test('画布缺失检查收集剪辑嵌套素材及预览URL',()=>{
  const nodes=[{id:'c',type:'clip',clipData:{clips:[{url:'/assets/p.png',posterUrl:'/output/p.jpg'},{url:'/api/storage-files/generated/v.mp4'}]}}];

@@ -178,21 +178,35 @@
     }
 
     function startLink(deps, e, originId, originKind){
+        e.preventDefault();
         e.stopPropagation();
         originKind = originKind || 'out';
         const src = deps.portPoint(originId, originKind);
         const source = deps.nodes.find(n => n.id === originId);
         deps.tempLink = {from:originId, originKind, x1:src.x, y1:src.y, x2:src.x, y2:src.y};
+        const clearLink = () => {
+            deps.tempLink = null;
+            deps.setCanvasMouseMove(null);
+            deps.setCanvasMouseUp(null);
+            deps.renderTempLink();
+        };
+        deps.renderTempLink();
         deps.setCanvasMouseMove(e2 => {
+            if(!deps.tempLink) return;
+            // Recover when the mouse was released outside the window.
+            if(e2.buttons === 0){ clearLink(); return; }
             const p = deps.screenToWorld(e2.clientX, e2.clientY);
             deps.tempLink.x2 = p.x;
             deps.tempLink.y2 = p.y;
-            deps.renderLinks();
+            deps.renderTempLink();
         });
         deps.setCanvasMouseUp(e2 => {
+            // Clean up before any synchronization/rendering that might throw.
+            clearLink();
             const targetKind = originKind === 'out' ? 'in' : 'out';
-            const targetPort = nearestPort(deps, e2.clientX, e2.clientY, targetKind);
+            const targetPort = nearestPort(deps, e2.clientX, e2.clientY, targetKind, originId);
             const target = targetPort?.closest('.node');
+            if(!target && deps.document.elementFromPoint(e2.clientX,e2.clientY)?.closest('.node')) return;
             if(target){
                 const targetId = target.dataset.id;
                 const fromId = originKind === 'out' ? originId : targetId;
@@ -224,20 +238,27 @@
             } else if(originKind === 'in'){
                 deps.openLinkCreateMenu(originId, originKind, e2.clientX, e2.clientY);
             }
-            deps.tempLink = null;
-            deps.setCanvasMouseMove(null);
-            deps.setCanvasMouseUp(null);
-            deps.renderLinks();
         });
     }
 
-    function nearestPort(deps, clientX, clientY, kind){
+    function nearestPort(deps, clientX, clientY, kind, originId){
         const selector = `.port.${kind}`;
-        const direct = deps.document.elementFromPoint(clientX, clientY)?.closest(selector);
-        if(direct) return direct;
+        const hit = deps.document.elementFromPoint(clientX, clientY);
+        const compatible = port => {
+            const id=port?.closest('.node')?.dataset.id;
+            return id && id!==originId && (kind==='in' ? deps.canConnect(originId,id) : deps.canConnect(id,originId));
+        };
+        const direct = hit?.closest(selector);
+        if(compatible(direct)) return direct;
+        const node = hit?.closest('.node');
+        if(node){
+            const port=node.querySelector(selector);
+            return compatible(port) ? port : null;
+        }
         let best = null;
         let bestDistance = Infinity;
         deps.nodesEl.querySelectorAll(selector).forEach(port => {
+            if(!compatible(port)) return;
             const r = port.getBoundingClientRect();
             const cx = r.left + r.width / 2;
             const cy = r.top + r.height / 2;

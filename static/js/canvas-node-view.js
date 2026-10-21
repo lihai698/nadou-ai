@@ -265,7 +265,7 @@ function renderNode(deps, node){
         if(e.button !== 0 || !deps.isNodeDragSurface(e.target)) return;
         deps.startNodeDrag(e, node);
     };
-    const canInput = Boolean(node.storyWorkflowOrigin) || Boolean(node.depthCapture) || node.type==='shot-table' || ['clip','generator','midjourney','comfy','output','llm','msgen','video','rh'].includes(node.type) || (node.type === 'loop' && (node.imageInput || node.showPrompt));
+    const canInput = Boolean(node.storyWorkflowOrigin) || Boolean(node.depthCapture) || node.type==='shot-table' || ['audio','image','prompt','group','promptGroup','clip','generator','midjourney','comfy','output','llm','msgen','video','rh'].includes(node.type) || (node.type === 'loop' && (node.imageInput || node.showPrompt));
     const canOutput = node.type==='shot-table' || ['clip','image','audio','prompt','loop','group','promptGroup','generator','midjourney','comfy','llm','msgen','video','rh','output'].includes(node.type);
     if(canInput) el.insertAdjacentHTML('beforeend', `<div class="port in" title="${deps.tr('canvas.connectHere')}"></div>`);
     if(canOutput) el.insertAdjacentHTML('beforeend', `<div class="port out" title="${deps.tr('canvas.dragConnect')}"></div>`);

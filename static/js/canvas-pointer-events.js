@@ -73,6 +73,7 @@ function handleBoardMouseDown(deps, e){
 function handleBoardMouseMove(deps, e){
     const point = deps.screenToWorld(e.clientX, e.clientY);
     deps.lastMouseBoard = point;
+    if(deps.tempLink) return;
     deps.updateConnectionHoverFromMouse(e);
     if(deps.canvas && deps.knifeActive && !deps.isEditableTarget(e.target) && !deps.dragNode && !deps.dragBoard && !deps.resizeNode && !deps.tempLink){
         deps.continueKnifeDrag(e);
@@ -168,7 +169,9 @@ function create(host){
         if(active||disposed)return;
         active=true;
         if(!listening){deps.window.addEventListener('pagehide',suspend);deps.window.addEventListener('pageshow',mount);listening=true;}
-        listen(deps.window,'blur',releaseMouse);
+        listen(deps.window,'blur',()=>{
+            try{finishTransientInput(deps);}finally{releaseMouse();}
+        });
         if(deps.minimap){listen(deps.minimap,'mousedown',event=>handleMinimapMouseDown(deps,event));}
         if(deps.canvasArrangeBtn){listen(deps.canvasArrangeBtn,'mousedown',event=>handleArrangeMouseDown(deps,event));}
         if(deps.canvasArrangeBtn){listen(deps.canvasArrangeBtn,'click',event=>handleArrangeClick(deps,event));}
