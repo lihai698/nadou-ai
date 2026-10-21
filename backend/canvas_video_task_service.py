@@ -662,3 +662,63 @@ async def refresh_task(task_id, *, record_lock, read_record, write_record, volat
             return public_record(updated)
     except OSError as exc:
         raise VideoTaskError(status_code=503, detail="视频任务记录暂时无法保存，请稍后按原编号查询") from exc
+
+
+def validate_canvas_video_assistant_task(payload, existing=None, *, check_provider=False, re, HTTPException, hashlib, json, model_dump_compat, get_api_provider_exact, model_list_from_values):
+    """助手任务固定归属与完整请求；旧手动任务保留原有兼容行为。"""
+    binding = {}
+    if payload.assistant_action_id:
+        for key in ("assistant_action_id", "canvas_id", "node_id", "input_hash"):
+            value = getattr(payload, key)
+            pattern = r"[0-9a-f]{64}" if key == "input_hash" else r"[A-Za-z0-9_-]{1,100}"
+            if not re.fullmatch(pattern, value):
+                raise HTTPException(422, "助手视频任务须有完整有效的画布、节点、动作和输入绑定")
+            binding[key] = value
+        binding["request_hash"] = hashlib.sha256(
+            json.dumps(model_dump_compat(payload), ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest()
+    if existing and (binding or existing.get("assistant_action_id")):
+        expected = {**binding, "provider_id":payload.provider_id, "model":payload.model}
+        if not binding or existing.get("type") != "video" or any(existing.get(key) != value for key, value in expected.items()):
+            raise HTTPException(409, "同一视频任务编号的归属或参数不一致，请只查询原任务")
+    if binding and check_provider:
+        if not payload.provider_id or not payload.model:
+            raise HTTPException(409, "请先在原视频节点手动选择平台和模型，助手不使用默认配置")
+        try:
+            provider = get_api_provider_exact(payload.provider_id)
+        except HTTPException as exc:
+            raise HTTPException(409, "原视频平台不存在或已停用，本次视频请求未提交") from exc
+        if provider.get("id") != payload.provider_id or provider.get("enabled") is False or payload.model not in model_list_from_values(provider.get("video_models") or []):
+            raise HTTPException(409, "原视频平台或所属模型已变化，本次视频请求未提交")
+    return binding
+
+
+async def _query_canvas_video_remote(task, remote_id, provider_id, query_mode, *, get_api_provider_exact, HTTPException, is_runninghub_provider, query_runninghub_video_task_once, is_jimeng_provider, query_jimeng_video_task_once, is_tudou_provider, is_agnes_provider, query_video_task_once):
+    try:
+        provider = get_api_provider_exact(provider_id)
+    except HTTPException as exc:
+        raise HTTPException(status_code=409, detail="原视频供应商配置不可用，无法安全查询远端任务；请恢复配置后重试") from exc
+    if provider_id == "runninghub":
+        if query_mode != "runninghub_openapi" or not is_runninghub_provider(provider):
+            raise HTTPException(status_code=409, detail="原视频供应商配置已变化，无法安全查询远端任务；请恢复 RunningHub 配置后重试")
+        observation, local_urls = await query_runninghub_video_task_once(provider, remote_id)
+    elif query_mode == "jimeng_cli":
+        if not is_jimeng_provider(provider):
+            raise HTTPException(status_code=409, detail="原视频供应商配置已变化，无法安全查询即梦 CLI 任务；请恢复原供应商配置后重试")
+        observation, local_urls = await query_jimeng_video_task_once(remote_id, "video")
+    elif query_mode in {"http_get", "tudou_http_get", "agnes_http_get"}:
+        if is_runninghub_provider(provider) or is_jimeng_provider(provider):
+            raise HTTPException(status_code=409, detail="原视频供应商配置已变化，无法安全查询远端任务；请恢复原供应商配置后重试")
+        if query_mode == "tudou_http_get" and not is_tudou_provider(provider):
+            raise HTTPException(status_code=409, detail="原视频供应商配置已变化，无法安全查询土豆视频任务")
+        if query_mode == "agnes_http_get" and not is_agnes_provider(provider, task.get("model")):
+            raise HTTPException(status_code=409, detail="原视频供应商配置已变化，无法安全查询 Agnes 视频任务")
+        observation, local_urls = await query_video_task_once(
+            provider,
+            remote_id,
+            query_mode=query_mode,
+            model=str(task.get("model") or ""),
+        )
+    else:
+        raise HTTPException(status_code=409, detail="当前视频供应商暂不支持远端刷新；请保留原任务编号并稍后查询")
+    return provider, observation, local_urls

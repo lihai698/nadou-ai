@@ -5282,59 +5282,11 @@ async def _run_canvas_comfy_task(task_id: str, payload: GenerateRequest):
 
 @app.post("/api/canvas-comfy-tasks")
 async def create_canvas_comfy_task(payload: GenerateRequest, request: Request):
-    binding = {}
-    if payload.assistant_action_id:
-        for key in ("assistant_action_id", "canvas_id", "node_id", "input_hash"):
-            value = getattr(payload, key)
-            pattern = r"[0-9a-f]{64}" if key == "input_hash" else r"[A-Za-z0-9_-]{1,100}"
-            if not re.fullmatch(pattern, value):
-                raise HTTPException(422, "助手 ComfyUI 任务须有完整有效的画布、节点、动作和输入绑定")
-            binding[key] = value
-        if payload.segment_id and not re.fullmatch(r"[A-Za-z0-9_-]{1,100}", payload.segment_id):
-            raise HTTPException(422, "助手 ComfyUI 原片段编号无效")
-        binding.update(segment_id=payload.segment_id, provider_id="comfyui", model=payload.workflow_json)
-    task_id = f"canvas_comfy_{uuid.uuid4().hex}"
-    trace_fields = task_context(
-        task_id,
-        trace_id=getattr(request.state, "trace_id", ""),
-        request_id=getattr(request.state, "request_id", ""),
-    )
-    with CANVAS_TASK_LOCK:
-        CANVAS_TASKS[task_id] = {
-            **binding,
-            "id": task_id,
-            "type": "comfy",
-            "status": "queued",
-            "created_at": time.time(),
-            "updated_at": time.time(),
-            "result": None,
-            "error": "",
-            "workflow_json": payload.workflow_json,
-            "input_summary": task_input_summary(
-                prompt=payload.prompt,
-                workflow_json=payload.workflow_json,
-            ),
-            "process_id": CANVAS_TASK_PROCESS_ID,
-            "trace_id": trace_fields["trace_id"],
-            "request_id": trace_fields["request_id"],
-        }
-        try:
-            _write_canvas_task_record(CANVAS_TASKS[task_id], required=True)
-        except (OSError, TaskRecordError):
-            CANVAS_TASKS.pop(task_id, None)
-            raise HTTPException(status_code=503, detail="本地 ComfyUI 任务记录无法保存，本次请求未提交")
-    asyncio.create_task(run_canvas_comfy_task(task_id, payload))
-    return {"task_id": task_id, "status": "queued", **trace_fields, **binding}
+    return await comfy_task_service.create_canvas_comfy_task(payload, request, re=re, HTTPException=HTTPException, uuid=uuid, task_context=task_context, CANVAS_TASK_LOCK=CANVAS_TASK_LOCK, CANVAS_TASKS=CANVAS_TASKS, time=time, task_input_summary=task_input_summary, CANVAS_TASK_PROCESS_ID=CANVAS_TASK_PROCESS_ID, _write_canvas_task_record=_write_canvas_task_record, TaskRecordError=TaskRecordError, asyncio=asyncio, run_canvas_comfy_task=run_canvas_comfy_task)
 
 @app.get("/api/canvas-comfy-tasks/{task_id}")
 async def get_canvas_comfy_task(task_id: str):
-    with CANVAS_TASK_LOCK:
-        task = dict(CANVAS_TASKS.get(task_id) or {})
-        if not task:
-            task = dict(_read_canvas_task_record(task_id) or {})
-    if not task:
-        raise HTTPException(status_code=404, detail="ComfyUI 任务不存在，可能服务已重启或任务已过期")
-    return _public_canvas_task(_interrupted_canvas_task(task))
+    return await comfy_task_service.get_canvas_comfy_task(task_id, CANVAS_TASK_LOCK=CANVAS_TASK_LOCK, CANVAS_TASKS=CANVAS_TASKS, _read_canvas_task_record=_read_canvas_task_record, HTTPException=HTTPException, _public_canvas_task=_public_canvas_task, _interrupted_canvas_task=_interrupted_canvas_task)
 
 # --- 图像生成参数 schema（供客户端动态渲染参数表单，避免把参数写死在前端） ---
 IMAGE_PARAM_RATIOS = [
@@ -5623,32 +5575,7 @@ def validate_canvas_video_assistant_task(
     *,
     check_provider: bool = False,
 ) -> Dict[str, str]:
-    """助手任务固定归属与完整请求；旧手动任务保留原有兼容行为。"""
-    binding = {}
-    if payload.assistant_action_id:
-        for key in ("assistant_action_id", "canvas_id", "node_id", "input_hash"):
-            value = getattr(payload, key)
-            pattern = r"[0-9a-f]{64}" if key == "input_hash" else r"[A-Za-z0-9_-]{1,100}"
-            if not re.fullmatch(pattern, value):
-                raise HTTPException(422, "助手视频任务须有完整有效的画布、节点、动作和输入绑定")
-            binding[key] = value
-        binding["request_hash"] = hashlib.sha256(
-            json.dumps(model_dump_compat(payload), ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()
-        ).hexdigest()
-    if existing and (binding or existing.get("assistant_action_id")):
-        expected = {**binding, "provider_id":payload.provider_id, "model":payload.model}
-        if not binding or existing.get("type") != "video" or any(existing.get(key) != value for key, value in expected.items()):
-            raise HTTPException(409, "同一视频任务编号的归属或参数不一致，请只查询原任务")
-    if binding and check_provider:
-        if not payload.provider_id or not payload.model:
-            raise HTTPException(409, "请先在原视频节点手动选择平台和模型，助手不使用默认配置")
-        try:
-            provider = get_api_provider_exact(payload.provider_id)
-        except HTTPException as exc:
-            raise HTTPException(409, "原视频平台不存在或已停用，本次视频请求未提交") from exc
-        if provider.get("id") != payload.provider_id or provider.get("enabled") is False or payload.model not in model_list_from_values(provider.get("video_models") or []):
-            raise HTTPException(409, "原视频平台或所属模型已变化，本次视频请求未提交")
-    return binding
+    return canvas_video_task_service.validate_canvas_video_assistant_task(payload, existing, check_provider=check_provider, re=re, HTTPException=HTTPException, hashlib=hashlib, json=json, model_dump_compat=model_dump_compat, get_api_provider_exact=get_api_provider_exact, model_list_from_values=model_list_from_values)
 
 
 async def run_canvas_video_task(task_id: str, payload: CanvasVideoTaskRequest) -> None:
@@ -5696,34 +5623,7 @@ async def get_canvas_video_task(task_id: str):
 
 
 async def _query_canvas_video_remote(task, remote_id, provider_id, query_mode):
-    try:
-        provider = get_api_provider_exact(provider_id)
-    except HTTPException as exc:
-        raise HTTPException(status_code=409, detail="原视频供应商配置不可用，无法安全查询远端任务；请恢复配置后重试") from exc
-    if provider_id == "runninghub":
-        if query_mode != "runninghub_openapi" or not is_runninghub_provider(provider):
-            raise HTTPException(status_code=409, detail="原视频供应商配置已变化，无法安全查询远端任务；请恢复 RunningHub 配置后重试")
-        observation, local_urls = await query_runninghub_video_task_once(provider, remote_id)
-    elif query_mode == "jimeng_cli":
-        if not is_jimeng_provider(provider):
-            raise HTTPException(status_code=409, detail="原视频供应商配置已变化，无法安全查询即梦 CLI 任务；请恢复原供应商配置后重试")
-        observation, local_urls = await query_jimeng_video_task_once(remote_id, "video")
-    elif query_mode in {"http_get", "tudou_http_get", "agnes_http_get"}:
-        if is_runninghub_provider(provider) or is_jimeng_provider(provider):
-            raise HTTPException(status_code=409, detail="原视频供应商配置已变化，无法安全查询远端任务；请恢复原供应商配置后重试")
-        if query_mode == "tudou_http_get" and not is_tudou_provider(provider):
-            raise HTTPException(status_code=409, detail="原视频供应商配置已变化，无法安全查询土豆视频任务")
-        if query_mode == "agnes_http_get" and not is_agnes_provider(provider, task.get("model")):
-            raise HTTPException(status_code=409, detail="原视频供应商配置已变化，无法安全查询 Agnes 视频任务")
-        observation, local_urls = await query_video_task_once(
-            provider,
-            remote_id,
-            query_mode=query_mode,
-            model=str(task.get("model") or ""),
-        )
-    else:
-        raise HTTPException(status_code=409, detail="当前视频供应商暂不支持远端刷新；请保留原任务编号并稍后查询")
-    return provider, observation, local_urls
+    return await canvas_video_task_service._query_canvas_video_remote(task, remote_id, provider_id, query_mode, get_api_provider_exact=get_api_provider_exact, HTTPException=HTTPException, is_runninghub_provider=is_runninghub_provider, query_runninghub_video_task_once=query_runninghub_video_task_once, is_jimeng_provider=is_jimeng_provider, query_jimeng_video_task_once=query_jimeng_video_task_once, is_tudou_provider=is_tudou_provider, is_agnes_provider=is_agnes_provider, query_video_task_once=query_video_task_once)
 
 
 @app.post("/api/canvas-video-tasks/{task_id}/refresh")

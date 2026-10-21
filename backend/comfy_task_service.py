@@ -91,3 +91,59 @@ async def run_comfy_task_worker(
                 "comfy succeeded task record write failed "
                 f"error={type(record_exc).__name__}"
             )
+
+
+async def create_canvas_comfy_task(payload, request, *, re, HTTPException, uuid, task_context, CANVAS_TASK_LOCK, CANVAS_TASKS, time, task_input_summary, CANVAS_TASK_PROCESS_ID, _write_canvas_task_record, TaskRecordError, asyncio, run_canvas_comfy_task):
+    binding = {}
+    if payload.assistant_action_id:
+        for key in ("assistant_action_id", "canvas_id", "node_id", "input_hash"):
+            value = getattr(payload, key)
+            pattern = r"[0-9a-f]{64}" if key == "input_hash" else r"[A-Za-z0-9_-]{1,100}"
+            if not re.fullmatch(pattern, value):
+                raise HTTPException(422, "助手 ComfyUI 任务须有完整有效的画布、节点、动作和输入绑定")
+            binding[key] = value
+        if payload.segment_id and not re.fullmatch(r"[A-Za-z0-9_-]{1,100}", payload.segment_id):
+            raise HTTPException(422, "助手 ComfyUI 原片段编号无效")
+        binding.update(segment_id=payload.segment_id, provider_id="comfyui", model=payload.workflow_json)
+    task_id = f"canvas_comfy_{uuid.uuid4().hex}"
+    trace_fields = task_context(
+        task_id,
+        trace_id=getattr(request.state, "trace_id", ""),
+        request_id=getattr(request.state, "request_id", ""),
+    )
+    with CANVAS_TASK_LOCK:
+        CANVAS_TASKS[task_id] = {
+            **binding,
+            "id": task_id,
+            "type": "comfy",
+            "status": "queued",
+            "created_at": time.time(),
+            "updated_at": time.time(),
+            "result": None,
+            "error": "",
+            "workflow_json": payload.workflow_json,
+            "input_summary": task_input_summary(
+                prompt=payload.prompt,
+                workflow_json=payload.workflow_json,
+            ),
+            "process_id": CANVAS_TASK_PROCESS_ID,
+            "trace_id": trace_fields["trace_id"],
+            "request_id": trace_fields["request_id"],
+        }
+        try:
+            _write_canvas_task_record(CANVAS_TASKS[task_id], required=True)
+        except (OSError, TaskRecordError):
+            CANVAS_TASKS.pop(task_id, None)
+            raise HTTPException(status_code=503, detail="本地 ComfyUI 任务记录无法保存，本次请求未提交")
+    asyncio.create_task(run_canvas_comfy_task(task_id, payload))
+    return {"task_id": task_id, "status": "queued", **trace_fields, **binding}
+
+
+async def get_canvas_comfy_task(task_id, *, CANVAS_TASK_LOCK, CANVAS_TASKS, _read_canvas_task_record, HTTPException, _public_canvas_task, _interrupted_canvas_task):
+    with CANVAS_TASK_LOCK:
+        task = dict(CANVAS_TASKS.get(task_id) or {})
+        if not task:
+            task = dict(_read_canvas_task_record(task_id) or {})
+    if not task:
+        raise HTTPException(status_code=404, detail="ComfyUI 任务不存在，可能服务已重启或任务已过期")
+    return _public_canvas_task(_interrupted_canvas_task(task))
